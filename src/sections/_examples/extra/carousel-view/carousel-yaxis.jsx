@@ -1,0 +1,73 @@
+import Box from '@mui/material/Box';
+
+import { Image } from 'src/components/image';
+import {
+  Carousel,
+  useCarousel,
+  CarouselDotButtons,
+  CarouselArrowBasicButtons,
+} from 'src/components/carousel';
+
+import { IndexLabel } from './elements';
+
+// ----------------------------------------------------------------------
+
+export function CarouselYaxis({ data }) {
+  const carousel = useCarousel({ axis: 'y' });
+
+  return (
+    <Box sx={{ position: 'relative' }}>
+      <Carousel
+        carousel={carousel}
+        sx={{
+          borderRadius: 2,
+          overflow: 'hidden',
+          height: { xs: 240, sm: 320, md: 480 },
+        }}
+      >
+        {data.map((item, index) => (
+          <CarouselItem key={item.id} index={index} item={item} />
+        ))}
+      </Carousel>
+
+      <CarouselDotButtons
+        scrollSnaps={carousel.dots.scrollSnaps}
+        selectedIndex={carousel.dots.selectedIndex}
+        onClickDot={carousel.dots.onClickDot}
+        sx={{
+          top: 16,
+          right: 16,
+          position: 'absolute',
+          color: 'warning.main',
+        }}
+      />
+
+      <CarouselArrowBasicButtons
+        {...carousel.arrows}
+        options={carousel.options}
+        slotProps={{
+          prevBtn: { sx: { p: 0.75 } },
+          nextBtn: { sx: { p: 0.75 } },
+        }}
+        sx={{
+          p: 0.5,
+          gap: 0.5,
+          right: 16,
+          bottom: 16,
+          borderRadius: 1,
+          position: 'absolute',
+          bgcolor: 'common.white',
+        }}
+      />
+    </Box>
+  );
+}
+
+function CarouselItem({ item, index }) {
+  return (
+    <Box sx={{ position: 'relative', height: 1 }}>
+      <IndexLabel index={index + 1} />
+      <Image visibleByDefault alt={item.title} src={item.coverUrl} sx={{ width: 1, height: 1 }} />
+    </Box>
+  );
+}
