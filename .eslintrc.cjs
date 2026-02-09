@@ -11,15 +11,17 @@ module.exports = {
     },
   },
   settings: {
-    react: {
-      version: 'detect',
+    "react": {
+      "version": "detect"
     },
-    'import/resolver': {
-      alias: {
-        map: [['src', './src']],
-        extensions: ['.js', '.jsx', '.json'],
-      },
-    },
+    "import/resolver": {
+      "alias": {
+        "map": [
+          ["@", "."]
+        ],
+        "extensions": [".js", ".jsx", ".json"]
+      }
+    }
   },
   /**
    * 0 ~ 'off'
