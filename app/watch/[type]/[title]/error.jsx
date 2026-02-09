@@ -3,11 +3,11 @@
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 
-import { paths } from 'routes/paths';
-import { RouterLink } from 'routes/components';
+import { paths } from '@/routes/paths';
+import { RouterLink } from '@/routes/components';
 
-import { Iconify } from 'components/iconify';
-import { EmptyContent } from 'components/empty-content';
+import { Iconify } from '@/components/iconify';
+import { EmptyContent } from '@/components/empty-content';
 
 // ----------------------------------------------------------------------
 
@@ -16,7 +16,7 @@ export default function Error({ error, reset }) {
     <Container sx={{ my: 5 }}>
       <EmptyContent
         filled
-        title="Post not found!"
+        title="Movie/show not found!"
         action={
           <Button
             component={RouterLink}

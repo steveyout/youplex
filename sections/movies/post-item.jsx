@@ -55,7 +55,7 @@ export function PostItem({ post }) {
         <Image
           alt={displayTitle}
           src={getPosterUrl(poster_path)}
-          ratio="2/3" // standard movie poster ratio
+          ratio="2/3" // standard watch poster ratio
         />
       </Box>
 
@@ -94,7 +94,7 @@ export function PostItemLatest({ post }) {
   const displayDate = release_date || first_air_date;
   const type = media_type || (release_date ? 'movie' : 'tv');
 
-  const linkTo = paths.post.details(type, id);
+  const linkTo = paths.watch.details(type, id);
 
   // For "Latest/Featured", we usually use the backdrop (wide image) instead of poster
   const backdropUrl = backdrop_path

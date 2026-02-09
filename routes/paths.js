@@ -1,5 +1,4 @@
-import { paramCase } from 'utils/change-case';
-
+import { paramCase } from '@/utils/change-case';
 import { _id, _postTitles } from '_mock/assets';
 
 // ----------------------------------------------------------------------
@@ -40,10 +39,13 @@ export const paths = {
     details: (id) => `/product/${id}`,
     demo: { details: `/product/${MOCK_ID}` },
   },
-  post: {
-    root: `/post`,
-    details: (title) => `/post/${paramCase(title)}`,
-    demo: { details: `/post/${paramCase(MOCK_TITLE)}` },
+  watch: {
+    root: `/watch`,
+    details: (type, id, title = 'video', sn = 1, ep = 1) => {
+      const base = `/watch/${type}/${paramCase(title)}?id=${id}`;
+      // For TV shows, we append season and episode to the query string
+      return type === 'tv' ? `${base}&sn=${sn}&ep=${ep}` : base;
+    },
   },
   // AUTH
   auth: {

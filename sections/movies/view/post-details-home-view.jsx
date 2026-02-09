@@ -1,123 +1,198 @@
 'use client';
 
+import { paths } from '@/routes/paths';
+import { useRouter } from '@/routes/hooks';
+import { fDate } from '@/utils/format-time';
+import { Iconify } from '@/components/iconify';
+import { RouterLink } from '@/routes/components';
+import { CustomBreadcrumbs } from '@/components/custom-breadcrumbs';
+
+import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
+import Card from '@mui/material/Card';
 import Stack from '@mui/material/Stack';
 import Avatar from '@mui/material/Avatar';
-import Divider from '@mui/material/Divider';
-import Checkbox from '@mui/material/Checkbox';
+import Button from '@mui/material/Button';
+import MenuItem from '@mui/material/MenuItem';
+import TextField from '@mui/material/TextField';
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Unstable_Grid2';
+import { useTheme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
-import AvatarGroup from '@mui/material/AvatarGroup';
-import FormControlLabel from '@mui/material/FormControlLabel';
-
-import { paths } from 'routes/paths';
-
-import { fShortenNumber } from 'utils/format-number';
-
-import { Iconify } from 'components/iconify';
-import { Markdown } from 'components/markdown';
-import { CustomBreadcrumbs } from 'components/custom-breadcrumbs';
+import CardHeader from '@mui/material/CardHeader';
+import CardContent from '@mui/material/CardContent';
 
 import { PostItem } from '../post-item';
-import { PostCommentList } from '../post-comment-list';
-import { PostCommentForm } from '../post-comment-form';
-import { PostDetailsHero } from '../post-details-hero';
+import VideoPlayer from '../VideoPlayer';
 
 // ----------------------------------------------------------------------
 
-export function PostDetailsHomeView({ post, latestPosts }) {
+export function PostDetailsHomeView({ post, latestPosts, videoParams }) {
+  const theme = useTheme();
+  const router = useRouter();
+
+  const isTv = videoParams.type === 'tv';
+  const displayTitle = post?.title || post?.name || '';
+  const displayDate = post?.release_date || post?.first_air_date;
+  const cast = post?.credits?.cast?.slice(0, 10) || [];
+
+  // Logic for Seasons and Episodes
+  const seasons = post?.seasons?.filter((s) => s.season_number > 0) || [];
+  const currentSeasonData = post?.seasons?.find((s) => s.season_number === videoParams.season);
+  const totalEpisodes = currentSeasonData?.episode_count || 0;
+
+  const handleSeasonChange = (event) => {
+    const newSeason = event.target.value;
+    // When changing seasons, we default back to episode 1
+    const path = paths.watch.details(videoParams.type, videoParams.id, displayTitle, newSeason, 1);
+    router.push(path);
+  };
+
   return (
     <>
-      <PostDetailsHero
-        title={post?.title ?? ''}
-        author={post?.author}
-        coverUrl={post?.coverUrl ?? ''}
-        createdAt={post?.createdAt}
-      />
+      <Box sx={{ bgcolor: 'common.black', py: { xs: 2, md: 5 } }}>
+        <Container maxWidth="xl">
+          <VideoPlayer
+            tmdbId={videoParams.id}
+            type={videoParams.type}
+            season={videoParams.season}
+            episode={videoParams.episode}
+          />
+        </Container>
+      </Box>
 
-      <Container
-        maxWidth={false}
-        sx={{ py: 3, mb: 5, borderBottom: (theme) => `solid 1px ${theme.vars.palette.divider}` }}
-      >
+      <Container maxWidth="lg" sx={{ mt: 5 }}>
         <CustomBreadcrumbs
           links={[
             { name: 'Home', href: '/' },
-            { name: 'Blog', href: paths.post.root },
-            { name: post?.title },
+            { name: isTv ? 'TV Series' : 'Movies', href: '#' },
+            { name: displayTitle },
           ]}
-          sx={{ maxWidth: 720, mx: 'auto' }}
+          sx={{ mb: 3 }}
         />
-      </Container>
 
-      <Container maxWidth={false}>
-        <Stack sx={{ maxWidth: 720, mx: 'auto' }}>
-          <Typography variant="subtitle1">{post?.description}</Typography>
+        <Grid container spacing={{ xs: 3, md: 5 }}>
+          <Grid xs={12} md={8}>
+            <Stack spacing={3}>
+              <Typography variant="h3">{displayTitle}</Typography>
 
-          <Markdown children={post?.content} />
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                <Typography variant="subtitle2" sx={{ color: 'primary.main' }}>
+                  {displayDate ? fDate(displayDate) : 'Unknown'}
+                </Typography>
+                <Chip label={videoParams.type.toUpperCase()} size="small" variant="outlined" />
+                {post?.vote_average > 0 && (
+                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Iconify icon="eva:star-fill" sx={{ color: 'warning.main' }} />
+                    <Typography variant="subtitle2">{post.vote_average.toFixed(1)}</Typography>
+                  </Stack>
+                )}
+              </Stack>
 
-          <Stack
-            spacing={3}
-            sx={{
-              py: 3,
-              borderTop: (theme) => `dashed 1px ${theme.vars.palette.divider}`,
-              borderBottom: (theme) => `dashed 1px ${theme.vars.palette.divider}`,
-            }}
-          >
-            <Stack direction="row" flexWrap="wrap" spacing={1}>
-              {post?.tags.map((tag) => (
-                <Chip key={tag} label={tag} variant="soft" />
+              {/* Enhanced Season & Episode Selector */}
+              {isTv && seasons.length > 0 && (
+                <Card sx={{ bgcolor: 'background.neutral', border: `1px solid ${theme.palette.divider}` }}>
+                  <CardHeader
+                    title="Episodes"
+                    sx={{ pb: 0 }}
+                    action={
+                      <TextField
+                        select
+                        size="small"
+                        value={videoParams.season}
+                        onChange={handleSeasonChange}
+                        SelectProps={{ sx: { typography: 'subtitle2' } }}
+                        sx={{ minWidth: 120 }}
+                      >
+                        {seasons.map((season) => (
+                          <MenuItem key={season.id} value={season.season_number}>
+                            Season {season.season_number}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    }
+                  />
+                  <CardContent>
+                    <Box
+                      display="grid"
+                      gap={1}
+                      gridTemplateColumns={{
+                        xs: 'repeat(4, 1fr)',
+                        sm: 'repeat(6, 1fr)',
+                        md: 'repeat(8, 1fr)',
+                        lg: 'repeat(10, 1fr)',
+                      }}
+                    >
+                      {[...Array(totalEpisodes)].map((_, index) => {
+                        const epNumber = index + 1;
+                        const isSelected = epNumber === videoParams.episode;
+
+                        return (
+                          <Button
+                            key={epNumber}
+                            component={RouterLink}
+                            href={paths.watch.details(
+                              videoParams.type,
+                              videoParams.id,
+                              displayTitle,
+                              videoParams.season,
+                              epNumber
+                            )}
+                            variant={isSelected ? 'contained' : 'soft'}
+                            color={isSelected ? 'primary' : 'inherit'}
+                            sx={{ minWidth: 0, p: 1, height: 40 }}
+                          >
+                            {epNumber}
+                          </Button>
+                        );
+                      })}
+                    </Box>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.8 }}>
+                {post?.overview}
+              </Typography>
+
+              <Stack direction="row" flexWrap="wrap" spacing={1}>
+                {post?.genres?.map((genre) => (
+                  <Chip key={genre.id} label={genre.name} variant="soft" />
+                ))}
+              </Stack>
+            </Stack>
+          </Grid>
+
+          {/* Sidebar */}
+          <Grid xs={12} md={4}>
+            <Typography variant="h6" sx={{ mb: 2 }}>Top Cast</Typography>
+            <Stack spacing={2}>
+              {cast.map((actor) => (
+                <Stack key={actor.id} direction="row" alignItems="center" spacing={2}>
+                  <Avatar
+                    alt={actor.name}
+                    src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                    sx={{ width: 48, height: 48 }}
+                  />
+                  <Stack>
+                    <Typography variant="subtitle2">{actor.name}</Typography>
+                    <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                      {actor.character}
+                    </Typography>
+                  </Stack>
+                </Stack>
               ))}
             </Stack>
-
-            <Stack direction="row" alignItems="center">
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    defaultChecked
-                    size="small"
-                    color="error"
-                    icon={<Iconify icon="solar:heart-bold" />}
-                    checkedIcon={<Iconify icon="solar:heart-bold" />}
-                    inputProps={{ id: 'favorite-checkbox', 'aria-label': 'Favorite checkbox' }}
-                  />
-                }
-                label={fShortenNumber(post?.totalFavorites)}
-                sx={{ mr: 1 }}
-              />
-
-              <AvatarGroup>
-                {post?.favoritePerson.map((person) => (
-                  <Avatar key={person.name} alt={person.name} src={person.avatarUrl} />
-                ))}
-              </AvatarGroup>
-            </Stack>
-          </Stack>
-
-          <Stack direction="row" sx={{ mb: 3, mt: 5 }}>
-            <Typography variant="h4">Comments</Typography>
-
-            <Typography variant="subtitle2" sx={{ color: 'text.disabled' }}>
-              ({post?.comments.length})
-            </Typography>
-          </Stack>
-
-          <PostCommentForm />
-
-          <Divider sx={{ mt: 5, mb: 2 }} />
-
-          <PostCommentList comments={post?.comments} />
-        </Stack>
+          </Grid>
+        </Grid>
       </Container>
 
+      {/* Recommendations */}
       {!!latestPosts?.length && (
-        <Container sx={{ pb: 15 }}>
-          <Typography variant="h4" sx={{ mb: 5 }}>
-            Recent Posts
-          </Typography>
-
+        <Container sx={{ py: 10 }}>
+          <Typography variant="h4" sx={{ mb: 5 }}>You May Also Like</Typography>
           <Grid container spacing={3}>
-            {latestPosts?.slice(latestPosts.length - 4).map((latestPost) => (
+            {latestPosts.slice(0, 4).map((latestPost) => (
               <Grid key={latestPost.id} xs={12} sm={6} md={4} lg={3}>
                 <PostItem post={latestPost} />
               </Grid>

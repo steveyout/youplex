@@ -34,7 +34,7 @@ export async function getTvShows(category = 'popular', page = 1) {
 
 /**
  * Fetch Details for a specific Movie or TV Show
- * @param {string} type - 'movie' or 'tv'
+ * @param {string} type - 'watch' or 'tv'
  * @param {string|number} id - TMDB ID
  */
 export async function getMediaDetails(type, id) {
@@ -42,7 +42,11 @@ export async function getMediaDetails(type, id) {
 
   if (!url) return null;
 
-  const res = await axios.get(url);
+  const res = await axios.get(url, {
+    params: {
+      append_to_response: 'credits',
+    },
+  });
 
   return res.data;
 }
@@ -51,7 +55,7 @@ export async function getMediaDetails(type, id) {
 
 /**
  * Fetch Trending Content
- * @param {string} type - 'all', 'movie', 'tv', 'person'
+ * @param {string} type - 'all', 'watch', 'tv', 'person'
  * @param {string} timeWindow - 'day' or 'week'
  */
 export async function getTrending(type = 'all', timeWindow = 'day') {
@@ -79,7 +83,7 @@ export async function searchMedia(query, page = 1) {
 
 /**
  * Fetch Recommendations
- * @param {string} type - 'movie' or 'tv'
+ * @param {string} type - 'watch' or 'tv'
  * @param {string|number} id - TMDB ID
  */
 export async function getRecommendations(type, id) {
@@ -96,7 +100,7 @@ export async function getRecommendations(type, id) {
 
 /**
  * Fetch Credits (Cast & Crew)
- * @param {string} type - 'movie' or 'tv'
+ * @param {string} type - 'watch' or 'tv'
  * @param {string|number} id - TMDB ID
  */
 export async function getCredits(type, id) {

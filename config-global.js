@@ -1,4 +1,4 @@
-import { paths } from 'routes/paths';
+import { paths } from '@/routes/paths';
 
 import packageJson from './package.json';
 
