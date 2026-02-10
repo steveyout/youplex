@@ -1,35 +1,43 @@
+import { varAlpha } from '@/theme/styles';
+
 import Box from '@mui/material/Box';
+import Avatar from '@mui/material/Avatar';
 import ListItemText from '@mui/material/ListItemText';
 import ListItemButton from '@mui/material/ListItemButton';
 
-import { varAlpha } from 'theme/styles';
-
-import { Label } from 'components/label';
-
 // ----------------------------------------------------------------------
 
-export function ResultItem({ title, path, groupLabel, onClickItem }) {
+export function ResultItem({ title, path, posterPath, onClickItem }) {
+  const posterUrl = posterPath
+    ? `https://image.tmdb.org/t/p/w92${posterPath}`
+    : '';
+
   return (
     <ListItemButton
       onClick={onClickItem}
       sx={{
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderColor: 'transparent',
-        borderBottomColor: (theme) => theme.vars.palette.divider,
+        gap: 2,
+        borderRadius: 1,
+        borderBottom: (theme) => `solid 1px ${theme.vars.palette.divider}`,
         '&:hover': {
-          borderRadius: 1,
-          borderColor: (theme) => theme.vars.palette.primary.main,
           backgroundColor: (theme) =>
-            varAlpha(
-              theme.vars.palette.primary.mainChannel,
-              theme.vars.palette.action.hoverOpacity
-            ),
+            varAlpha(theme.vars.palette.primary.mainChannel, theme.vars.palette.action.hoverOpacity),
         },
       }}
     >
+      <Avatar
+        variant="rounded"
+        src={posterUrl}
+        sx={{
+          width: 48,
+          height: 64, // Poster Ratio
+          flexShrink: 0,
+          bgcolor: 'background.neutral',
+        }}
+      />
+
       <ListItemText
-        primaryTypographyProps={{ typography: 'subtitle2', sx: { textTransform: 'capitalize' } }}
+        primaryTypographyProps={{ typography: 'subtitle2', noWrap: true }}
         secondaryTypographyProps={{ typography: 'caption', noWrap: true }}
         primary={title.map((part, index) => (
           <Box
@@ -44,14 +52,12 @@ export function ResultItem({ title, path, groupLabel, onClickItem }) {
           <Box
             key={index}
             component="span"
-            sx={{ color: part.highlight ? 'primary.main' : 'text.secondary' }}
+            sx={{ color: part.highlight ? 'primary.main' : 'text.secondary', textTransform: 'capitalize' }}
           >
             {part.text}
           </Box>
         ))}
       />
-
-      {groupLabel && <Label color="info">{groupLabel}</Label>}
     </ListItemButton>
   );
 }

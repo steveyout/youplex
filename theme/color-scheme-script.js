@@ -1,8 +1,8 @@
 'use client';
 
-import { getInitColorSchemeScript as _getInitColorSchemeScript } from '@mui/material/styles';
+import { defaultSettings } from '@/components/settings';
 
-import { defaultSettings } from 'components/settings';
+import { getInitColorSchemeScript as _getInitColorSchemeScript } from '@mui/material/styles';
 
 // ----------------------------------------------------------------------
 

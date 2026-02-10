@@ -32,7 +32,7 @@ export function PostItem({ post }) {
   const displayDate = release_date || first_air_date;
   const type = media_type || (release_date ? 'movie' : 'tv');
 
-  const linkTo = paths.post.details(type, id);
+  const linkTo = paths.watch.details(type, id,displayTitle);
 
   return (
     <Card sx={{ '&:hover .poster-overlay': { opacity: 1 } }}>
@@ -94,7 +94,7 @@ export function PostItemLatest({ post }) {
   const displayDate = release_date || first_air_date;
   const type = media_type || (release_date ? 'movie' : 'tv');
 
-  const linkTo = paths.watch.details(type, id);
+  const linkTo = paths.watch.details(type, id,displayTitle);
 
   // For "Latest/Featured", we usually use the backdrop (wide image) instead of poster
   const backdropUrl = backdrop_path

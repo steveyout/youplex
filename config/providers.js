@@ -2,32 +2,50 @@
 
 export const providers = [
   {
-    id: 'vidsrc',
-    name: 'VidSrc',
+    id: 'vidlink',
+    name: 'Server 1 (VidLink Pro)',
+    baseUrl: 'https://vidlink.pro',
+    enabled: true,
+  },
+  {
+    id: 'vidsrc_to',
+    name: 'Server 2 (VIP)',
+    baseUrl: 'https://vidsrc.to/embed',
+    enabled: true,
+  },
+  {
+    id: 'vidnest',
+    name: 'Server 3 (VidNest)',
+    baseUrl: 'https://vidnest.fun',
+    enabled: true,
+  },
+  {
+    id: 'vidfast',
+    name: 'Server 3 (VidFast)',
+    baseUrl: 'https://vidfast.net',
+    enabled: true,
+  },
+  {
+    id: 'videasy',
+    name: 'Server 3 (VidEasy)',
+    baseUrl: 'https://player.videasy.net',
+    enabled: true,
+  },
+  {
+    id: 'vidsrc_me',
+    name: 'Server 4',
     baseUrl: 'https://vidsrc.me/embed',
     enabled: true,
   },
   {
-    id: 'vidsrc_xyz',
-    name: 'VidSrc.xyz',
-    baseUrl: 'https://vidsrc.xyz/embed',
-    enabled: true,
-  },
-  {
-    id: '2embed',
-    name: '2Embed',
-    baseUrl: 'https://www.2embed.cc/embed',
-    enabled: true,
-  },
-  {
-    id: 'superembed',
-    name: 'SuperEmbed',
-    baseUrl: 'https://multiembed.mov/directstream.php',
+    id: 'rivestream',
+    name: 'Server 6 (Rive)',
+    baseUrl: 'https://rivestream.org/embed',
     enabled: true,
   },
 ];
 
-export const DEFAULT_PROVIDER_ID = 'vidsrc';
+export const DEFAULT_PROVIDER_ID = 'vidsrc_to';
 
 /**
  * Helper to build the URL based on media type
@@ -38,9 +56,9 @@ export const getEmbedUrl = (providerId, type, tmdbId, season = 1, episode = 1) =
   if (!selected) return '';
 
   if (type === 'movie') {
-    return `${selected.baseUrl}/movie?tmdb=${tmdbId}`;
-  } else {
-    // For TV shows, we append season and episode
-    return `${selected.baseUrl}/tv?tmdb=${tmdbId}&sea=${season}&epi=${episode}`;
+    return `${selected.baseUrl}/movie/${tmdbId}`;
   }
+    // For TV shows, we append season and episode
+    return `${selected.baseUrl}/tv/${tmdbId}/${season}/${episode}`;
+
 };

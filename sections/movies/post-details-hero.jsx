@@ -1,3 +1,9 @@
+import {paths} from "@/routes/paths";
+import { fDate } from '@/utils/format-time';
+import { varAlpha, bgGradient } from '@/theme/styles';
+import { useResponsive } from '@/hooks/use-responsive';
+import { Iconify, SocialIcon } from '@/components/iconify';
+
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Avatar from '@mui/material/Avatar';
@@ -8,15 +14,22 @@ import Typography from '@mui/material/Typography';
 import ListItemText from '@mui/material/ListItemText';
 import SpeedDialAction from '@mui/material/SpeedDialAction';
 
-import { useResponsive } from 'hooks/use-responsive';
-
-import { fDate } from 'utils/format-time';
-
-import { _socials } from '_mock';
-import { varAlpha, bgGradient } from 'theme/styles';
-
-import { Iconify, SocialIcon } from 'components/iconify';
-
+export const _socials = [
+  {
+    name: 'Telegram',
+    value: 'telegram',
+    icon: 'logos:telegram',
+    path: paths.telegram,
+    color: '#0088cc',
+  },
+  {
+    name: 'Discord',
+    value: 'discord',
+    icon: 'logos:discord-icon',
+    path: paths.discord,
+    color: '#5865F2',
+  },
+];
 // ----------------------------------------------------------------------
 
 export function PostDetailsHero({ title, author, coverUrl, createdAt }) {

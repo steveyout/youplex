@@ -3,7 +3,7 @@
 import { paths } from '@/routes/paths';
 import { searchMedia } from '@/actions/api';
 import { useState, useCallback } from 'react';
-import { useDebounce } from '@/hooks/use-debounce'; // Updated to use your new TMDB search
+import { useDebounce } from '@/hooks/use-debounce';
 
 import Stack from '@mui/material/Stack';
 import Container from '@mui/material/Container';
@@ -29,7 +29,6 @@ export function PostListHomeView({ categories }) {
 
   const debouncedQuery = useDebounce(searchQuery);
 
-  // Handle Search using TMDB
   const handleSearch = useCallback(async (inputValue) => {
     setSearchQuery(inputValue);
     if (inputValue.length > 2) {
@@ -51,48 +50,67 @@ export function PostListHomeView({ categories }) {
     setSortBy(newValue);
   }, []);
 
+  /**
+   * Helper to format object keys into Titles
+   * Example: "popularMovies" -> "Popular Movies"
+   */
+  const formatSectionTitle = (key) => {
+    const result = key.replace(/([A-Z])/g, ' $1');
+    return result.charAt(0).toUpperCase() + result.slice(1);
+  };
+
   return (
     <Container sx={{ pb: 10 }}>
-      <Typography variant="h4" sx={{ my: { xs: 3, md: 5 } }}>
-        Explore Content
-      </Typography>
-
       <Stack
         spacing={3}
         justifyContent="space-between"
         alignItems={{ xs: 'flex-end', sm: 'center' }}
         direction={{ xs: 'column', sm: 'row' }}
-        sx={{ mb: { xs: 3, md: 5 } }}
+        sx={{ py: { xs: 3, md: 5 } }}
       >
-        <PostSearch
-          query={debouncedQuery}
-          results={searchResults}
-          onSearch={handleSearch}
-          loading={searchLoading}
-          // Assuming your path helper takes (type, id)
-          hrefItem={(item) => paths.post.details(item.media_type || 'movie', item.id)}
-        />
+        <Typography variant="h4" sx={{ textTransform: 'capitalize' }}>
+          Explore Content
+        </Typography>
 
-        <PostSort sort={sortBy} onSort={handleSortBy} sortOptions={SORT_OPTIONS} />
+        <Stack direction="row" spacing={1} flexShrink={0}>
+          <PostSearch
+            query={debouncedQuery}
+            results={searchResults}
+            onSearch={handleSearch}
+            loading={searchLoading}
+            /**
+             * Refined hrefItem logic:
+             * 1. Check item.media_type (returned by multi-search)
+             * 2. Fallback to checking for 'first_air_date' (unique to TV)
+             * 3. Default to 'movie'
+             */
+            hrefItem={(item) => {
+              const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+              const title = item.title || item.name;
+
+              return paths.watch.details(type, item.id, title);
+            }}
+          />
+          <PostSort sort={sortBy} onSort={handleSortBy} sortOptions={SORT_OPTIONS} />
+        </Stack>
       </Stack>
 
-      {/* Rendering Different Categories */}
-      <Stack spacing={5}>
-        {categories.trending.length > 0 && (
-          <BoxSection title="Trending Now" posts={applyFilter(categories.trending, sortBy)} />
-        )}
+      <Stack spacing={8}>
+        {Object.keys(categories).map((key) => {
+          const items = categories[key];
 
-        {categories.popularMovies.length > 0 && (
-          <BoxSection title="Popular Movies" posts={applyFilter(categories.popularMovies, sortBy)} />
-        )}
+          if (!items || items.length === 0) return null;
 
-        {categories.topRatedTv.length > 0 && (
-          <BoxSection title="Top Rated TV Shows" posts={applyFilter(categories.topRatedTv, sortBy)} />
-        )}
+          const filteredItems = applyFilter(items, sortBy);
 
-        {categories.upcoming.length > 0 && (
-          <BoxSection title="Upcoming Releases" posts={applyFilter(categories.upcoming, sortBy)} />
-        )}
+          return (
+            <BoxSection
+              key={key}
+              title={formatSectionTitle(key)}
+              posts={filteredItems}
+            />
+          );
+        })}
       </Stack>
     </Container>
   );

@@ -1,16 +1,15 @@
 'use client';
 
+import { usePathname } from '@/routes/hooks';
+import { useBoolean } from '@/hooks/use-boolean';
+
 import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 
-import { usePathname } from 'routes/hooks';
-
-import { useBoolean } from 'hooks/use-boolean';
-
 import { Main } from './main';
+import { Footer} from './footer';
 import { NavMobile } from './nav/mobile';
 import { NavDesktop } from './nav/desktop';
-import { Footer, HomeFooter } from './footer';
 import { HeaderBase } from '../core/header-base';
 import { LayoutSection } from '../core/layout-section';
 import { navData as mainNavData } from '../config-nav-main';
@@ -24,7 +23,6 @@ export function MainLayout({ sx, data, children }) {
 
   const mobileNavOpen = useBoolean();
 
-  const homePage = pathname === '/';
 
   const layoutQuery = 'md';
 
@@ -72,7 +70,7 @@ export function MainLayout({ sx, data, children }) {
         /** **************************************
          * Footer
          *************************************** */
-        footerSection={homePage ? <HomeFooter /> : <Footer layoutQuery={layoutQuery} />}
+        footerSection={<Footer layoutQuery={layoutQuery} />}
         /** **************************************
          * Style
          *************************************** */

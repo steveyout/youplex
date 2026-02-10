@@ -1,109 +1,113 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { paths } from '@/routes/paths';
+import { varAlpha } from '@/theme/styles';
+import { useRouter } from '@/routes/hooks';
+import { Label } from '@/components/label';
+import { searchMedia } from '@/actions/api';
+import { Iconify } from '@/components/iconify';
 import parse from 'autosuggest-highlight/parse';
 import match from 'autosuggest-highlight/match';
+import { useBoolean } from '@/hooks/use-boolean';
+import { useDebounce } from '@/hooks/use-debounce';
+import { Scrollbar } from '@/components/scrollbar';
+import { useState, useEffect, useCallback } from 'react';
+import { useEventListener } from '@/hooks/use-event-listener';
+import { SearchNotFound } from '@/components/search-not-found';
 
 import Box from '@mui/material/Box';
-import SvgIcon from '@mui/material/SvgIcon';
 import InputBase from '@mui/material/InputBase';
 import { useTheme } from '@mui/material/styles';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import Dialog, { dialogClasses } from '@mui/material/Dialog';
+import CircularProgress from '@mui/material/CircularProgress';
 
-import { useRouter } from 'routes/hooks';
-import { isExternalLink } from 'routes/utils';
-
-import { useBoolean } from 'hooks/use-boolean';
-import { useEventListener } from 'hooks/use-event-listener';
-
-import { varAlpha } from 'theme/styles';
-
-import { Label } from 'components/label';
-import { Iconify } from 'components/iconify';
-import { Scrollbar } from 'components/scrollbar';
-import { SearchNotFound } from 'components/search-not-found';
-
+import Stack from "@mui/material/Stack";
 import { ResultItem } from './result-item';
-import { groupItems, applyFilter, getAllItems } from './utils';
 
 // ----------------------------------------------------------------------
 
-export function Searchbar({ data: navItems = [], sx, ...other }) {
+export function Searchbar({ sx, ...other }) {
   const theme = useTheme();
-
   const router = useRouter();
-
   const search = useBoolean();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const debouncedQuery = useDebounce(searchQuery, 500);
 
   const handleClose = useCallback(() => {
     search.onFalse();
     setSearchQuery('');
+    setSearchResults([]);
   }, [search]);
 
+  // Fetch Live Data from TMDB
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (!debouncedQuery.trim()) {
+        setSearchResults([]);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const data = await searchMedia(debouncedQuery);
+        setSearchResults(data?.results || []);
+      } catch (error) {
+        console.error('Search Error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResults();
+  }, [debouncedQuery]);
+
   const handleKeyDown = (event) => {
-    if (event.key === 'k' && event.metaKey) {
+    if (event.key === 'k' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
       search.onToggle();
-      setSearchQuery('');
     }
   };
 
   useEventListener('keydown', handleKeyDown);
 
-  const handleClick = useCallback(
-    (path) => {
-      if (isExternalLink(path)) {
-        window.open(path);
-      } else {
-        router.push(path);
-      }
+  const handleClickItem = useCallback(
+    (item) => {
+      const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+      const title = item.title || item.name;
+
+      router.push(paths.watch.details(type, item.id, title));
       handleClose();
     },
     [handleClose, router]
   );
 
-  const handleSearch = useCallback((event) => {
-    setSearchQuery(event.target.value);
-  }, []);
+  const renderItems = () => (
+    <Box component="ul">
+      {searchResults.map((item) => {
+        const title = item.title || item.name;
+        const releaseDate = item.release_date || item.first_air_date;
+        const year = releaseDate ? ` (${new Date(releaseDate).getFullYear()})` : '';
 
-  const dataFiltered = applyFilter({
-    inputData: getAllItems({ data: navItems }),
-    query: searchQuery,
-  });
-
-  const notFound = searchQuery && !dataFiltered.length;
-
-  const renderItems = () => {
-    const dataGroups = groupItems(dataFiltered);
-
-    return Object.keys(dataGroups)
-      .sort((a, b) => -b.localeCompare(a))
-      .map((group, index) => (
-        <Box component="ul" key={`${group}-${index}`}>
-          {dataGroups[group].map((item) => {
-            const { title, path } = item;
-
-            const partsTitle = parse(title, match(title, searchQuery));
-
-            const partsPath = parse(path, match(path, searchQuery));
-
-            return (
-              <Box component="li" key={`${title}${path}`} sx={{ display: 'flex' }}>
-                <ResultItem
-                  path={partsPath}
-                  title={partsTitle}
-                  groupLabel={searchQuery && group}
-                  onClickItem={() => handleClick(path)}
-                />
-              </Box>
-            );
-          })}
-        </Box>
-      ));
-  };
+        return (
+          <Box component="li" key={item.id} sx={{ display: 'flex' }}>
+            <ResultItem
+              title={parse(title, match(title, searchQuery))}
+              // Show Media Type and Year as the "path" or secondary text
+              path={parse(`${item.media_type || 'Media'} • ${year}`, [])}
+              posterPath={item.poster_path}
+              onClickItem={() => handleClickItem(item)}
+            />
+          </Box>
+        );
+      })}
+    </Box>
+  );
 
   const renderButton = (
     <Box
@@ -112,6 +116,7 @@ export function Searchbar({ data: navItems = [], sx, ...other }) {
       onClick={search.onTrue}
       sx={{
         pr: { sm: 1 },
+        pl: { xs: 1, sm: 0 },
         borderRadius: { sm: 1.5 },
         cursor: { sm: 'pointer' },
         bgcolor: { sm: varAlpha(theme.vars.palette.grey['500Channel'], 0.08) },
@@ -120,21 +125,15 @@ export function Searchbar({ data: navItems = [], sx, ...other }) {
       {...other}
     >
       <IconButton disableRipple>
-        {/* https://icon-sets.iconify.design/eva/search-fill/ */}
-        <SvgIcon sx={{ width: 20, height: 20 }}>
-          <path
-            fill="currentColor"
-            d="m20.71 19.29l-3.4-3.39A7.92 7.92 0 0 0 19 11a8 8 0 1 0-8 8a7.92 7.92 0 0 0 4.9-1.69l3.39 3.4a1 1 0 0 0 1.42 0a1 1 0 0 0 0-1.42M5 11a6 6 0 1 1 6 6a6 6 0 0 1-6-6"
-          />
-        </SvgIcon>
+        <Iconify icon="eva:search-fill" width={20} />
       </IconButton>
 
       <Label
         sx={{
           fontSize: 12,
-          color: 'grey.800',
-          bgcolor: 'common.white',
-          boxShadow: theme.customShadows.z1,
+          color: 'text.secondary',
+          bgcolor: 'background.paper',
+          border: `solid 1px ${theme.vars.palette.divider}`,
           display: { xs: 'none', sm: 'inline-flex' },
         }}
       >
@@ -164,23 +163,30 @@ export function Searchbar({ data: navItems = [], sx, ...other }) {
           <InputBase
             fullWidth
             autoFocus
-            placeholder="Search..."
+            placeholder="Search movies, series, actors..."
             value={searchQuery}
-            onChange={handleSearch}
+            onChange={(e) => setSearchQuery(e.target.value)}
             startAdornment={
               <InputAdornment position="start">
                 <Iconify icon="eva:search-fill" width={24} sx={{ color: 'text.disabled' }} />
               </InputAdornment>
             }
-            endAdornment={<Label sx={{ letterSpacing: 1, color: 'text.secondary' }}>esc</Label>}
+            endAdornment={
+              <Stack direction="row" alignItems="center" spacing={1}>
+                {loading && <CircularProgress size={18} color="inherit" />}
+                <Label sx={{ letterSpacing: 1, color: 'text.secondary' }}>esc</Label>
+              </Stack>
+            }
             inputProps={{ sx: { typography: 'h6' } }}
           />
         </Box>
 
-        {notFound ? (
+        {searchQuery && !loading && !searchResults.length ? (
           <SearchNotFound query={searchQuery} sx={{ py: 15 }} />
         ) : (
-          <Scrollbar sx={{ px: 3, pb: 3, pt: 2, height: 400 }}>{renderItems()}</Scrollbar>
+          <Scrollbar sx={{ px: 3, pb: 3, pt: 2, height: 400 }}>
+            {renderItems()}
+          </Scrollbar>
         )}
       </Dialog>
     </>

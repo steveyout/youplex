@@ -2,8 +2,8 @@
 
 import { useMemo, useState, useCallback, createContext } from 'react';
 
-import { useCookies } from 'hooks/use-cookies';
-import { useLocalStorage } from 'hooks/use-local-storage';
+import { useCookies } from '@/hooks/use-cookies';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 
 import { STORAGE_KEY, defaultSettings } from '../config-settings';
 

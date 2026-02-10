@@ -11,6 +11,7 @@ import Drawer from '@mui/material/Drawer';
 import Button from '@mui/material/Button';
 
 import { NavList } from './nav-mobile-list';
+import {Iconify} from "@/components/iconify";
 
 // ----------------------------------------------------------------------
 
@@ -62,9 +63,10 @@ export function NavMobile({ data, open, onClose, slots, sx }) {
             variant="contained"
             rel="noopener"
             target="_blank"
-            href={paths.minimalStore}
+            href={paths.discord}
+            startIcon={<Iconify icon="line-md:discord" width={24} />}
           >
-            Purchase
+            Discord
           </Button>
         </Box>
       )}

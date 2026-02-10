@@ -1,3 +1,8 @@
+import { paths } from '@/routes/paths';
+import { Logo } from '@/components/logo';
+import { RouterLink } from '@/routes/components';
+import { SocialIcon } from '@/components/iconify';
+
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
@@ -8,19 +13,11 @@ import Grid from '@mui/material/Unstable_Grid2';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 
-import { paths } from 'routes/paths';
-import { RouterLink } from 'routes/components';
-
-import { _socials } from '_mock';
-
-import { Logo } from 'components/logo';
-import { SocialIcon } from 'components/iconify';
-
 // ----------------------------------------------------------------------
 
 const LINKS = [
   {
-    headline: 'Minimal',
+    headline: process.env.NEXT_PUBLIC_APP_NAME,
     children: [
       { name: 'About us', href: paths.about },
       { name: 'Contact us', href: paths.contact },
@@ -34,9 +31,25 @@ const LINKS = [
       { name: 'Privacy policy', href: '#' },
     ],
   },
-  { headline: 'Contact', children: [{ name: 'support@minimals.cc', href: '#' }] },
+  { headline: 'Contact', children: [{ name: 'support@youplex.site', href: '#' }] },
 ];
-
+/// ----------------------------socials-----------------------------------
+export const _socials = [
+  {
+    name: 'Telegram',
+    value: 'telegram',
+    icon: 'logos:telegram',
+    path: paths.telegram,
+    color: '#0088cc',
+  },
+  {
+    name: 'Discord',
+    value: 'discord',
+    icon: 'logos:discord-icon',
+    path: paths.discord,
+    color: '#5865F2',
+  },
+];
 // ----------------------------------------------------------------------
 
 export function Footer({ layoutQuery, sx }) {
@@ -73,8 +86,7 @@ export function Footer({ layoutQuery, sx }) {
                 [theme.breakpoints.up(layoutQuery)]: { mx: 'unset' },
               }}
             >
-              The starting point for your next project with Minimal UI Kit, built on the newest
-              version of Material-UI ©, ready to be customized to your style.
+              {process.env.NEXT_PUBLIC_APP_NAME} Your number one movie/series/anime streaming site
             </Typography>
 
             <Stack
@@ -160,7 +172,7 @@ export function HomeFooter({ sx }) {
         <Box sx={{ mt: 1, typography: 'caption' }}>
           © All rights reserved.
           <br /> made by
-          <Link href="https://minimals.cc/"> minimals.cc </Link>
+          <Link href={process.env.NEXT_PUBLIC_SERVER_URL}> {process.env.NEXT_PUBLIC_APP_NAME} </Link>
         </Box>
       </Container>
     </Box>

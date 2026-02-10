@@ -1,4 +1,4 @@
-import { defaultFont } from 'theme/core/typography';
+import { defaultFont } from '@/theme/core/typography';
 
 // ----------------------------------------------------------------------
 

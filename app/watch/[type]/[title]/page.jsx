@@ -5,8 +5,8 @@ import { getMediaDetails, getRecommendations } from '@/actions/api';
 // ----------------------------------------------------------------------
 
 export async function generateMetadata({ params, searchParams }) {
-  const { type } = params;
-  const { id, sn, ep } = searchParams;
+  const { type,title } = await params;
+  const { id, sn, ep } = await searchParams;
 
   const data = await getMediaDetails(type, id);
 
@@ -22,7 +22,7 @@ export async function generateMetadata({ params, searchParams }) {
     : `Watch ${displayTitle} (${year}) Full Movie Online - ${CONFIG.site.name}`;
 
   const description = data.overview?.slice(0, 160);
-  const imageUrl = `${process.env.NEXT_PUBLIC_TMDB_IMAGE_BASE_URL}/original${data.backdrop_path}`;
+  const imageUrl = `https://image.tmdb.org/t/p/original${data.backdrop_path}`;
 
   return {
     title: seoTitle,
@@ -32,7 +32,7 @@ export async function generateMetadata({ params, searchParams }) {
       title: seoTitle,
       description,
       type: 'video.movie',
-      url: `${CONFIG.site.serverUrl}/watch/${type}/${params.title}?id=${id}`,
+      url: `${CONFIG.site.serverUrl}/watch/${type}/${title}?id=${id}`,
       images: [{ url: imageUrl, width: 1200, height: 630, alt: displayTitle }],
     },
     twitter: {
@@ -42,7 +42,7 @@ export async function generateMetadata({ params, searchParams }) {
       images: [imageUrl],
     },
     alternates: {
-      canonical: `${CONFIG.site.serverUrl}/watch/${type}/${params.title}?id=${id}`,
+      canonical: `${CONFIG.site.serverUrl}/watch/${type}/${title}?id=${id}`,
     },
   };
 }
@@ -50,8 +50,8 @@ export async function generateMetadata({ params, searchParams }) {
 // ----------------------------------------------------------------------
 
 export default async function Page({ params, searchParams }) {
-  const { type } = params;
-  const { id, sn, ep } = searchParams;
+  const { type } = await params;
+  const { id, sn, ep } = await searchParams;
 
   const [mediaData, recommendationsData] = await Promise.all([
     getMediaDetails(type, id),
@@ -96,8 +96,7 @@ export default async function Page({ params, searchParams }) {
 
 // ----------------------------------------------------------------------
 
-const dynamic = CONFIG.isStaticExport ? 'auto' : 'force-dynamic';
-export { dynamic };
+export const dynamic = 'force-dynamic';
 
 export async function generateStaticParams() {
   return [];

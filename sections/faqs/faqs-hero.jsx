@@ -10,8 +10,8 @@ import { outlinedInputClasses } from '@mui/material/OutlinedInput';
 import { CONFIG } from 'config-global';
 import { varAlpha, bgGradient } from 'theme/styles';
 
-import { Iconify } from 'components/iconify';
-import { varFade, AnimateText, MotionContainer, animateTextClasses } from 'components/animate';
+import { Iconify } from '@/components/iconify';
+import { varFade, AnimateText, MotionContainer, animateTextClasses } from '@/components/animate';
 
 // ----------------------------------------------------------------------
 

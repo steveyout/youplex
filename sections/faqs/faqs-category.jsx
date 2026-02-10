@@ -9,10 +9,10 @@ import ListItemButton from '@mui/material/ListItemButton';
 
 import { useBoolean } from 'hooks/use-boolean';
 
-import { CONFIG } from 'config-global';
-import { maxLine } from 'theme/styles';
+import { CONFIG } from '@/config-global';
+import { maxLine } from '@/theme/styles';
 
-import { Iconify } from 'components/iconify';
+import { Iconify } from '@/components/iconify';
 
 // ----------------------------------------------------------------------
 
