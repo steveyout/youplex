@@ -72,7 +72,20 @@ export default function VideoPlayer({ tmdbId, type, season = 1, episode = 1 }) {
           <Typography variant="subtitle2">Server:</Typography>
         </Stack>
 
-        <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 0.5 }}>
+        <Stack
+          direction="row"
+          spacing={1.5} // Increased spacing for better touch targets
+          sx={{
+            overflowX: 'auto',
+            pb: 1, // Space for the scrollbar if visible
+            px: { xs: 2, sm: 0 }, // Adds "edge" spacing on mobile so buttons don't hit the screen wall
+            scrollbarWidth: 'none', // Hides scrollbar on Firefox
+            '&::-webkit-scrollbar': { display: 'none' }, // Hides scrollbar on Chrome/Safari
+            '& > *': {
+              flexShrink: 0, // Prevents buttons from squishing
+            },
+          }}
+        >
           {availableProviders.map((provider) => {
             const isSelected = selectedProviderId === provider.id;
 
@@ -83,7 +96,11 @@ export default function VideoPlayer({ tmdbId, type, season = 1, episode = 1 }) {
                 variant={isSelected ? 'contained' : 'soft'}
                 color={isSelected ? 'primary' : 'inherit'}
                 onClick={() => setSelectedProviderId(provider.id)}
-                sx={{ whiteSpace: 'nowrap' }}
+                sx={{
+                  whiteSpace: 'nowrap',
+                  borderRadius: 1.25, // Slightly rounder for a modern look
+                  px: 2 // Internal button padding for better clickable area
+                }}
               >
                 {provider.name}
               </Button>

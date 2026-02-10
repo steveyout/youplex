@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { paths } from '@/routes/paths';
 import { Logo } from '@/components/logo';
 import { usePathname } from '@/routes/hooks';
+import {Iconify} from "@/components/iconify";
 import { NavUl } from '@/components/nav-section';
 import { Scrollbar } from '@/components/scrollbar';
 import { SignInButton } from '@/layouts/components/sign-in-button';
@@ -11,7 +12,6 @@ import Drawer from '@mui/material/Drawer';
 import Button from '@mui/material/Button';
 
 import { NavList } from './nav-mobile-list';
-import {Iconify} from "@/components/iconify";
 
 // ----------------------------------------------------------------------
 

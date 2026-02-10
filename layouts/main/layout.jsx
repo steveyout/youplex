@@ -19,7 +19,6 @@ import { navData as mainNavData } from '../config-nav-main';
 export function MainLayout({ sx, data, children }) {
   const theme = useTheme();
 
-  const pathname = usePathname();
 
   const mobileNavOpen = useBoolean();
 
@@ -45,6 +44,7 @@ export function MainLayout({ sx, data, children }) {
               searchbar: true,
               localization: true,
               notifications: true,
+              signIn :false,
             }}
             slots={{
               topArea: (

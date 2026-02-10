@@ -45,7 +45,7 @@ export const providers = [
   },
 ];
 
-export const DEFAULT_PROVIDER_ID = 'vidsrc_to';
+export const DEFAULT_PROVIDER_ID = 'vidlink';
 
 /**
  * Helper to build the URL based on media type
