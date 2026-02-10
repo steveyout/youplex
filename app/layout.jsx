@@ -67,6 +67,7 @@ export default async function RootLayout({ children }) {
     });
              `}
                     </Script>
+                    {/*
                     <Script data-cfasync="false" strategy="afterInteractive" id="show-banner">
                       {`
             atOptions = {
@@ -84,6 +85,7 @@ export default async function RootLayout({ children }) {
                       strategy="afterInteractive"
                       src="https://disturbsparkler.com/db286534355560bb44457576fd0665fb/invoke.js"
                     />
+                    */}
 
                     <Script
                       data-cfasync="false"
