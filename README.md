@@ -9,6 +9,21 @@ Youplex is a high-performance, SEO-optimized streaming discovery platform built 
 
 ---
 
+---
+
+## 📈 Project Growth
+
+### Star History
+[![Star History Chart](https://api.star-history.com/svg?repos=steveyout/youplex&theme=dark)](https://star-history.com/#steveyout/youplex&Date)
+
+### Repository Metrics
+![GitHub Repo stars](https://img.shields.io/github/stars/steveyout/youplex?style=for-the-badge&color=yellow)
+![GitHub forks](https://img.shields.io/github/forks/steveyout/youplex?style=for-the-badge&color=blue)
+![GitHub contributors](https://img.shields.io/github/contributors/steveyout/youplex?style=for-the-badge&color=green)
+![GitHub last commit](https://img.shields.io/github/last-commit/steveyout/youplex?style=for-the-badge)
+
+---
+
 ## ✨ Features
 
 - 🚀 **Next.js 15 & Turbopack:** Blazing fast development and optimized production builds.
