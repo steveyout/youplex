@@ -35,8 +35,12 @@ jobs:
 
       - name: Build APK with Bubblewrap
         run: |
-          # Use the pre-created twa-manifest.json
-          # We bypass interactive prompts using a yes pipe or default config
+          # Configure bubblewrap globally to use the pre-installed JDK and Android SDK
+          # This prevents it from asking to download them interactively
+          mkdir -p ~/.bubblewrap
+          echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
+          
+          # Run build in non-interactive mode
           bubblewrap build --quiet --skipActionablePreviews
 
       - name: Upload APK
