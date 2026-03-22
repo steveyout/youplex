@@ -1,0 +1,27 @@
+{
+  "projectVersion": 1,
+  "bundleId": "app.vercel.youplex.twa",
+  "host": "youplex.vercel.app",
+  "name": "Youplex TV",
+  "launcherName": "Youplex",
+  "startUrl": "/tv-ui",
+  "iconUrl": "https://youplex.vercel.app/logo/logo.png",
+  "display": "standalone",
+  "orientation": "any",
+  "statusBarStyle": "default",
+  "themeColor": "#050505",
+  "backgroundColor": "#050505",
+  "shortcuts": [],
+  "webManifestUrl": "https://youplex.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaCode": "",
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "generatorApp": "bubblewrap-cli",
+  "webhub": {
+    "webhubVersion": "1.0.0"
+  }
+}
