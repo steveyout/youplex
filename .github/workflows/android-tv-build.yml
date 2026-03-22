@@ -2,7 +2,7 @@ name: Build Android TV APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: ["*"]
   workflow_dispatch:
 
 jobs:
