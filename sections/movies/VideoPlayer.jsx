@@ -44,6 +44,7 @@ export default function VideoPlayer({ tmdbId, type, season = 1, episode = 1 }) {
             frameBorder="0"
             scrolling="no"
             allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
             title="Movie Player"
             style={{ position: 'absolute', top: 0, left: 0 }}
           />

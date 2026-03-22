@@ -59,40 +59,7 @@ export default async function RootLayout({ children }) {
                       <SettingsDrawer />
                     {/* Google tag (gtag.js) */}
                     <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? ""} />
-                    <Script async strategy="afterInteractive" src="//acscdn.com/script/aclib.js"  />
-                    <Script data-cfasync="false" strategy="lazyOnload" id="adcash">
-                      {`
-           aclib.runPop({
-        zoneId: '9033646',
-    });
-             `}
-                    </Script>
-                    {/*
-                    <Script data-cfasync="false" strategy="afterInteractive" id="show-banner">
-                      {`
-            atOptions = {
-            'key' : 'db286534355560bb44457576fd0665fb',
-            'format' : 'iframe',
-            'height' : 600,
-            'width' : 160,
-            'params' : {}
-            };
-            `}
-                    </Script>
-
-                    <Script
-                      data-cfasync="false"
-                      strategy="afterInteractive"
-                      src="https://disturbsparkler.com/db286534355560bb44457576fd0665fb/invoke.js"
-                    />
-                    */}
-
-                    <Script
-                      data-cfasync="false"
-                      strategy="afterInteractive"
-                      src="https://disturbsparkler.com/cb91f4b32d74a911ec84244e77e12b2f/invoke.js"
-                    />
-                      {children}
+                    {children}
                   </MotionLazy>
                 </ThemeProvider>
               </SettingsProvider>

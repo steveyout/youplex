@@ -11,8 +11,13 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = process.env.NEXT_PUBLIC_TMDB_TOKEN;
+    const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else if (apiKey) {
+      config.params = config.params || {};
+      config.params.api_key = apiKey;
     }
     return config;
   },
