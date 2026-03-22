@@ -33,15 +33,24 @@ jobs:
         run: |
           keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=Youplex, OU=TV, O=Youplex, L=Unknown, ST=Unknown, C=US"
 
+      - name: Debug Paths
+        run: |
+          echo "JAVA_HOME: $JAVA_HOME"
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          ls -d $ANDROID_HOME
+
       - name: Build APK with Bubblewrap
         run: |
-          # Configure bubblewrap globally to use the pre-installed JDK and Android SDK
-          # This prevents it from asking to download them interactively
           mkdir -p ~/.bubblewrap
-          echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
+          cat <<EOF > ~/.bubblewrap/config.json
+          {
+            "jdkPath": "${JAVA_HOME}",
+            "androidSdkPath": "${ANDROID_HOME}"
+          }
+          EOF
           
-          # Run build in non-interactive mode
-          bubblewrap build --quiet --skipActionablePreviews
+          # Run build using 'yes' to handle any remaining license prompts
+          yes | bubblewrap build --quiet --skipActionablePreviews
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
