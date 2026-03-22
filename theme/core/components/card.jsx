@@ -10,6 +10,12 @@ const MuiCard = {
       boxShadow: theme.customShadows.card,
       borderRadius: theme.shape.borderRadius * 2,
       zIndex: 0, // Fix Safari overflow: hidden with border radius
+      [theme.getColorSchemeSelector('dark')]: {
+        backgroundColor: 'rgba(20, 20, 25, 0.4)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+      },
     }),
   },
 };

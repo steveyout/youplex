@@ -2,11 +2,11 @@ import { setFont, pxToRem, responsiveFontSizes } from '../styles/utils';
 
 // ----------------------------------------------------------------------
 
-export const defaultFont = 'Public Sans';
+export const defaultFont = 'Inter';
 
 export const primaryFont = setFont(defaultFont);
 
-export const secondaryFont = setFont('Barlow');
+export const secondaryFont = setFont('Inter');
 
 // ----------------------------------------------------------------------
 
@@ -20,6 +20,7 @@ export const typography = {
   fontWeightBold: '700',
   h1: {
     fontWeight: 800,
+    letterSpacing: '-0.02em',
     lineHeight: 80 / 64,
     fontSize: pxToRem(40),
     fontFamily: secondaryFont,
@@ -27,6 +28,7 @@ export const typography = {
   },
   h2: {
     fontWeight: 800,
+    letterSpacing: '-0.02em',
     lineHeight: 64 / 48,
     fontSize: pxToRem(32),
     fontFamily: secondaryFont,
@@ -34,6 +36,7 @@ export const typography = {
   },
   h3: {
     fontWeight: 700,
+    letterSpacing: '-0.01em',
     lineHeight: 1.5,
     fontSize: pxToRem(24),
     fontFamily: secondaryFont,
@@ -41,6 +44,7 @@ export const typography = {
   },
   h4: {
     fontWeight: 700,
+    letterSpacing: '-0.01em',
     lineHeight: 1.5,
     fontSize: pxToRem(20),
     ...responsiveFontSizes({ sm: 20, md: 24, lg: 24 }),
