@@ -1,10 +1,16 @@
 'use client';
+
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import Autoplay from 'embla-carousel-autoplay';
+import { useRouter } from 'next/navigation';
+
+import { paths } from '@/routes/paths';
 import { Carousel, useCarousel, CarouselDotButtons, CarouselArrowBasicButtons } from '@/components/carousel';
+
+// ----------------------------------------------------------------------
 
 export function HeroBanner({ items }) {
   const carousel = useCarousel(
@@ -20,35 +26,21 @@ export function HeroBanner({ items }) {
   return (
     <Box
       sx={{
-        // ── Main hero container ──
         position: 'relative',
-        width: '100vw',
-        marginLeft: 'calc(-50vw + 50%)',
-        marginRight: 'calc(-50vw + 50%)',
-        height: { xs: '560px', sm: '650px', md: '720px', lg: '780px' }, // ← tune these values
-        minHeight: { xs: '520px', md: '680px' },
-        mb: 0,
+        width: '100%',
+        height: { xs: '420px', sm: '480px', md: '520px', lg: '560px' },
+        mb: 3,
         overflow: 'hidden',
-        isolation: 'isolate',           // helps with stacking context / z-index
+        borderRadius: { xs: 0, md: 3 },
+        isolation: 'isolate',
       }}
     >
-      {/* Carousel takes 100% height */}
       <Carousel
         carousel={carousel}
         sx={{
           height: '100%',
-          margin: 0,
-          '& .mnl__carousel__container': {
-            height: '100%',
-            margin: 0,
-            padding: 0,
-          },
-          '& .mnl__carousel__slide': {
-            height: '100%',
-            minHeight: '100%',
-            margin: 0,
-            padding: 0,
-          },
+          '& .mnl__carousel__container': { height: '100%' },
+          '& .mnl__carousel__slide': { height: '100%' },
         }}
       >
         {items.map((item) => (
@@ -56,40 +48,30 @@ export function HeroBanner({ items }) {
         ))}
       </Carousel>
 
-      {/* Navigation overlay – small strip at bottom */}
+      {/* Navigation overlay */}
       <Box
         sx={{
           position: 'absolute',
-          inset: 'auto 0 0 0',           // bottom:0, left:0, right:0
-          height: { xs: '60px', md: '70px' },
-          pointerEvents: 'none',
+          inset: 'auto 0 0 0',
           zIndex: 10,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'flex-end',
-          pb: { xs: 1, md: 1.5 },
+          pointerEvents: 'none',
+          pb: 2,
         }}
       >
-        {/* Dots – centered */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            pb: { xs: 1, md: 1.5 },
-            pointerEvents: 'auto',
-          }}
-        >
+        <Box sx={{ display: 'flex', justifyContent: 'center', pointerEvents: 'auto' }}>
           <CarouselDotButtons {...carousel.dots} />
         </Box>
 
-        {/* Arrows – bottom right, desktop only */}
         <Box
           sx={{
             position: 'absolute',
-            bottom: { xs: 16, md: 24 },
-            right: { xs: 16, md: 32 },
+            bottom: 20,
+            right: 32,
             pointerEvents: 'auto',
-            display: { xs: 'none', md: 'block' },
+            display: { xs: 'none', lg: 'block' },
           }}
         >
           <CarouselArrowBasicButtons {...carousel.arrows} />
@@ -99,20 +81,35 @@ export function HeroBanner({ items }) {
   );
 }
 
+// ----------------------------------------------------------------------
+
 function HeroBannerItem({ item }) {
+  const router = useRouter();
+
   const title = item.title || item.name || 'Untitled';
   const overview = item.overview || '';
+
+  // Determine if it's a movie or tv show for the path
+  const type = item.title ? 'movie' : 'tv';
+
   const backdropUrl = item.backdrop_path
     ? `https://image.tmdb.org/t/p/original${item.backdrop_path}`
     : '/fallback-backdrop.jpg';
+
+  const handlePlay = () => {
+    router.push(paths.watch.details(type, item.id));
+  };
+
+  const handleMoreInfo = () => {
+    router.push(paths.watch.details(type, item.id));
+  };
 
   return (
     <Box
       sx={{
         height: '100%',
         width: '100%',
-        background: `url(${backdropUrl}) center center / cover no-repeat`,
-        backgroundColor: 'grey.900',
+        background: `url(${backdropUrl}) center 20% / cover no-repeat`,
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
@@ -120,14 +117,14 @@ function HeroBannerItem({ item }) {
           content: '""',
           position: 'absolute',
           inset: 0,
-          background: 'linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.55) 45%, rgba(10,10,10,0.15) 100%)',
+          background: 'linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.4) 50%, transparent 100%)',
           zIndex: 1,
         },
         '&::after': {
           content: '""',
           position: 'absolute',
           inset: 0,
-          background: 'linear-gradient(to right, #0a0a0a 0%, rgba(10,10,10,0.65) 35%, transparent 70%)',
+          background: 'linear-gradient(to right, #0a0a0a 0%, rgba(10,10,10,0.4) 40%, transparent 80%)',
           zIndex: 1,
         },
       }}
@@ -136,55 +133,51 @@ function HeroBannerItem({ item }) {
         sx={{
           position: 'relative',
           zIndex: 2,
-          maxWidth: 'lg',
-          mx: 'auto',
           width: '100%',
-          px: { xs: 3, md: 6, lg: 8 },
-          py: { xs: 0, md: 4 },
+          px: { xs: 2, md: 6 },
+          mt: { xs: 4, md: 0 },
         }}
-        spacing={{ xs: 2.5, md: 4 }}
+        spacing={2}
       >
         <Typography
           variant="h1"
           sx={{
             color: 'common.white',
-            maxWidth: 880,
-            textShadow: '0 5px 25px rgba(0,0,0,0.85)',
-            fontSize: { xs: '2.6rem', sm: '3.5rem', md: '4.5rem', lg: '5.2rem' },
-            lineHeight: 1.05,
-            fontWeight: 900,
-            letterSpacing: '-0.02em',
+            maxWidth: 600,
+            textShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            fontSize: { xs: '1.8rem', sm: '2.4rem', md: '3rem', lg: '3.6rem' },
+            lineHeight: 1.1,
+            fontWeight: 800,
           }}
         >
           {title}
         </Typography>
 
         <Typography
-          variant="body1"
+          variant="body2"
           sx={{
-            color: 'grey.100',
-            maxWidth: 640,
-            WebkitLineClamp: 3,
+            color: 'grey.300',
+            maxWidth: 500,
+            WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
             display: '-webkit-box',
             overflow: 'hidden',
-            textShadow: '0 2px 12px rgba(0,0,0,0.9)',
-            fontSize: { xs: '1.05rem', md: '1.2rem' },
+            fontSize: { xs: '0.9rem', md: '1rem' },
           }}
         >
           {overview}
         </Typography>
 
-        <Stack direction="row" spacing={2.5} sx={{ pt: { xs: 1, md: 2 } }}>
+        <Stack direction="row" spacing={1.5}>
           <Button
             variant="contained"
-            size="large"
+            color="primary"
+            size="medium"
+            onClick={handlePlay}
             sx={{
-              px: { xs: 4, md: 6 },
-              py: { xs: 1.4, md: 1.6 },
-              fontSize: '1.1rem',
+              px: 3,
+              borderRadius: 1.5,
               fontWeight: 700,
-              borderRadius: 3,
               textTransform: 'none',
             }}
           >
@@ -192,23 +185,21 @@ function HeroBannerItem({ item }) {
           </Button>
 
           <Button
-            variant="outlined"
-            size="large"
+            variant="soft"
+            color="inherit"
+            size="medium"
+            onClick={handleMoreInfo}
             sx={{
-              px: { xs: 4, md: 6 },
-              py: { xs: 1.4, md: 1.6 },
-              fontSize: '1.1rem',
+              px: 3,
+              borderRadius: 1.5,
               fontWeight: 700,
-              borderRadius: 3,
-              color: 'white',
-              borderColor: 'whiteAlpha.500',
-              background: 'rgba(255,255,255,0.08)',
-              backdropFilter: 'blur(10px)',
               textTransform: 'none',
+              bgcolor: 'rgba(255,255,255,0.1)',
+              backdropFilter: 'blur(8px)',
+              color: 'white',
               '&:hover': {
-                borderColor: 'white',
-                background: 'rgba(255,255,255,0.18)',
-              },
+                bgcolor: 'rgba(255,255,255,0.2)',
+              }
             }}
           >
             More Info

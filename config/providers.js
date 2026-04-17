@@ -33,8 +33,14 @@ export const providers = [
   },
   {
     id: 'vidsrc_me',
-    name: 'Server 4',
-    baseUrl: 'https://vidsrc.me/embed',
+    name: 'Server 4 (Vidsrc)',
+    baseUrl: 'https://vsembed.ru/embed',
+    enabled: true,
+  },
+  {
+    id: 'vidup',
+    name: 'Server 5 (Vidup)',
+    baseUrl: 'https://vidup.to',
     enabled: true,
   },
   {
@@ -45,7 +51,7 @@ export const providers = [
   },
 ];
 
-export const DEFAULT_PROVIDER_ID = 'vidlink';
+export const DEFAULT_PROVIDER_ID = 'videasy';
 
 /**
  * Helper to build the URL based on media type

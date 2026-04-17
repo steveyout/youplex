@@ -1,26 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Iconify } from '@/components/iconify';
 import { providers, getEmbedUrl, DEFAULT_PROVIDER_ID } from '@/config/providers';
 
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
+import Skeleton from '@mui/material/Skeleton';
 import { alpha } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 
 // ----------------------------------------------------------------------
 
 export default function VideoPlayer({ tmdbId, type, season = 1, episode = 1 }) {
-  // Use the default provider ID from your config
   const [selectedProviderId, setSelectedProviderId] = useState(DEFAULT_PROVIDER_ID);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Filter only enabled providers from your config
+  // Effect to trigger loading state when server changes
+  useEffect(() => {
+    setIsLoading(true);
+  }, [selectedProviderId, tmdbId, season, episode]);
+
   const availableProviders = providers.filter((p) => p.enabled);
-
-  // Use your helper function to generate the source
   const iframeSrc = getEmbedUrl(selectedProviderId, type, tmdbId, season, episode);
+
+  const handleProviderChange = (id) => {
+    if (id !== selectedProviderId) {
+      setIsLoading(true);
+      setSelectedProviderId(id);
+    }
+  };
 
   return (
     <Box>
@@ -36,17 +46,40 @@ export default function VideoPlayer({ tmdbId, type, season = 1, episode = 1 }) {
           boxShadow: (theme) => `0 24px 48px 0 ${alpha(theme.palette.common.black, 0.4)}`,
         }}
       >
+        {/* Skeleton Loader Overlay */}
+        {isLoading && (
+          <Skeleton
+            variant="rectangular"
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: 1,
+              height: 1,
+              zIndex: 2,
+              bgcolor: 'grey.900',
+            }}
+            animation="wave"
+          />
+        )}
+
         {iframeSrc ? (
           <iframe
+            key={`${selectedProviderId}-${season}-${episode}`} // Forces re-mount on change
             src={iframeSrc}
             width="100%"
             height="100%"
             frameBorder="0"
             scrolling="no"
             allowFullScreen
-            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+            onLoad={() => setIsLoading(false)} // Hide skeleton when iframe content loads
             title="Movie Player"
-            style={{ position: 'absolute', top: 0, left: 0 }}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              zIndex: 1
+            }}
           />
         ) : (
           <Stack alignItems="center" justifyContent="center" sx={{ height: 1, color: 'white' }}>
@@ -65,7 +98,7 @@ export default function VideoPlayer({ tmdbId, type, season = 1, episode = 1 }) {
           p: 2,
           borderRadius: 1.5,
           bgcolor: 'background.neutral',
-          border: (theme) => `solid 1px ${theme.vars.palette.divider}`
+          border: (theme) => `solid 1px ${theme.vars.palette.divider}`,
         }}
       >
         <Stack direction="row" alignItems="center" spacing={1} sx={{ color: 'text.secondary', flexShrink: 0 }}>
@@ -75,16 +108,14 @@ export default function VideoPlayer({ tmdbId, type, season = 1, episode = 1 }) {
 
         <Stack
           direction="row"
-          spacing={1.5} // Increased spacing for better touch targets
+          spacing={1.5}
           sx={{
             overflowX: 'auto',
-            pb: 1, // Space for the scrollbar if visible
-            px: { xs: 2, sm: 0 }, // Adds "edge" spacing on mobile so buttons don't hit the screen wall
-            scrollbarWidth: 'none', // Hides scrollbar on Firefox
-            '&::-webkit-scrollbar': { display: 'none' }, // Hides scrollbar on Chrome/Safari
-            '& > *': {
-              flexShrink: 0, // Prevents buttons from squishing
-            },
+            pb: 1,
+            px: { xs: 2, sm: 0 },
+            scrollbarWidth: 'none',
+            '&::-webkit-scrollbar': { display: 'none' },
+            '& > *': { flexShrink: 0 },
           }}
         >
           {availableProviders.map((provider) => {
@@ -96,11 +127,11 @@ export default function VideoPlayer({ tmdbId, type, season = 1, episode = 1 }) {
                 size="small"
                 variant={isSelected ? 'contained' : 'soft'}
                 color={isSelected ? 'primary' : 'inherit'}
-                onClick={() => setSelectedProviderId(provider.id)}
+                onClick={() => handleProviderChange(provider.id)}
                 sx={{
                   whiteSpace: 'nowrap',
-                  borderRadius: 1.25, // Slightly rounder for a modern look
-                  px: 2 // Internal button padding for better clickable area
+                  borderRadius: 1.25,
+                  px: 2,
                 }}
               >
                 {provider.name}
