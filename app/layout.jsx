@@ -24,7 +24,7 @@ export const metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Yourplex',
+    title: 'Youplex',
   },
   formatDetection: {
     telephone: false,
