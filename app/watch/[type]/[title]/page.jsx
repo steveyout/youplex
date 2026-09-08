@@ -6,7 +6,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useRouter } from 'next/router';
 
-import { Player } from '@/components/player';
+import Player from '@/components/player/player'; // Corrected import path
 import { getMovieOrShow } from '@/actions/api';
 
 // ----------------------------------------------------------------------
