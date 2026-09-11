@@ -6,6 +6,7 @@ import { useRouter } from '@/routes/hooks';
 import { Label } from '@/components/label';
 import { searchMedia } from '@/actions/api';
 import { Iconify } from '@/components/iconify';
+import { RouterLink } from '@/routes/components';
 import parse from 'autosuggest-highlight/parse';
 import match from 'autosuggest-highlight/match';
 import { useBoolean } from '@/hooks/use-boolean';
@@ -16,6 +17,7 @@ import { useEventListener } from '@/hooks/use-event-listener';
 import { SearchNotFound } from '@/components/search-not-found';
 
 import Box from '@mui/material/Box';
+import Link from '@mui/material/Link';
 import InputBase from '@mui/material/InputBase';
 import { useTheme } from '@mui/material/styles';
 import IconButton from '@mui/material/IconButton';
@@ -184,9 +186,30 @@ export function Searchbar({ sx, ...other }) {
         {searchQuery && !loading && !searchResults.length ? (
           <SearchNotFound query={searchQuery} sx={{ py: 15 }} />
         ) : (
-          <Scrollbar sx={{ px: 3, pb: 3, pt: 2, height: 400 }}>
-            {renderItems()}
-          </Scrollbar>
+          <>
+            <Scrollbar sx={{ px: 3, pb: 3, pt: 2, height: 400 }}>
+              {renderItems()}
+            </Scrollbar>
+
+            {searchResults.length > 0 && (
+              <Box sx={{ p: 2, textAlign: 'center', borderTop: `solid 1px ${theme.vars.palette.divider}` }}>
+                <Link
+                  component={RouterLink}
+                  href={`${paths.search}?q=${encodeURIComponent(searchQuery)}`}
+                  onClick={handleClose}
+                  sx={{
+                    typography: 'subtitle2',
+                    fontWeight: 700,
+                    color: 'primary.main',
+                    transition: 'opacity 0.2s ease',
+                    '&:hover': { opacity: 0.72 },
+                  }}
+                >
+                  View all results for &ldquo;{searchQuery}&rdquo;
+                </Link>
+              </Box>
+            )}
+          </>
         )}
       </Dialog>
     </>

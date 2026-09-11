@@ -36,3 +36,4 @@ build
 .eslintcache
 .unimportedrc.json
 tsconfig.tsbuildinfo
+.aider*

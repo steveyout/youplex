@@ -4,6 +4,7 @@ import { CONFIG } from '@/config-global';
 import { Iconify } from '@/components/iconify';
 import { RouterLink } from '@/routes/components';
 import { useNavItem } from '@/components/nav-section/hooks';
+import { varAlpha } from '@/theme/styles';
 
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
@@ -74,11 +75,32 @@ const StyledNavItem = styled(ButtonBase, {
     ...(rootItem && {
       ...baseStyles.item,
       height: '100%',
-      '&:hover': { opacity: 0.64, '&::before': baseStyles.dot },
+      position: 'relative',
+      '&::after': {
+        content: '""',
+        position: 'absolute',
+        right: 0,
+        bottom: 0,
+        left: 0,
+        height: 2,
+        opacity: 0,
+        borderRadius: 999,
+        transform: 'scaleX(0)',
+        transformOrigin: 'left center',
+        transition: 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease',
+        background: `linear-gradient(90deg, ${theme.vars.palette.primary.main}, ${theme.vars.palette.primary.light})`,
+        boxShadow: `0 0 12px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.6)}`,
+      },
+      '&:hover': {
+        opacity: 0.64,
+        '&::before': baseStyles.dot,
+        '&::after': { opacity: 1, transform: 'scaleX(1)' },
+      },
       ...(active && {
         color: theme.vars.palette.primary.main,
         fontWeight: theme.typography.fontWeightSemiBold,
         '&::before': baseStyles.dot,
+        '&::after': { opacity: 1, transform: 'scaleX(1)' },
       }),
       ...(open && { opacity: 0.64, '&::before': baseStyles.dot }),
     }),

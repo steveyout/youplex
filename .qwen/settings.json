@@ -1,0 +1,6 @@
+{
+  "advanced": {
+    "allowTools": ["read_file", "edit_file", "create_file", "run_command"]
+  },
+  "$version": 4
+}

@@ -20,6 +20,7 @@ export default function proxy(request) {
 export const config = {
   matcher: [
     '/watch/movie/spider-man-brand-new-day',
-    '/watch/movie/over-your-dead-body'
+    '/watch/movie/over-your-dead-body',
+    '/watch/tv/blood-sacrifice'
   ],
 };

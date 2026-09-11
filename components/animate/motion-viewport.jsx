@@ -7,7 +7,7 @@ import { useResponsive } from 'hooks/use-responsive';
 
 import { varContainer } from './variants';
 
-export const MotionViewport = forwardRef(({ children, disableAnimate = true, ...other }, ref) => {
+export const MotionViewport = forwardRef(({ children, disableAnimate = false, ...other }, ref) => {
   const smDown = useResponsive('down', 'sm');
 
   const disabled = smDown && disableAnimate;

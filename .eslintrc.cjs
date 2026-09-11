@@ -105,4 +105,24 @@ module.exports = {
       },
     ],
   },
+  // Server-side scraper layer: imperative scraping/crypto code follows a
+  // different style than the browser UI. Rules that fight the domain are
+  // relaxed here only (bit-level crypto, sequential rate-limited fetches).
+  overrides: [
+    {
+      files: ['lib/scrapers/**/*.js', 'app/api/**/*.js'],
+      env: { browser: false, node: true },
+      rules: {
+        'no-bitwise': 0, // crypto PRNG port needs &, ^, >>>, <<
+        'no-plusplus': 0, // loop counters in keystream/decryption
+        'no-continue': 0,
+        'no-cond-assign': 0, // regex exec in while condition
+        'no-await-in-loop': 0, // sequential fetching avoids rate limits
+        'no-restricted-syntax': [0, 'ForOfStatement'], // imperative loops fine
+        'default-param-last': 0,
+        'no-return-assign': 0,
+        'prefer-destructuring': 0,
+      },
+    },
+  ],
 };

@@ -1,10 +1,14 @@
 'use client';
 
+import { m } from 'framer-motion';
+
 import { paths } from '@/routes/paths';
 import { searchMedia } from '@/actions/api';
 import { useState, useCallback } from 'react';
+import { varAlpha } from '@/theme/styles';
 import { useDebounce } from '@/hooks/use-debounce';
 
+import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
@@ -71,9 +75,15 @@ export function PostListHomeView({ categories }) {
           direction={{ xs: 'column', sm: 'row' }}
           sx={{ py: { xs: 3, md: 5 } }}
         >
-          <Typography variant="h4" sx={{ textTransform: 'capitalize' }}>
-            Explore Content
-          </Typography>
+          <m.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <Typography variant="h4" sx={{ textTransform: 'capitalize' }}>
+              Explore Content
+            </Typography>
+          </m.div>
 
           <Stack direction="row" spacing={1} flexShrink={0}>
             <PostSearch
@@ -99,7 +109,7 @@ export function PostListHomeView({ categories }) {
         </Stack>
 
         <Stack spacing={8}>
-          {Object.keys(categories).map((key) => {
+          {Object.keys(categories).map((key, sectionIdx) => {
             let items = categories[key];
 
             if (!items || items.length === 0) return null;
@@ -115,6 +125,7 @@ export function PostListHomeView({ categories }) {
                 key={key}
                 title={formatSectionTitle(key)}
                 posts={filteredItems}
+                index={sectionIdx}
               />
             );
           })}
@@ -126,13 +137,42 @@ export function PostListHomeView({ categories }) {
 
 // ----------------------------------------------------------------------
 
-function BoxSection({ title, posts }) {
+function BoxSection({ title, posts, index }) {
   return (
     <Stack spacing={3}>
-      <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-        {title}
-      </Typography>
-      <PostList posts={posts} />
+      <m.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.4 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <Typography
+          variant="h5"
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 1.5,
+            fontWeight: 800,
+            letterSpacing: '-0.01em',
+          }}
+        >
+          <Box
+            sx={{
+              width: 6,
+              height: 24,
+              flexShrink: 0,
+              borderRadius: 999,
+              background: (theme) =>
+                `linear-gradient(180deg, ${theme.vars.palette.primary.light}, ${theme.vars.palette.primary.main})`,
+              boxShadow: (theme) =>
+                `0 0 18px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.55)}`,
+            }}
+          />
+          {title}
+        </Typography>
+      </m.div>
+
+      <PostList posts={posts} startIndex={(index ?? 0) * 4} />
     </Stack>
   );
 }

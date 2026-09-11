@@ -32,13 +32,37 @@ export function createTheme(localeComponents, settings) {
    * 2.Create theme + add locale + update component with settings.
    */
   const theme = extendTheme(
-    updateTheme,
-    localeComponents,
-    updateComponentsWithSettings(settings),
-    overridesTheme
+    guardReactElements(updateTheme),
+    guardReactElements(localeComponents),
+    guardReactElements(updateComponentsWithSettings(settings)),
+    guardReactElements(overridesTheme)
   );
 
   return theme;
+}
+
+function guardReactElements(value) {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  if (typeof value.$$typeof === 'symbol') {
+    const raw = { ...value };
+    Object.defineProperty(raw, Symbol.iterator, { value: undefined });
+    return raw;
+  }
+
+  const keys = Array.isArray(value) ? value.map((_, index) => index) : Object.keys(value);
+  const output = Array.isArray(value) ? [] : {};
+  let changed = false;
+
+  keys.forEach((key) => {
+    const next = guardReactElements(value[key]);
+    output[key] = next;
+    changed = changed || next !== value[key];
+  });
+
+  return changed ? output : value;
 }
 
 // ----------------------------------------------------------------------

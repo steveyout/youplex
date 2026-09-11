@@ -2,7 +2,7 @@ import '@/global.css';
 
 import Script from 'next/script'
 import { CONFIG } from '@/config-global';
-import { primary } from '@/theme/core/palette';
+import PRIMARY_COLOR from '@/theme/with-settings/primary-color.json';
 import { LocalizationProvider } from '@/locales';
 import { Snackbar } from '@/components/snackbar';
 import { detectLanguage } from '@/locales/server';
@@ -34,7 +34,7 @@ export const metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: primary.main,
+  themeColor: PRIMARY_COLOR.red.main,
 };
 
 export default async function RootLayout({ children }) {

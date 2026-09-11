@@ -7,15 +7,20 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import InputAdornment from '@mui/material/InputAdornment';
 import Autocomplete, { autocompleteClasses } from '@mui/material/Autocomplete';
+import { useTheme } from '@mui/material/styles';
 
 import { useRouter } from '@/routes/hooks';
 import { Iconify } from '@/components/iconify';
 import { SearchNotFound } from '@/components/search-not-found';
+
+import { varAlpha } from 'theme/styles';
 import Box from "@mui/material/Box";
 
 // ----------------------------------------------------------------------
 
 export function PostSearch({ query, results, onSearch, hrefItem, loading }) {
+  const theme = useTheme();
+
   const router = useRouter();
 
   // Unified navigation function
@@ -46,7 +51,18 @@ export function PostSearch({ query, results, onSearch, hrefItem, loading }) {
       isOptionEqualToValue={(option, value) => option.id === value.id}
       slotProps={{
         popper: { placement: 'bottom-start', sx: { minWidth: 320 } },
-        paper: { sx: { [` .${autocompleteClasses.option}`]: { pl: 0.75 } } },
+        paper: {
+          sx: {
+            backgroundImage: 'none',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            bgcolor: varAlpha(theme.vars.palette.background.paperChannel, 0.92),
+            border: '1px solid',
+            borderColor: varAlpha(theme.vars.palette.grey['500Channel'], 0.14),
+            boxShadow: `0 24px 48px -24px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.3)}`,
+            [` .${autocompleteClasses.option}`]: { pl: 0.75 },
+          },
+        },
       }}
       renderInput={(params) => (
         <TextField

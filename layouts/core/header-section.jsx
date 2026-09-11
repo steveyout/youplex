@@ -43,8 +43,13 @@ export function HeaderSection({
 
   const toolbarStyles = {
     default: {
+      position: 'relative',
       minHeight: 'auto',
       height: 'var(--layout-header-mobile-height)',
+      ...bgBlur({
+        blur: 12,
+        color: varAlpha(theme.vars.palette.background.defaultChannel, 0.4),
+      }),
       transition: theme.transitions.create(['height', 'background-color'], {
         easing: theme.transitions.easing.easeInOut,
         duration: theme.transitions.duration.shorter,
@@ -58,7 +63,8 @@ export function HeaderSection({
     },
     offset: {
       ...bgBlur({
-        color: varAlpha(theme.vars.palette.background.defaultChannel, 0.8),
+        blur: 16,
+        color: varAlpha(theme.vars.palette.background.defaultChannel, 0.85),
       }),
     },
   };
@@ -104,6 +110,24 @@ export function HeaderSection({
       </Toolbar>
 
       {slots?.bottomArea}
+
+      <Box
+        sx={{
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          zIndex: -1,
+          pointerEvents: 'none',
+          content: '""',
+          position: 'absolute',
+          background: `linear-gradient(90deg, transparent, ${varAlpha(
+            theme.vars.palette.primary.mainChannel,
+            0.55
+          )}, transparent)`,
+          opacity: 0.45,
+        }}
+      />
 
       {!disableElevation && offsetTop && <StyledElevation />}
     </AppBar>

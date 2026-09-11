@@ -54,6 +54,7 @@
 html {
   height: 100%;
   -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
 }
 body,
 #root,
@@ -83,4 +84,198 @@ input[type='number']::-webkit-outer-spin-button {
 input[type='number']::-webkit-inner-spin-button {
   margin: 0;
   -webkit-appearance: none;
+}
+
+/** **************************************
+* Design animations
+*************************************** */
+/* Slow cinematic zoom used on hero backdrops */
+@keyframes youplex-kenburns {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    transform: scale(1.12) translate(1.5%, -1.5%);
+  }
+}
+
+/* Soft entrance: rise + fade */
+@keyframes youplex-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Soft entrance: scale + fade */
+@keyframes youplex-fade-scale {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Moving gradient sheen used on hero buttons / active pills */
+@keyframes youplex-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+/* Gently pulsing halo glow */
+@keyframes youplex-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Slow aurora drift used on page background gradients */
+@keyframes youplex-drift-a {
+  0% {
+    transform: translate3d(-6%, -4%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(7%, 5%, 0) scale(1.12);
+  }
+  100% {
+    transform: translate3d(-6%, -4%, 0) scale(1);
+  }
+}
+
+@keyframes youplex-drift-b {
+  0% {
+    transform: translate3d(5%, 6%, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(-7%, -6%, 0) scale(0.92);
+  }
+  100% {
+    transform: translate3d(5%, 6%, 0) scale(1.05);
+  }
+}
+
+@keyframes youplex-drift-c {
+  0% {
+    transform: translate3d(0%, 0%, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(4%, -8%, 0) scale(1.1);
+  }
+  66% {
+    transform: translate3d(-5%, 6%, 0) scale(0.95);
+  }
+  100% {
+    transform: translate3d(0%, 0%, 0) scale(1);
+  }
+}
+
+.youplex-kenburns {
+  transform-origin: center 20%;
+  animation: youplex-kenburns 22s ease-out both;
+}
+
+.youplex-fade-up {
+  opacity: 0;
+  animation: youplex-fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.youplex-fade-scale {
+  opacity: 0;
+  animation: youplex-fade-scale 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.youplex-shimmer {
+  background-size: 200% 200%;
+  animation: youplex-shimmer 3s linear infinite;
+}
+
+/* Aurora background blob (positioned/colored/sized/anim by the component) */
+.youplex-aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .youplex-kenburns,
+  .youplex-fade-up,
+  .youplex-fade-scale,
+  .youplex-shimmer,
+  .youplex-glow-pulse,
+  .youplex-aurora {
+    animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Player captions: centered block sitting above the custom controls.  */
+/* ------------------------------------------------------------------ */
+.youplex-vds-captions.vds-captions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--youplex-captions-bottom, 72px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: var(--youplex-captions-padding, 0 4%);
+  text-align: center;
+  z-index: 1;
+}
+
+@media (max-width: 600px) {
+  .youplex-vds-captions.vds-captions {
+    --youplex-captions-bottom: 64px;
+    --youplex-captions-padding: 0 4%;
+  }
+}
+
+.youplex-vds-captions.vds-captions [data-part='cue-display'] {
+  padding: 0;
+}
+
+.youplex-vds-captions.vds-captions [data-part='cue'] {
+  display: inline;
+  background-color: rgba(0, 0, 0, 0.62);
+  color: #ffffff;
+  font-family: 'Public Sans', sans-serif;
+  font-size: clamp(15px, 1.35vh, 22px);
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 3px;
+  line-height: 1.5;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  --cue-bg-color: transparent;
+  --cue-text-shadow: none;
+  --cue-box-shadow: none;
+}
+
+@media (max-width: 600px) {
+  .youplex-vds-captions.vds-captions [data-part='cue'] {
+    font-size: 13px;
+    padding: 2px 6px;
+    line-height: 1.45;
+  }
 }

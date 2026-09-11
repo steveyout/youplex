@@ -6,12 +6,13 @@ import { SocialIcon } from '@/components/iconify';
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
-import Divider from '@mui/material/Divider';
 import { useTheme } from '@mui/material/styles';
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Unstable_Grid2';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
+
+import { varAlpha } from 'theme/styles';
 
 // ----------------------------------------------------------------------
 
@@ -56,8 +57,28 @@ export function Footer({ layoutQuery, sx }) {
   const theme = useTheme();
 
   return (
-    <Box component="footer" sx={{ position: 'relative', bgcolor: 'background.default', ...sx }}>
-      <Divider />
+    <Box
+    component="footer"
+    sx={{
+      position: 'relative',
+      bgcolor: varAlpha(theme.vars.palette.background.defaultChannel, 0.35),
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      borderTop: '1px solid',
+      borderColor: varAlpha(theme.vars.palette.grey['500Channel'], 0.18),
+      ...sx,
+    }}
+  >
+      <Box
+        sx={{
+          height: 1,
+          mx: 2,
+          background: `linear-gradient(90deg, transparent, ${varAlpha(
+            theme.vars.palette.primary.mainChannel,
+            0.55
+          )}, transparent)`,
+        }}
+      />
 
       <Container
         sx={{
@@ -99,7 +120,35 @@ export function Footer({ layoutQuery, sx }) {
               }}
             >
               {_socials.map((social) => (
-                <IconButton key={social.name}>
+                <IconButton
+                  key={social.name}
+                  component="a"
+                  href={social.path}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={social.name}
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 1.5,
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    bgcolor: varAlpha(theme.vars.palette.background.paperChannel, 0.07),
+                    border: '1px solid',
+                    borderColor: varAlpha(theme.vars.palette.grey['500Channel'], 0.22),
+                    transition:
+                      'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.65),
+                      bgcolor: varAlpha(theme.vars.palette.primary.mainChannel, 0.16),
+                      boxShadow: `0 14px 28px -12px ${varAlpha(
+                        theme.vars.palette.primary.mainChannel,
+                        0.7
+                      )}`,
+                    },
+                  }}
+                >
                   <SocialIcon icon={social.name} />
                 </IconButton>
               ))}
@@ -156,6 +205,8 @@ export function Footer({ layoutQuery, sx }) {
 // ----------------------------------------------------------------------
 
 export function HomeFooter({ sx }) {
+  const theme = useTheme();
+
   return (
     <Box
       component="footer"
@@ -163,7 +214,11 @@ export function HomeFooter({ sx }) {
         py: 5,
         textAlign: 'center',
         position: 'relative',
-        bgcolor: 'background.default',
+        bgcolor: varAlpha(theme.vars.palette.background.defaultChannel, 0.35),
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderTop: '1px solid',
+        borderColor: varAlpha(theme.vars.palette.grey['500Channel'], 0.18),
         ...sx,
       }}
     >

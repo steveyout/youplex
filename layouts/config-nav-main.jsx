@@ -6,6 +6,11 @@ import { Iconify } from '@/components/iconify';
 export const navData = [
   { title: 'Home', path: '/', icon: <Iconify width={22} icon="proicons:home" /> },
   {
+    title: 'Search',
+    path: paths.search,
+    icon: <Iconify width={22} icon="ic:round-search" />,
+  },
+  {
     title: 'Movies',
     path: paths.movies,
     icon: <Iconify width={22} icon="fluent:movies-and-tv-20-regular" />,

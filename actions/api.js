@@ -1,4 +1,58 @@
 import axios, { endpoints } from '@/utils/axios';
+import { providers, getEmbedUrl, DEFAULT_PROVIDER_ID } from '@/config/providers';
+
+// ----------------------------------------------------------------------
+
+/**
+ * Scrape direct stream sources from the server-side scraper layer.
+ * @param {string} type - 'movie' or 'tv'
+ * @param {string|number} id - TMDB ID
+ * @param {{season?:number, episode?:number, provider?:string}} [opts]
+ * @returns {Promise<{success:boolean, sources:Array, subtitles:Array, provider?:string, error?:string}>}
+ */
+export async function getPlaySources(type, id, opts = {}) {
+  const params = new URLSearchParams({ type, id: String(id) });
+  if (opts.provider) params.set('provider', opts.provider);
+  if (type === 'tv') {
+    if (opts.season !== undefined) params.set('season', String(opts.season));
+    if (opts.episode !== undefined) params.set('episode', String(opts.episode));
+  }
+
+  const res = await fetch(`/api/scrape?${params.toString()}`, {
+    signal: AbortSignal.timeout(25000),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || 'Scrape failed');
+  return data;
+}
+
+// ----------------------------------------------------------------------
+
+/**
+ * Fetch Movie or Show details plus playable servers
+ * @param {string} type - 'movie' or 'tv'
+ * @param {string|number} id - TMDB ID
+ */
+export async function getMovieOrShow(type, id) {
+  const details = await getMediaDetails(type, id);
+
+  if (!details) return null;
+
+  const servers = providers
+    .filter((provider) => provider.enabled)
+    .map((provider) => ({
+      id: provider.id,
+      name: provider.name,
+      url: getEmbedUrl(provider.id, type, id),
+    }));
+
+  return {
+    ...details,
+    title: details.title || details.name,
+    videoUrl: getEmbedUrl(DEFAULT_PROVIDER_ID, type, id),
+    servers,
+  };
+}
 
 // ----------------------------------------------------------------------
 

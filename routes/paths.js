@@ -15,6 +15,7 @@ export const paths = {
   page500: '/error/500',
   movies:'/movies',
   tv:'/tv',
+  search:'/search',
   torrents:'https://torrents.youplex.site/',
   discord:'https://discord.gg/5eWu9Vz6tQ',
   telegram:'https://t.me/youplexannouncments',
