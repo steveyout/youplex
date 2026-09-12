@@ -4,7 +4,7 @@ import { Iconify } from '@/components/iconify';
 import Player from '@/components/player/player';
 import { CLIENT_SCRAPER_CONFIG } from '@/lib/scrapers/provider-config';
 import { useState, useEffect, useCallback } from 'react';
-import { getMovieOrShow, getPlaySources } from '@/actions/api';
+import { getMovieOrShow, getPlaySources, getSubtitles } from '@/actions/api';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
 import Box from '@mui/material/Box';
@@ -30,6 +30,7 @@ export default function PlayPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [sourcesError, setSourcesError] = useState(null);
+  const [openSubtitles, setOpenSubtitles] = useState([]);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -80,6 +81,18 @@ export default function PlayPage() {
       })
       .finally(() => {
         if (active) setSourcesLoading(false);
+      });
+
+    getSubtitles(
+      type,
+      id,
+      type === 'tv' && season && episode ? { season: Number(season), episode: Number(episode) } : {}
+    )
+      .then((data) => {
+        if (active) setOpenSubtitles(data?.subtitles || []);
+      })
+      .catch(() => {
+        if (active) setOpenSubtitles([]);
       });
 
     return () => {
@@ -217,7 +230,7 @@ export default function PlayPage() {
               src={movieOrShow.videoUrl}
               servers={movieOrShow.servers || []}
               directSources={directSources?.sources || []}
-              subtitles={directSources?.subtitles || []}
+              subtitles={[...(directSources?.subtitles || []), ...openSubtitles]}
               extractorProviders={CLIENT_SCRAPER_CONFIG}
               activeExtractorId={directSources?.provider || null}
               sourcesLoading={sourcesLoading}

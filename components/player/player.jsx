@@ -397,6 +397,7 @@ export default function Player({
               <MediaProvider>
                 {subtitles
                   .filter((t) => t?.url)
+                  .filter((track, index, tracks) => tracks.findIndex((item) => item.url === track.url) === index)
                   .map((track, index) => (
                     <Track
                       key={`${track.url}-${index}`}

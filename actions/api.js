@@ -42,6 +42,21 @@ export async function getPlaySources(type, id, opts = {}) {
   throw lastError || new Error('Scrape failed');
 }
 
+export async function getSubtitles(type, id, opts = {}) {
+  const params = new URLSearchParams({ type, id: String(id) });
+  if (type === 'tv') {
+    if (opts.season !== undefined) params.set('season', String(opts.season));
+    if (opts.episode !== undefined) params.set('episode', String(opts.episode));
+  }
+
+  const res = await fetch(`/api/subtitles?${params.toString()}`, {
+    signal: AbortSignal.timeout(25000),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || 'Subtitle search failed');
+  return data;
+}
+
 // ----------------------------------------------------------------------
 
 /**
