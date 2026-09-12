@@ -1,0 +1,3 @@
+allowBuilds:
+  browser-tabs-lock: true
+  protobufjs: true

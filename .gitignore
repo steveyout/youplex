@@ -37,3 +37,13 @@ build
 .unimportedrc.json
 tsconfig.tsbuildinfo
 .aider*
+.qwen*
+modelfile
+Modelfile
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

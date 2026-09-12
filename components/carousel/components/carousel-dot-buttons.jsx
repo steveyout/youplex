@@ -1,9 +1,9 @@
 import Box from '@mui/material/Box';
 import NoSsr from '@mui/material/NoSsr';
-import { useTheme } from '@mui/material/styles';
 import ButtonBase from '@mui/material/ButtonBase';
+import { useTheme } from '@mui/material/styles';
 
-import { varAlpha, stylesMode } from 'theme/styles';
+import { varAlpha, stylesMode } from '@/theme/styles';
 
 import { carouselClasses } from '../classes';
 
@@ -16,6 +16,7 @@ export function CarouselDotButtons({
   onClickDot,
   scrollSnaps,
   selectedIndex,
+  dotCount,
   fallbackCount = 1,
   variant = 'circular',
   fallback = false,

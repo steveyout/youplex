@@ -82,6 +82,7 @@
     "mui-one-time-password-input": "^2.0.2",
     "next": "^16.1.6",
     "nprogress": "^0.2.0",
+    "playwright-core": "^1.63.0",
     "react": "^19.2.4",
     "react-apexcharts": "^1.4.1",
     "react-dom": "^19.2.4",
@@ -107,7 +108,9 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@svgr/webpack": "^8.1.0",
+    "@types/node": "^22.20.2",
     "@types/react": "^18.3.3",
     "eslint": "^8.57.0",
     "eslint-config-airbnb": "^19.0.4",
@@ -123,5 +126,5 @@
     "prettier": "^3.3.2",
     "typescript": "^5.4.5"
   },
-  "packageManager": "yarn@4.14.1"
+  "packageManager": "pnpm@11.23.0"
 }

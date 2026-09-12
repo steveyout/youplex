@@ -1,15 +1,24 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+'use client';
+
+import { useRef, useState, useEffect, useCallback } from 'react';
 
 const AUTO_HIDE_MS = 3200;
 
-export function usePlayerControls(paused) {
+/**
+ * Custom hook to handle auto-hiding the player controls overlay
+ * during active playback, while keeping them visible when paused,
+ * when a menu is open, or during mouse/touch interaction.
+ */
+export function usePlayerControls(paused, isMenuOpen = false) {
   const [visible, setVisible] = useState(true);
 
   const hideTimer = useRef(null);
   const pausedRef = useRef(paused);
+  const menuOpenRef = useRef(isMenuOpen);
   const isTouchRef = useRef(false);
 
   pausedRef.current = paused;
+  menuOpenRef.current = isMenuOpen;
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -21,9 +30,14 @@ export function usePlayerControls(paused) {
   const show = useCallback(() => {
     setVisible(true);
     clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      if (!pausedRef.current && !isTouchRef.current) setVisible(false);
-    }, AUTO_HIDE_MS);
+
+    if (!pausedRef.current && !menuOpenRef.current) {
+      hideTimer.current = setTimeout(() => {
+        if (!pausedRef.current && !menuOpenRef.current) {
+          setVisible(false);
+        }
+      }, AUTO_HIDE_MS);
+    }
   }, []);
 
   useEffect(() => {
@@ -32,8 +46,13 @@ export function usePlayerControls(paused) {
   }, [show]);
 
   useEffect(() => {
-    if (paused) setVisible(true);
-  }, [paused]);
+    if (paused || isMenuOpen) {
+      setVisible(true);
+      clearTimeout(hideTimer.current);
+    } else {
+      show();
+    }
+  }, [paused, isMenuOpen, show]);
 
   return { visible, show, isTouch: isTouchRef.current };
 }

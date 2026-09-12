@@ -2,7 +2,7 @@
 
 import { Iconify } from '@/components/iconify';
 import Player from '@/components/player/player';
-import { SCRAPER_CONFIG } from '@/lib/scrapers';
+import { CLIENT_SCRAPER_CONFIG } from '@/lib/scrapers/provider-config';
 import { useState, useEffect, useCallback } from 'react';
 import { getMovieOrShow, getPlaySources } from '@/actions/api';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -29,6 +29,7 @@ export default function PlayPage() {
   const [directSources, setDirectSources] = useState({ sources: [], subtitles: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [sourcesError, setSourcesError] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export default function PlayPage() {
 
     setIsLoading(true);
     setSourcesLoading(true);
+    setSourcesError(null);
     setError(null);
 
     getMovieOrShow(type, id)
@@ -61,10 +63,20 @@ export default function PlayPage() {
       type === 'tv' && season && episode ? { season: Number(season), episode: Number(episode) } : {}
     )
       .then((data) => {
-        if (active && data?.success) setDirectSources(data);
+        if (!active) return;
+        if (data?.success) {
+          setDirectSources(data);
+          setSourcesError(null);
+        } else {
+          setDirectSources({ sources: [], subtitles: [] });
+          setSourcesError('The providers are taking longer than usual to respond.');
+        }
       })
-      .catch(() => {
-        if (active) setDirectSources({ sources: [], subtitles: [] });
+      .catch((err) => {
+        if (active) {
+          setDirectSources({ sources: [], subtitles: [] });
+          setSourcesError(err?.message || 'The providers are taking longer than usual to respond.');
+        }
       })
       .finally(() => {
         if (active) setSourcesLoading(false);
@@ -79,6 +91,7 @@ export default function PlayPage() {
     async (providerId) => {
       try {
         setSourcesLoading(true);
+        setSourcesError(null);
         const opts = {
           provider: providerId,
           ...(type === 'tv' && season && episode
@@ -90,9 +103,34 @@ export default function PlayPage() {
           setDirectSources(data);
           return true;
         }
+        setSourcesError('This provider did not return a stream yet.');
         return false;
-      } catch {
+      } catch (err) {
+        setSourcesError(err?.message || 'This provider is taking longer than usual to respond.');
         return false;
+      } finally {
+        setSourcesLoading(false);
+      }
+    },
+    [type, id, season, episode]
+  );
+
+  const retrySources = useCallback(
+    async () => {
+      setSourcesLoading(true);
+      setSourcesError(null);
+
+      try {
+        const opts = {
+          ...(type === 'tv' && season && episode
+            ? { season: Number(season), episode: Number(episode) }
+            : {}),
+        };
+        const data = await getPlaySources(type, id, opts);
+        if (!data?.success) throw new Error('The providers did not return a stream yet.');
+        setDirectSources(data);
+      } catch (err) {
+        setSourcesError(err?.message || 'The providers are taking longer than usual to respond.');
       } finally {
         setSourcesLoading(false);
       }
@@ -171,14 +209,21 @@ export default function PlayPage() {
         ) : (
           <Container maxWidth="xl" sx={{ width: 1 }}>
             <Player
+              title={displayTitle}
+              type={type}
+              season={season}
+              episode={episode}
+              onBack={backToWatch}
               src={movieOrShow.videoUrl}
               servers={movieOrShow.servers || []}
               directSources={directSources?.sources || []}
               subtitles={directSources?.subtitles || []}
-              extractorProviders={SCRAPER_CONFIG}
+              extractorProviders={CLIENT_SCRAPER_CONFIG}
               activeExtractorId={directSources?.provider || null}
               sourcesLoading={sourcesLoading}
+              sourcesError={sourcesError}
               onSelectExtractor={selectExtractor}
+              onRetrySources={retrySources}
             />
           </Container>
         )}

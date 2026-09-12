@@ -1,7 +1,7 @@
 import { paths } from '@/routes/paths';
 import { Logo } from '@/components/logo';
 import { RouterLink } from '@/routes/components';
-import { SocialIcon } from '@/components/iconify';
+import { Iconify } from '@/components/iconify';
 
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
@@ -112,6 +112,7 @@ export function Footer({ layoutQuery, sx }) {
 
             <Stack
               direction="row"
+              spacing={1.5}
               sx={{
                 mt: 3,
                 mb: 5,
@@ -149,7 +150,7 @@ export function Footer({ layoutQuery, sx }) {
                     },
                   }}
                 >
-                  <SocialIcon icon={social.name} />
+                  <Iconify icon={social.icon} width={22} sx={{ color: social.color }} />
                 </IconButton>
               ))}
             </Stack>

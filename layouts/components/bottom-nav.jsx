@@ -1,13 +1,12 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { m, useScroll, useMotionValueEvent } from 'framer-motion';
-
 import { paths } from '@/routes/paths';
-import { Iconify } from '@/components/iconify';
-import { usePathname } from '@/routes/hooks';
-import { RouterLink } from '@/routes/components';
+import { useRef, useState } from 'react';
 import { varAlpha } from '@/theme/styles';
+import { usePathname } from '@/routes/hooks';
+import { Iconify } from '@/components/iconify';
+import { RouterLink } from '@/routes/components';
+import { m, useScroll, useMotionValueEvent } from 'framer-motion';
 
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -17,22 +16,25 @@ import Typography from '@mui/material/Typography';
 // ----------------------------------------------------------------------
 
 const NAV_ITEMS = [
-  { key: 'home', title: 'Home', path: '/', icon: 'proicons:home' },
-  { key: 'search', title: 'Search', path: paths.search, icon: 'ic:round-search' },
-  { key: 'movies', title: 'Movies', path: paths.movies, icon: 'fluent:movies-and-tv-20-regular' },
-  { key: 'tv', title: 'TV', path: paths.tv, icon: 'iconoir:tv' },
+  { key: 'home', title: 'Home', path: '/', icon: 'solar:home-2-bold-duotone', activeIcon: 'solar:home-2-bold' },
+  { key: 'search', title: 'Search', path: paths.search, icon: 'solar:magnifer-bold-duotone', activeIcon: 'solar:magnifer-bold' },
+  { key: 'movies', title: 'Movies', path: paths.movies, icon: 'solar:clapperboard-bold-duotone', activeIcon: 'solar:clapperboard-bold' },
+  { key: 'tv', title: 'TV Shows', path: paths.tv, icon: 'solar:tv-bold-duotone', activeIcon: 'solar:tv-bold' },
+  { key: 'live-tv', title: 'Live TV', path: paths.liveTv, icon: 'solar:radio-bold-duotone', activeIcon: 'solar:radio-bold' },
   {
     key: 'torrents',
     title: 'Torrents',
     path: paths.torrents,
-    icon: 'arcticons:torrents-csv-android',
+    icon: 'solar:download-square-bold-duotone',
+    activeIcon: 'solar:download-square-bold',
     external: true,
   },
   {
     key: 'discord',
     title: 'Discord',
     path: paths.discord,
-    icon: 'ic:round-discord',
+    icon: 'ic:baseline-discord',
+    activeIcon: 'ic:baseline-discord',
     external: true,
   },
 ];
@@ -50,7 +52,7 @@ export function BottomNav({ sx }) {
 
   useMotionValueEvent(scrollY, 'change', (y) => {
     const isScrollingDown = y > lastY.current;
-    setHidden(isScrollingDown && y > 140);
+    setHidden(isScrollingDown && y > 120);
     lastY.current = y;
   });
 
@@ -62,34 +64,34 @@ export function BottomNav({ sx }) {
         bottom: 0,
         left: 0,
         right: 0,
-        zIndex: 'var(--layout-header-zIndex)',
+        zIndex: 'var(--layout-header-zIndex, 1100)',
         display: { xs: 'flex', md: 'none' },
         justifyContent: 'center',
-        px: 2,
+        px: 1.5,
         pt: 1,
-        pb: 'calc(10px + env(safe-area-inset-bottom, 0px))',
+        pb: 'calc(12px + env(safe-area-inset-bottom, 0px))',
         pointerEvents: 'none',
         ...sx,
       }}
     >
       <m.div
-        initial={{ y: 110, opacity: 0 }}
-        animate={{ y: hidden ? 110 : 0, opacity: hidden ? 0 : 1 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-        style={{ pointerEvents: 'auto' }}
+        initial={{ y: 120, opacity: 0 }}
+        animate={{ y: hidden ? 120 : 0, opacity: hidden ? 0 : 1 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+        style={{ pointerEvents: 'auto', maxWidth: '100%' }}
       >
         <Stack
           direction="row"
-          spacing={0.25}
+          alignItems="center"
+          spacing={0.5}
           sx={{
-            p: 0.75,
+            p: 0.6,
             borderRadius: 999,
-            border: '1px solid',
-            borderColor: theme.vars.palette.divider,
-            background: `linear-gradient(180deg, ${varAlpha(theme.vars.palette.background.paperChannel, 0.9)}, ${varAlpha(theme.vars.palette.background.defaultChannel, 0.92)})`,
-            backdropFilter: 'blur(18px)',
-            WebkitBackdropFilter: 'blur(18px)',
-            boxShadow: theme.customShadows.dropdown,
+            border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.12)}`,
+            background: `linear-gradient(180deg, ${varAlpha(theme.vars.palette.background.paperChannel, 0.88)}, ${varAlpha(theme.vars.palette.background.defaultChannel, 0.94)})`,
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            boxShadow: `0 16px 36px -8px rgba(0, 0, 0, 0.56), 0 0 0 1px ${varAlpha(theme.vars.palette.common.whiteChannel, 0.06)}`,
           }}
         >
           {NAV_ITEMS.map((item) => {
@@ -102,18 +104,18 @@ export function BottomNav({ sx }) {
                 href={item.path}
                 target={item.external ? '_blank' : undefined}
                 rel={item.external ? 'noopener noreferrer' : undefined}
-                sx={{ textDecoration: 'none', color: 'inherit' }}
+                sx={{ textDecoration: 'none', color: 'inherit', outline: 'none' }}
               >
-                <m.div whileHover={{ y: -2 }} whileTap={{ scale: 0.9 }}>
+                <m.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}>
                   <Stack
                     alignItems="center"
                     justifyContent="center"
-                    spacing={0.25}
+                    spacing={0.3}
                     sx={{
                       position: 'relative',
-                      minWidth: { xs: 46, sm: 56 },
-                      py: 0.7,
-                      px: 0.25,
+                      minWidth: { xs: 48, sm: 58 },
+                      py: 0.75,
+                      px: 0.5,
                       borderRadius: 999,
                       color: active ? 'primary.main' : 'text.secondary',
                       transition: theme.transitions.create(['color'], {
@@ -124,18 +126,29 @@ export function BottomNav({ sx }) {
                     {active && (
                       <m.span
                         layoutId="youplex-bottom-nav-pill"
-                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                        transition={{ type: 'spring', stiffness: 450, damping: 34 }}
                         style={{
                           position: 'absolute',
                           inset: 0,
                           borderRadius: 999,
-                          background: varAlpha(theme.vars.palette.primary.mainChannel, 0.16),
-                          boxShadow: `inset 0 0 0 1px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.3)}, 0 8px 24px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.35)}`,
+                          background: varAlpha(theme.vars.palette.primary.mainChannel, 0.14),
+                          boxShadow: `inset 0 0 0 1px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.32)}, 0 8px 20px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.35)}`,
                         }}
                       />
                     )}
 
-                    <Iconify icon={item.icon} width={21} sx={{ zIndex: 1 }} />
+                    <Iconify
+                      icon={active ? (item.activeIcon || item.icon) : item.icon}
+                      width={22}
+                      sx={{
+                        zIndex: 1,
+                        transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        transform: active ? 'scale(1.1)' : 'scale(1)',
+                        filter: active
+                          ? `drop-shadow(0 2px 8px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.5)})`
+                          : 'none',
+                      }}
+                    />
 
                     <Typography
                       variant="caption"
@@ -144,6 +157,7 @@ export function BottomNav({ sx }) {
                         fontSize: '0.625rem',
                         fontWeight: active ? 700 : 500,
                         lineHeight: 1,
+                        letterSpacing: 0.2,
                       }}
                     >
                       {item.title}
@@ -180,6 +194,10 @@ function isItemActive(pathname, item) {
   if (item.key === 'tv') {
     if (/^\/watch\/tv\//.test(pathname)) return true;
     return pathname === '/tv' || pathname.startsWith('/tv/');
+  }
+
+  if (item.key === 'live-tv') {
+    return pathname === '/live-tv' || pathname.startsWith('/live-tv/');
   }
 
   return false;

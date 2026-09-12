@@ -1,6 +1,8 @@
 import Box from '@mui/material/Box';
-import Grid from '@mui/material/Unstable_Grid2';
 import Stack from '@mui/material/Stack';
+import Grid from '@mui/material/Unstable_Grid2';
+
+import { SliderRow } from '@/components/slider-row/slider-row';
 
 import { PostItemSkeleton } from './post-skeleton';
 import { PostItem, PostItemLatest } from './post-item';
@@ -24,31 +26,14 @@ export function PostList({ posts, loading, startIndex = 0 }) {
   );
 
   const renderMobileScroll = (
-    <Box
-      sx={{
-        display: { xs: 'flex', md: 'none' },
-        gap: 2,
-        mb: 1,
-        pb: 1,
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        scrollSnapType: 'x mandatory',
-        '&::-webkit-scrollbar': { display: 'none' },
-        scrollbarWidth: 'none',
-      }}
-    >
-      {posts.map((post, index) => (
-        <Box
-          key={post.id}
-          sx={{
-            width: { xs: 148, sm: 170 },
-            flexShrink: 0,
-            scrollSnapAlign: 'start',
-          }}
-        >
-          <PostItem post={post} index={startIndex + index} />
-        </Box>
-      ))}
+    <Box sx={{ display: { xs: 'block', md: 'none' }, mb: 1 }}>
+      <SliderRow itemWidth={{ xs: 148, sm: 175 }} gap={1.75}>
+        {posts.map((post, index) => (
+          <Box key={post.id}>
+            <PostItem post={post} index={startIndex + index} />
+          </Box>
+        ))}
+      </SliderRow>
     </Box>
   );
 
@@ -63,7 +48,7 @@ export function PostList({ posts, loading, startIndex = 0 }) {
   );
 
   const renderStandard = (
-    <Grid container spacing={2}>
+    <Grid container spacing={2.5}>
       {posts.slice(4, posts.length).map((post, index) => (
         <Grid key={post.id} xs={6} sm={4} md={4} lg={2}>
           <PostItem post={post} index={startIndex + index + 4} />
@@ -75,7 +60,6 @@ export function PostList({ posts, loading, startIndex = 0 }) {
   const renderDesktop = (
     <Stack spacing={3} sx={{ display: { xs: 'none', md: 'block' } }}>
       {posts.length > 0 && renderFeatured}
-
       {posts.length > 4 && renderStandard}
     </Stack>
   );

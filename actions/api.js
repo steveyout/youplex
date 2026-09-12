@@ -18,12 +18,28 @@ export async function getPlaySources(type, id, opts = {}) {
     if (opts.episode !== undefined) params.set('episode', String(opts.episode));
   }
 
-  const res = await fetch(`/api/scrape?${params.toString()}`, {
-    signal: AbortSignal.timeout(25000),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Scrape failed');
-  return data;
+  let lastError;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const res = await fetch(`/api/scrape?${params.toString()}`, {
+        signal: AbortSignal.timeout(90000),
+      });
+      const data = await res.json();
+
+      if (res.ok) return data;
+
+      lastError = new Error(data?.error || 'Scrape failed');
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+  }
+
+  throw lastError || new Error('Scrape failed');
 }
 
 // ----------------------------------------------------------------------

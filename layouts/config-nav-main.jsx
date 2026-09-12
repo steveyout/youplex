@@ -21,6 +21,11 @@ export const navData = [
     icon: <Iconify width={22} icon="iconoir:tv" />,
   },
   {
+    title: 'Live TV',
+    path: paths.liveTv,
+    icon: <Iconify width={22} icon="solar:tv-bold-duotone" />,
+  },
+  {
     title: 'Torrents',
     path: paths.torrents,
     icon: <Iconify width={22} icon="arcticons:torrents-csv-android" />,
