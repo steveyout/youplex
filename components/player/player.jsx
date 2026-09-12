@@ -4,7 +4,7 @@ import '@vidstack/react/player/styles/base.css';
 import '@vidstack/react/player/styles/default/captions.css';
 
 import { Iconify } from '@/components/iconify';
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Track, Captions, MediaPlayer, MediaProvider } from '@vidstack/react';
 
 import Box from '@mui/material/Box';
@@ -138,6 +138,9 @@ export default function Player({
   const [failedExtractorId, setFailedExtractorId] = useState(null);
   const [playbackError, setPlaybackError] = useState(null);
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
+  const [isAutoRetrying, setIsAutoRetrying] = useState(false);
+  const autoRetryCountRef = useRef(0);
+  const retryTimerRef = useRef(null);
   const [embedSrvAnchor, setEmbedSrvAnchor] = useState(null);
   const [embedHeaderVisible, setEmbedHeaderVisible] = useState(true);
 
@@ -166,6 +169,20 @@ export default function Player({
   const effectiveSelectedExtractor = selectedExtractorId ?? activeExtractorId;
   const embedAvailable = allowEmbedMode && (Boolean(src) || servers.length > 0);
   const nativeReady = nativeSrc.length > 0;
+
+  useEffect(() => {
+    autoRetryCountRef.current = 0;
+    setIsAutoRetrying(false);
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, [nativeSrc[0]?.src, effectiveSelectedExtractor]);
+
   const resolvedMode =
     allowEmbedMode &&
     playbackMode === 'native' &&
@@ -220,6 +237,8 @@ export default function Player({
         setFailedExtractorId(null);
         setSelectedExtractorId(server.id);
         setPlaybackError(null);
+        autoRetryCountRef.current = 0;
+        setIsAutoRetrying(false);
         setIsLoading(true);
         if (onSelectExtractor) {
           const ok = await onSelectExtractor(server.id);
@@ -256,10 +275,12 @@ export default function Player({
 
   const loadingPhrases = useMemo(
     () =>
-      scrapingNative
+      isAutoRetrying
+        ? [`Retrying ${activeProviderName}`, `Reconnecting to ${activeProviderName}`, 'Recovering stream']
+        : scrapingNative
         ? [`Loading ${activeProviderName}`, `Connecting to ${activeProviderName}`, 'Preparing stream']
         : ['Preparing player', 'Loading video', 'Buffering stream'],
-    [activeProviderName, scrapingNative]
+    [activeProviderName, isAutoRetrying, scrapingNative]
   );
   const [typedLoadingLabel, setTypedLoadingLabel] = useState('');
 
@@ -305,6 +326,8 @@ export default function Player({
 
   const handleRetry = useCallback(async () => {
     setPlaybackError(null);
+    autoRetryCountRef.current = 0;
+    setIsAutoRetrying(false);
     setIsLoading(true);
     setPlaybackAttempt((attempt) => attempt + 1);
 
@@ -345,14 +368,29 @@ export default function Player({
               playsInline
               onCanPlay={() => {
                 setIsLoading(false);
+                autoRetryCountRef.current = 0;
+                setIsAutoRetrying(false);
                 setPlaybackError(null);
               }}
               onError={() => {
+                if (autoRetryCountRef.current < 2) {
+                  autoRetryCountRef.current += 1;
+                  setIsAutoRetrying(true);
+                  setIsLoading(true);
+                  setPlaybackError(null);
+                  retryTimerRef.current = setTimeout(() => {
+                    retryTimerRef.current = null;
+                    setPlaybackAttempt((attempt) => attempt + 1);
+                  }, 900);
+                  return;
+                }
+
+                setIsAutoRetrying(false);
                 setIsLoading(false);
                 setPlaybackError(
                   allowEmbedMode
-                    ? 'The direct stream failed to load. Try another provider or switch to Embed.'
-                    : 'The direct stream failed to load. Try another provider.'
+                    ? 'The direct stream failed after automatic retries. Try another provider or switch to Embed.'
+                    : 'The direct stream failed after automatic retries. Try another provider.'
                 );
               }}
             >

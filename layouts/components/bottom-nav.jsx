@@ -19,8 +19,8 @@ const NAV_ITEMS = [
   { key: 'home', title: 'Home', path: '/', icon: 'solar:home-2-bold-duotone', activeIcon: 'solar:home-2-bold' },
   { key: 'search', title: 'Search', path: paths.search, icon: 'solar:magnifer-bold-duotone', activeIcon: 'solar:magnifer-bold' },
   { key: 'movies', title: 'Movies', path: paths.movies, icon: 'solar:clapperboard-bold-duotone', activeIcon: 'solar:clapperboard-bold' },
-  { key: 'tv', title: 'TV Shows', path: paths.tv, icon: 'solar:tv-bold-duotone', activeIcon: 'solar:tv-bold' },
-  { key: 'live-tv', title: 'Live TV', path: paths.liveTv, icon: 'solar:radio-bold-duotone', activeIcon: 'solar:radio-bold' },
+  { key: 'tv', title: 'Shows', path: paths.tv, icon: 'solar:tv-bold-duotone', activeIcon: 'solar:tv-bold' },
+  { key: 'live-tv', title: 'Live', path: paths.liveTv, icon: 'solar:radio-bold-duotone', activeIcon: 'solar:radio-bold' },
   {
     key: 'torrents',
     title: 'Torrents',
@@ -113,9 +113,10 @@ export function BottomNav({ sx }) {
                     spacing={0.3}
                     sx={{
                       position: 'relative',
-                      minWidth: { xs: 48, sm: 58 },
+                      minWidth: { xs: 42, sm: 58 },
+                      flexShrink: 0,
                       py: 0.75,
-                      px: 0.5,
+                      px: { xs: 0.25, sm: 0.5 },
                       borderRadius: 999,
                       color: active ? 'primary.main' : 'text.secondary',
                       transition: theme.transitions.create(['color'], {
@@ -158,6 +159,7 @@ export function BottomNav({ sx }) {
                         fontWeight: active ? 700 : 500,
                         lineHeight: 1,
                         letterSpacing: 0.2,
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {item.title}
