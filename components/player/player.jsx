@@ -122,6 +122,7 @@ export default function Player({
   extractorProviders = [],
   activeExtractorId = null,
   sourcesLoading = false,
+  loading = false,
   sourcesError = null,
   onSelectExtractor,
   onRetrySources,
@@ -152,7 +153,7 @@ export default function Player({
     } else {
       setPlaybackMode(stored);
     }
-  }, [directSources.length, sourcesLoading]);
+  }, [allowEmbedMode, directSources.length, sourcesLoading]);
 
   // All native sources mapped to the Vidstack src array
   const nativeSrc = useMemo(() => toVidstackSrcs(directSources), [directSources]);
@@ -169,6 +170,7 @@ export default function Player({
   const effectiveSelectedExtractor = selectedExtractorId ?? activeExtractorId;
   const embedAvailable = allowEmbedMode && (Boolean(src) || servers.length > 0);
   const nativeReady = nativeSrc.length > 0;
+  const activeNativeSrc = nativeSrc[0]?.src;
 
   useEffect(() => {
     autoRetryCountRef.current = 0;
@@ -181,7 +183,7 @@ export default function Player({
     return () => {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     };
-  }, [nativeSrc[0]?.src, effectiveSelectedExtractor]);
+  }, [activeNativeSrc, effectiveSelectedExtractor]);
 
   const resolvedMode =
     allowEmbedMode &&
@@ -259,7 +261,7 @@ export default function Player({
   );
 
   const scrapingNative = resolvedMode === 'native' && !nativeReady && sourcesLoading;
-  const showSpinner = !playbackError && (scrapingNative || isLoading);
+  const showSpinner = !playbackError && (loading || scrapingNative || isLoading);
   const activeProviderName = useMemo(() => {
     if (effectiveSelectedExtractor === 'dlhd') return 'DLHD';
 

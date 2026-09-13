@@ -257,7 +257,7 @@ export default function PlayPage() {
 
       {/* Player */}
       <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', px: { xs: 1, sm: 3 }, pb: 3 }}>
-        {isLoading && !error ? (
+        {isLoading && !movieOrShow && !error ? (
           <VideoLoadingState
             title={displayTitle}
             season={type === 'tv' ? selectedSeason : null}
@@ -296,6 +296,7 @@ export default function PlayPage() {
               extractorProviders={CLIENT_SCRAPER_CONFIG}
               activeExtractorId={directSources?.provider || null}
               sourcesLoading={sourcesLoading}
+              loading={isLoading}
               sourcesError={sourcesError}
               onSelectExtractor={selectExtractor}
               onRetrySources={retrySources}
