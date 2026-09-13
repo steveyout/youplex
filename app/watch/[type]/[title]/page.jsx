@@ -69,9 +69,12 @@ export default function WatchPage() {
 
   if (error || !movieOrShow) return <WatchError error={error} title={title} />;
 
+  const firstSeason = movieOrShow.seasons?.find((item) => item.season_number > 0);
+  const selectedSeason = season || (type === 'tv' ? String(firstSeason?.season_number || 1) : '');
+  const selectedEpisode = episode || (type === 'tv' ? '1' : '');
   const params = new URLSearchParams({ id: id || '' });
-  if (season) params.set('season', season);
-  if (episode) params.set('episode', episode);
+  if (selectedSeason) params.set('season', selectedSeason);
+  if (selectedEpisode && type === 'tv') params.set('episode', selectedEpisode);
   const playPath = `/watch/${type}/${title}/play?${params.toString()}`;
 
   return (

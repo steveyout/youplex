@@ -32,6 +32,9 @@ export default function LiveTvView() {
   const [loading, setLoading] = useState(true);
   const [streamLoading, setStreamLoading] = useState(false);
   const [source, setSource] = useState(null);
+  const refreshSelectedStream = () => {
+    setSelected((current) => (current ? { ...current } : current));
+  };
 
   useEffect(() => {
     Promise.all([
@@ -180,6 +183,7 @@ export default function LiveTvView() {
               sourcesLoading={false}
               activeExtractorId="dlhd"
               allowEmbedMode={false}
+              onRetrySources={refreshSelectedStream}
             />
           ) : null}
         </Box>

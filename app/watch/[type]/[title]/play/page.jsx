@@ -3,7 +3,7 @@
 import { Iconify } from '@/components/iconify';
 import Player from '@/components/player/player';
 import { CLIENT_SCRAPER_CONFIG } from '@/lib/scrapers/provider-config';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getMovieOrShow, getPlaySources, getSubtitles } from '@/actions/api';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
@@ -13,6 +13,8 @@ import { alpha } from '@mui/material/styles';
 import Skeleton from '@mui/material/Skeleton';
 import Container from '@mui/material/Container';
 import IconButton from '@mui/material/IconButton';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import Typography from '@mui/material/Typography';
 
 // ----------------------------------------------------------------------
@@ -48,57 +50,69 @@ export default function PlayPage() {
     setError(null);
 
     getMovieOrShow(type, id)
-      .then((data) => {
-        if (active) setMovieOrShow(data);
-      })
-      .catch((err) => {
-        if (active) setError(err?.message || 'Something went wrong while loading this title.');
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-
-    getPlaySources(
-      type,
-      id,
-      type === 'tv' && season && episode ? { season: Number(season), episode: Number(episode) } : {}
-    )
-      .then((data) => {
+      .then(async (data) => {
         if (!active) return;
-        if (data?.success) {
-          setDirectSources(data);
+        setMovieOrShow(data);
+
+        const firstSeason = data?.seasons?.find((item) => item.season_number > 0);
+        const playbackOptions =
+          type === 'tv'
+            ? {
+                season: Number(season || firstSeason?.season_number || 1),
+                episode: Number(episode || 1),
+              }
+            : {};
+
+        const [sourceData, subtitleData] = await Promise.allSettled([
+          getPlaySources(type, id, playbackOptions),
+          getSubtitles(type, id, playbackOptions),
+        ]);
+
+        if (!active) return;
+
+        if (sourceData.status === 'fulfilled' && sourceData.value?.success) {
+          setDirectSources(sourceData.value);
           setSourcesError(null);
         } else {
           setDirectSources({ sources: [], subtitles: [] });
-          setSourcesError('The providers are taking longer than usual to respond.');
+          setSourcesError(
+            sourceData.status === 'rejected'
+              ? sourceData.reason?.message || 'The providers are taking longer than usual to respond.'
+              : 'The providers are taking longer than usual to respond.'
+          );
         }
+
+        setOpenSubtitles(
+          subtitleData.status === 'fulfilled' ? subtitleData.value?.subtitles || [] : []
+        );
       })
       .catch((err) => {
         if (active) {
+          setError(err?.message || 'Something went wrong while loading this title.');
           setDirectSources({ sources: [], subtitles: [] });
-          setSourcesError(err?.message || 'The providers are taking longer than usual to respond.');
+          setOpenSubtitles([]);
         }
       })
       .finally(() => {
-        if (active) setSourcesLoading(false);
-      });
-
-    getSubtitles(
-      type,
-      id,
-      type === 'tv' && season && episode ? { season: Number(season), episode: Number(episode) } : {}
-    )
-      .then((data) => {
-        if (active) setOpenSubtitles(data?.subtitles || []);
-      })
-      .catch(() => {
-        if (active) setOpenSubtitles([]);
+        if (active) {
+          setIsLoading(false);
+          setSourcesLoading(false);
+        }
       });
 
     return () => {
       active = false;
     };
   }, [type, id, season, episode]);
+
+  const resolvedSeason = Number(
+    season || movieOrShow?.seasons?.find((item) => item.season_number > 0)?.season_number || 1
+  );
+  const resolvedEpisode = Number(episode || 1);
+  const playbackOptions = useMemo(
+    () => (type === 'tv' ? { season: resolvedSeason, episode: resolvedEpisode } : {}),
+    [type, resolvedSeason, resolvedEpisode]
+  );
 
   const selectExtractor = useCallback(
     async (providerId) => {
@@ -107,9 +121,7 @@ export default function PlayPage() {
         setSourcesError(null);
         const opts = {
           provider: providerId,
-          ...(type === 'tv' && season && episode
-            ? { season: Number(season), episode: Number(episode) }
-            : {}),
+          ...playbackOptions,
         };
         const data = await getPlaySources(type, id, opts);
         if (data?.success) {
@@ -125,7 +137,7 @@ export default function PlayPage() {
         setSourcesLoading(false);
       }
     },
-    [type, id, season, episode]
+    [type, id, playbackOptions]
   );
 
   const retrySources = useCallback(
@@ -135,9 +147,7 @@ export default function PlayPage() {
 
       try {
         const opts = {
-          ...(type === 'tv' && season && episode
-            ? { season: Number(season), episode: Number(episode) }
-            : {}),
+          ...playbackOptions,
         };
         const data = await getPlaySources(type, id, opts);
         if (!data?.success) throw new Error('The providers did not return a stream yet.');
@@ -148,28 +158,47 @@ export default function PlayPage() {
         setSourcesLoading(false);
       }
     },
-    [type, id, season, episode]
+    [type, id, playbackOptions]
   );
 
   const backToWatch = () => {
     const params = new URLSearchParams({ id: id || '' });
-    if (season) params.set('season', season);
-    if (episode) params.set('episode', episode);
+    if (type === 'tv') {
+      params.set('season', String(resolvedSeason));
+      params.set('episode', String(resolvedEpisode));
+    }
     router.push(`/watch/${type}/${title}?${params.toString()}`);
   };
 
   const displayTitle = movieOrShow?.title || movieOrShow?.name || '';
+  const seasons = movieOrShow?.seasons?.filter((item) => item.season_number > 0) || [];
+  const selectedSeason = resolvedSeason;
+  const selectedEpisode = resolvedEpisode;
+  const currentSeason = seasons.find((item) => item.season_number === selectedSeason);
+  const episodeCount = currentSeason?.episode_count || 0;
+
+  const navigateToEpisode = (nextSeason, nextEpisode) => {
+    setIsLoading(true);
+    setSourcesLoading(true);
+    setSourcesError(null);
+    setDirectSources({ sources: [], subtitles: [] });
+    const params = new URLSearchParams({ id: id || '' });
+    params.set('season', String(nextSeason));
+    params.set('episode', String(nextEpisode));
+    router.push(`/watch/${type}/${title}/play?${params.toString()}`);
+  };
 
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: '#000000', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
       <Stack
-        direction="row"
-        alignItems="center"
+        direction={{ xs: 'column', sm: 'row' }}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
         spacing={1.5}
         sx={{ px: { xs: 1.5, sm: 2.5 }, py: 1.5 }}
       >
-        <IconButton
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
+          <IconButton
           onClick={backToWatch}
           sx={{
             color: 'common.white',
@@ -179,16 +208,50 @@ export default function PlayPage() {
           }}
         >
           <Iconify icon="solar:alt-arrow-left-bold" width={20} />
-        </IconButton>
+          </IconButton>
 
         <Stack sx={{ minWidth: 0 }}>
           <Typography variant="overline" sx={{ color: 'text.disabled', lineHeight: 1.2 }}>
-            {type === 'tv' && episode ? `Season ${season} · Episode ${episode}` : 'Now Playing'}
+            {type === 'tv' ? `Season ${selectedSeason} · Episode ${selectedEpisode}` : 'Now Playing'}
           </Typography>
           <Typography variant="h6" noWrap sx={{ color: 'common.white', fontWeight: 600 }}>
             {isLoading ? 'Loading…' : displayTitle}
           </Typography>
         </Stack>
+        </Stack>
+
+        {type === 'tv' && seasons.length > 0 && (
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ ml: { sm: 'auto' }, overflowX: 'auto', pb: { xs: 0.5, sm: 0 } }}
+          >
+            <Select
+              size="small"
+              value={String(selectedSeason)}
+              onChange={(event) => navigateToEpisode(event.target.value, 1)}
+              sx={{ minWidth: 125, color: 'common.white', bgcolor: alpha('#ffffff', 0.08) }}
+            >
+              {seasons.map((item) => (
+                <MenuItem key={item.id} value={String(item.season_number)}>
+                  Season {item.season_number}
+                </MenuItem>
+              ))}
+            </Select>
+            <Select
+              size="small"
+              value={String(selectedEpisode)}
+              onChange={(event) => navigateToEpisode(selectedSeason, event.target.value)}
+              sx={{ minWidth: 135, color: 'common.white', bgcolor: alpha('#ffffff', 0.08) }}
+            >
+              {Array.from({ length: episodeCount }, (_, index) => index + 1).map((number) => (
+                <MenuItem key={number} value={String(number)}>
+                  Episode {number}
+                </MenuItem>
+              ))}
+            </Select>
+          </Stack>
+        )}
       </Stack>
 
       {/* Player */}

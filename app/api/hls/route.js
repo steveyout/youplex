@@ -57,6 +57,8 @@ function buildUpstreamHeaders({ ua, referer, origin, range, isPlaylist, profile 
     'User-Agent': ua,
     Accept: isPlaylist ? 'application/vnd.apple.mpegurl, application/x-mpegURL, */*' : '*/*',
     'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
   };
 
   if (profile !== 'minimal') {
