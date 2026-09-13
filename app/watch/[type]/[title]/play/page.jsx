@@ -8,9 +8,10 @@ import { getMovieOrShow, getPlaySources, getSubtitles } from '@/actions/api';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
 import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
+import LinearProgress from '@mui/material/LinearProgress';
 import Stack from '@mui/material/Stack';
 import { alpha } from '@mui/material/styles';
-import Skeleton from '@mui/material/Skeleton';
 import Container from '@mui/material/Container';
 import IconButton from '@mui/material/IconButton';
 import MenuItem from '@mui/material/MenuItem';
@@ -257,13 +258,11 @@ export default function PlayPage() {
       {/* Player */}
       <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', px: { xs: 1, sm: 3 }, pb: 3 }}>
         {isLoading && !error ? (
-          <Container maxWidth="xl">
-            <Skeleton
-              variant="rounded"
-              animation="wave"
-              sx={{ width: 1, aspectRatio: '16/9', bgcolor: 'grey.900' }}
-            />
-          </Container>
+          <VideoLoadingState
+            title={displayTitle}
+            season={type === 'tv' ? selectedSeason : null}
+            episode={type === 'tv' ? selectedEpisode : null}
+          />
         ) : error || !movieOrShow ? (
           <Container maxWidth="md">
             <Stack alignItems="center" spacing={2} textAlign="center" sx={{ color: 'common.white' }}>
@@ -305,5 +304,77 @@ export default function PlayPage() {
         )}
       </Box>
     </Box>
+  );
+}
+
+function VideoLoadingState({ title, season, episode }) {
+  return (
+    <Container maxWidth="xl" sx={{ width: 1 }}>
+      <Box
+        sx={{
+          position: 'relative',
+          width: 1,
+          aspectRatio: '16/9',
+          minHeight: { xs: 280, sm: 420 },
+          overflow: 'hidden',
+          display: 'grid',
+          placeItems: 'center',
+          borderRadius: { xs: 2, sm: 3 },
+          bgcolor: '#050709',
+          border: `1px solid ${alpha('#ffffff', 0.12)}`,
+          boxShadow: `0 24px 60px -12px ${alpha('#000000', 0.9)}`,
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            background:
+              'radial-gradient(circle at 50% 42%, rgba(255,48,48,0.18), transparent 34%), linear-gradient(120deg, transparent 20%, rgba(255,255,255,0.06) 45%, transparent 70%)',
+            backgroundSize: '100% 100%, 220% 100%',
+            animation: 'youplex-loading-sheen 2.4s linear infinite',
+          },
+        }}
+      >
+        <Stack
+          alignItems="center"
+          spacing={2}
+          sx={{ position: 'relative', zIndex: 1, px: 3, textAlign: 'center', color: 'common.white' }}
+        >
+          <Box sx={{ position: 'relative', display: 'flex' }}>
+            <CircularProgress size={72} thickness={3} sx={{ color: 'primary.main' }} />
+            <Iconify
+              icon="solar:play-stream-bold-duotone"
+              width={30}
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                m: 'auto',
+                color: 'common.white',
+                animation: 'youplex-glow-pulse 2s ease-in-out infinite',
+              }}
+            />
+          </Box>
+          <Stack spacing={0.5} alignItems="center">
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Preparing your stream
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.disabled' }}>
+              {title || 'Loading video'}{season ? ` · Season ${season}, Episode ${episode}` : ''}
+            </Typography>
+          </Stack>
+          <LinearProgress
+            sx={{
+              width: { xs: 220, sm: 320 },
+              height: 4,
+              borderRadius: 4,
+              bgcolor: alpha('#ffffff', 0.12),
+              '& .MuiLinearProgress-bar': { borderRadius: 4 },
+            }}
+          />
+          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+            Finding a playable source. This may take a moment.
+          </Typography>
+        </Stack>
+      </Box>
+    </Container>
   );
 }

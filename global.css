@@ -144,6 +144,15 @@ input[type='number']::-webkit-inner-spin-button {
   }
 }
 
+@keyframes youplex-loading-sheen {
+  from {
+    background-position: 0 0, 100% 0;
+  }
+  to {
+    background-position: 0 0, -120% 0;
+  }
+}
+
 /* Slow aurora drift used on page background gradients */
 @keyframes youplex-drift-a {
   0% {
@@ -221,6 +230,7 @@ input[type='number']::-webkit-inner-spin-button {
   .youplex-fade-up,
   .youplex-fade-scale,
   .youplex-shimmer,
+  .youplex-loading-sheen,
   .youplex-glow-pulse,
   .youplex-aurora {
     animation: none !important;
