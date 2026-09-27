@@ -130,6 +130,8 @@ export default function Player({
   title,
   season,
   episode,
+  backdrop,
+  type,
   onBack,
 }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -145,15 +147,15 @@ export default function Player({
   const [embedSrvAnchor, setEmbedSrvAnchor] = useState(null);
   const [embedHeaderVisible, setEmbedHeaderVisible] = useState(true);
 
-  // Initialize mode from localStorage on mount
+  // Initialize mode: ALWAYS start with 'native' unless user previously chose otherwise
   useEffect(() => {
     const stored = getStoredMode();
-    if (allowEmbedMode && stored === 'native' && directSources.length === 0 && !sourcesLoading) {
+    if (stored === 'embed') {
       setPlaybackMode('embed');
     } else {
-      setPlaybackMode(stored);
+      setPlaybackMode('native');
     }
-  }, [allowEmbedMode, directSources.length, sourcesLoading]);
+  }, []);
 
   // All native sources mapped to the Vidstack src array
   const nativeSrc = useMemo(() => toVidstackSrcs(directSources), [directSources]);
@@ -185,16 +187,7 @@ export default function Player({
     };
   }, [activeNativeSrc, effectiveSelectedExtractor]);
 
-  const resolvedMode =
-    allowEmbedMode &&
-    playbackMode === 'native' &&
-    !effectiveSelectedExtractor &&
-    !nativeReady &&
-    !sourcesLoading &&
-    !sourcesError &&
-    embedAvailable
-      ? 'embed'
-      : playbackMode;
+  const resolvedMode = playbackMode;
 
   // Build server list based on mode
   const serverList = useMemo(() => {
@@ -246,7 +239,13 @@ export default function Player({
           const ok = await onSelectExtractor(server.id);
           setIsLoading(false);
           setFailedExtractorId(ok ? null : server.id);
-          if (!ok) setPlaybackError('This direct stream could not be loaded.');
+          if (!ok) {
+            if (allowEmbedMode && embedAvailable) {
+              setPlaybackMode('embed');
+            } else {
+              setPlaybackError('This direct stream could not be loaded.');
+            }
+          }
         } else {
           setIsLoading(false);
         }
@@ -257,7 +256,7 @@ export default function Player({
         setPlaybackAttempt((attempt) => attempt + 1);
       }
     },
-    [resolvedMode, onSelectExtractor]
+    [resolvedMode, onSelectExtractor, allowEmbedMode, embedAvailable]
   );
 
   const scrapingNative = resolvedMode === 'native' && !nativeReady && sourcesLoading;
@@ -336,12 +335,18 @@ export default function Player({
     if (resolvedMode === 'native' && effectiveSelectedExtractor && onSelectExtractor) {
       const ok = await onSelectExtractor(effectiveSelectedExtractor);
       setIsLoading(false);
-      if (!ok) setPlaybackError('This direct stream could not be loaded.');
+      if (!ok) {
+        if (allowEmbedMode && embedAvailable) {
+          setPlaybackMode('embed');
+        } else {
+          setPlaybackError('This direct stream could not be loaded.');
+        }
+      }
     } else if (onRetrySources) {
       await onRetrySources();
       setIsLoading(false);
     }
-  }, [effectiveSelectedExtractor, onRetrySources, onSelectExtractor, resolvedMode]);
+  }, [effectiveSelectedExtractor, onRetrySources, onSelectExtractor, resolvedMode, allowEmbedMode, embedAvailable]);
 
   // Render Video / Iframe
   const renderPlayer = () => {
@@ -375,7 +380,7 @@ export default function Player({
                 setPlaybackError(null);
               }}
               onError={() => {
-                if (autoRetryCountRef.current < 2) {
+                if (autoRetryCountRef.current < 1) {
                   autoRetryCountRef.current += 1;
                   setIsAutoRetrying(true);
                   setIsLoading(true);
@@ -383,17 +388,24 @@ export default function Player({
                   retryTimerRef.current = setTimeout(() => {
                     retryTimerRef.current = null;
                     setPlaybackAttempt((attempt) => attempt + 1);
-                  }, 900);
+                  }, 800);
                   return;
                 }
 
                 setIsAutoRetrying(false);
                 setIsLoading(false);
-                setPlaybackError(
-                  allowEmbedMode
-                    ? 'The direct stream failed after automatic retries. Try another provider or switch to Embed.'
-                    : 'The direct stream failed after automatic retries. Try another provider.'
-                );
+                // Auto fallback to embed if native stream fails
+                if (allowEmbedMode && embedAvailable) {
+                  setPlaybackMode('embed');
+                  setPlaybackError(null);
+                  setIsLoading(true);
+                } else {
+                  setPlaybackError(
+                    allowEmbedMode
+                      ? 'The direct stream failed after automatic retries. Try another provider or switch to Embed.'
+                      : 'The direct stream failed after automatic retries. Try another provider.'
+                  );
+                }
               }}
             >
               <MediaProvider>
@@ -621,7 +633,7 @@ export default function Player({
       );
     }
 
-    // Empty state
+    // Empty state - if native returned empty or error, offer instant embed switch or retry
     return (
       <Stack
         alignItems="center"
@@ -631,22 +643,35 @@ export default function Player({
       >
         <Iconify icon="solar:videocamera-broken" width={56} sx={{ color: alpha('#ffffff', 0.3) }} />
         <Typography variant="h6" sx={{ color: 'common.white' }}>
-          {sourcesError ? 'Still searching for a stream' : 'No streaming source available'}
+          {sourcesError ? 'Native stream unavailable' : 'No direct stream found'}
         </Typography>
-        <Typography variant="body2" sx={{ color: 'text.disabled', textAlign: 'center', maxWidth: 400 }}>
+        <Typography variant="body2" sx={{ color: 'text.disabled', textAlign: 'center', maxWidth: 420 }}>
           {sourcesError
-            ? 'Some providers can take a little longer to wake up. Keep this page open and try again without leaving playback.'
-            : 'Direct streams could not be resolved for this title. Try selecting an alternative provider or switch to embed.'}
+            ? 'Native scraper could not resolve a stream immediately. You can switch to our fast Embed server or search again.'
+            : 'Direct stream could not be loaded. You can switch to embed servers instantly to watch now.'}
         </Typography>
-        {sourcesError && onRetrySources && (
-          <Button
-            variant="contained"
-            onClick={handleRetry}
-            startIcon={<Iconify icon="solar:refresh-bold" />}
-          >
-            Search again
-          </Button>
-        )}
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          {allowEmbedMode && embedAvailable && (
+            <Button
+              variant="contained"
+              onClick={() => handleModeChange('embed')}
+              startIcon={<Iconify icon="solar:code-bold" />}
+              sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
+            >
+              Switch to Embed Player
+            </Button>
+          )}
+          {onRetrySources && (
+            <Button
+              variant="outlined"
+              onClick={handleRetry}
+              startIcon={<Iconify icon="solar:refresh-bold" />}
+              sx={{ color: 'common.white', borderColor: alpha('#ffffff', 0.2) }}
+            >
+              Retry Native
+            </Button>
+          )}
+        </Stack>
       </Stack>
     );
   };
@@ -678,21 +703,61 @@ export default function Player({
           <Stack
             alignItems="center"
             justifyContent="center"
-            spacing={2}
+            spacing={2.5}
             sx={{
               position: 'absolute',
               inset: 0,
               zIndex: 10,
-              bgcolor: alpha('#050709', 0.75),
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
+              bgcolor: alpha('#050709', 0.8),
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              px: 2,
+              textAlign: 'center',
             }}
           >
-            <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <CircularProgress size={68} thickness={3} sx={{ color: 'primary.main' }} />
+            {backdrop && (
+              <Box
+                component="img"
+                src={backdrop}
+                alt=""
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: 1,
+                  height: 1,
+                  objectFit: 'cover',
+                  opacity: 0.15,
+                  filter: 'blur(20px) brightness(0.6)',
+                  transform: 'scale(1.1)',
+                  zIndex: 0,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+
+            <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  width: 96,
+                  height: 96,
+                  borderRadius: '50%',
+                  bgcolor: alpha('#FF3030', 0.2),
+                  filter: 'blur(16px)',
+                  animation: 'youplex-radar-pulse 2.2s ease-in-out infinite',
+                }}
+              />
+              <CircularProgress
+                size={72}
+                thickness={2.8}
+                sx={{
+                  color: 'primary.main',
+                  '& .MuiCircularProgress-circle': { strokeLinecap: 'round' },
+                }}
+              />
               <Iconify
                 icon="solar:play-stream-bold-duotone"
-                width={28}
+                width={30}
                 sx={{
                   position: 'absolute',
                   color: 'common.white',
@@ -700,21 +765,51 @@ export default function Player({
                 }}
               />
             </Box>
-            <Typography
-              variant="subtitle1"
-              sx={{
-                color: 'common.white',
-                fontWeight: 600,
-                letterSpacing: 0.3,
-                minWidth: { xs: 210, sm: 280 },
-                textAlign: 'center',
-              }}
-            >
-              {spinnerLabel}
-              <Box component="span" sx={{ color: 'primary.light', ml: 0.25 }}>
-                …
-              </Box>
-            </Typography>
+
+            <Stack spacing={0.75} alignItems="center" sx={{ zIndex: 1, maxWidth: 420 }}>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  color: 'common.white',
+                  fontWeight: 700,
+                  letterSpacing: 0.3,
+                  fontSize: { xs: 15, sm: 17 },
+                }}
+              >
+                {spinnerLabel}
+              </Typography>
+              {title && (
+                <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.6), fontSize: 12 }}>
+                  {title}{season ? ` • S${season} E${episode}` : ''}
+                </Typography>
+              )}
+            </Stack>
+
+            {allowEmbedMode && resolvedMode === 'native' && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => handleModeChange('embed')}
+                startIcon={<Iconify icon="solar:code-bold" width={16} />}
+                sx={{
+                  zIndex: 1,
+                  fontSize: 12,
+                  color: 'common.white',
+                  borderColor: alpha('#ffffff', 0.25),
+                  bgcolor: alpha('#ffffff', 0.06),
+                  borderRadius: 2,
+                  py: 0.6,
+                  px: 1.8,
+                  '&:hover': {
+                    color: 'common.white',
+                    borderColor: 'primary.main',
+                    bgcolor: alpha('#FF3030', 0.15),
+                  },
+                }}
+              >
+                Switch to Instant Embed Player
+              </Button>
+            )}
           </Stack>
         )}
 
@@ -746,69 +841,145 @@ export default function Player({
                 {playbackError}
               </Typography>
               <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              <Button variant="contained" onClick={handleRetry} startIcon={<Iconify icon="solar:refresh-bold" />}>
-                Try again
-              </Button>
-              {allowEmbedMode && (
-                <Button
-                  variant="outlined"
-                  onClick={() => handleModeChange(resolvedMode === 'native' ? 'embed' : 'native')}
-                  startIcon={<Iconify icon={resolvedMode === 'native' ? 'solar:code-bold' : 'solar:play-bold'} />}
-                >
-                  Switch to {resolvedMode === 'native' ? 'Embed' : 'Native'}
+                <Button variant="contained" onClick={handleRetry} startIcon={<Iconify icon="solar:refresh-bold" />}>
+                  Try again
                 </Button>
-              )}
+                {allowEmbedMode && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleModeChange(resolvedMode === 'native' ? 'embed' : 'native')}
+                    startIcon={<Iconify icon={resolvedMode === 'native' ? 'solar:code-bold' : 'solar:play-bold'} />}
+                  >
+                    Switch to {resolvedMode === 'native' ? 'Embed' : 'Native'}
+                  </Button>
+                )}
               </Stack>
             </Stack>
           </Stack>
         )}
       </Box>
 
-      {/* Subtle Player Info & Hint Bar */}
+      {/* Subtle Player Info & Mode Switcher Bar */}
       <Stack
-        direction="row"
-        alignItems="center"
+        direction={{ xs: 'column', sm: 'row' }}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
         justifyContent="space-between"
-        spacing={2}
+        spacing={1.5}
         sx={{
           mt: 1.5,
-          px: 1.5,
-          py: 0.75,
-          borderRadius: 2,
-          bgcolor: alpha('#ffffff', 0.03),
-          border: `1px solid ${alpha('#ffffff', 0.06)}`,
+          px: { xs: 1.5, sm: 2 },
+          py: 1,
+          borderRadius: 2.5,
+          bgcolor: alpha('#0d1117', 0.7),
+          backdropFilter: 'blur(12px)',
+          border: `1px solid ${alpha('#ffffff', 0.08)}`,
         }}
       >
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
-          <Iconify
-            icon={resolvedMode === 'native' ? 'solar:verified-check-bold' : 'solar:code-circle-bold'}
-            width={16}
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
+          <Box
             sx={{
-              color: resolvedMode === 'native' ? 'primary.light' : 'warning.light',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              bgcolor: resolvedMode === 'native' ? alpha('#FF3030', 0.15) : alpha('#00B8D9', 0.15),
+              color: resolvedMode === 'native' ? 'primary.light' : 'info.light',
               flexShrink: 0,
             }}
-          />
-          <Typography variant="caption" noWrap sx={{ color: 'text.secondary', fontSize: 12 }}>
-            {resolvedMode === 'native'
-              ? allowEmbedMode
-                ? 'Playing high quality direct stream. Switch to Embed if you experience buffering.'
-                : 'Playing high quality direct stream.'
-              : 'Playing via embed server. Switch to Native for direct streams with subtitles.'}
-          </Typography>
+          >
+            <Iconify
+              icon={resolvedMode === 'native' ? 'solar:play-stream-bold' : 'solar:code-circle-bold'}
+              width={18}
+            />
+          </Box>
+          <Stack spacing={0.2} sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle2" noWrap sx={{ color: 'common.white', fontSize: 13, fontWeight: 600 }}>
+              {resolvedMode === 'native' ? 'Native Direct Stream' : `Embed Stream (${currentServerLabel})`}
+            </Typography>
+            <Typography variant="caption" noWrap sx={{ color: 'text.secondary', fontSize: 11.5 }}>
+              {resolvedMode === 'native'
+                ? 'High quality stream with custom subtitles and audio tracks.'
+                : 'Zero-buffer fallback embed stream provided by fast mirrors.'}
+            </Typography>
+          </Stack>
         </Stack>
 
-        <Typography
-          variant="caption"
-          sx={{
-            color: 'text.disabled',
-            fontSize: 11,
-            display: { xs: 'none', sm: 'block' },
-            flexShrink: 0,
-          }}
-        >
-          Press <Box component="span" sx={{ color: 'common.white', fontWeight: 600 }}>F</Box> for Fullscreen •{' '}
-          <Box component="span" sx={{ color: 'common.white', fontWeight: 600 }}>Space</Box> to Play/Pause
-        </Typography>
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, flexShrink: 0 }}>
+          {allowEmbedMode && (
+            <Box
+              sx={{
+                bgcolor: alpha('#ffffff', 0.06),
+                border: `1px solid ${alpha('#ffffff', 0.12)}`,
+                p: 0.4,
+                borderRadius: 2.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+              }}
+            >
+              <Button
+                size="small"
+                onClick={() => handleModeChange('native')}
+                startIcon={<Iconify icon="solar:play-bold" width={13} />}
+                sx={{
+                  px: 1.5,
+                  py: 0.4,
+                  minHeight: 28,
+                  borderRadius: 2,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  color: resolvedMode === 'native' ? 'common.white' : alpha('#ffffff', 0.65),
+                  bgcolor: resolvedMode === 'native' ? 'primary.main' : 'transparent',
+                  boxShadow: resolvedMode === 'native' ? `0 2px 8px ${alpha('#FF3030', 0.4)}` : 'none',
+                  '&:hover': {
+                    bgcolor: resolvedMode === 'native' ? 'primary.main' : alpha('#ffffff', 0.1),
+                    color: 'common.white',
+                  },
+                }}
+              >
+                Native
+              </Button>
+              <Button
+                size="small"
+                onClick={() => handleModeChange('embed')}
+                startIcon={<Iconify icon="solar:code-bold" width={13} />}
+                sx={{
+                  px: 1.5,
+                  py: 0.4,
+                  minHeight: 28,
+                  borderRadius: 2,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  color: resolvedMode === 'embed' ? 'common.white' : alpha('#ffffff', 0.65),
+                  bgcolor: resolvedMode === 'embed' ? 'primary.main' : 'transparent',
+                  boxShadow: resolvedMode === 'embed' ? `0 2px 8px ${alpha('#FF3030', 0.4)}` : 'none',
+                  '&:hover': {
+                    bgcolor: resolvedMode === 'embed' ? 'primary.main' : alpha('#ffffff', 0.1),
+                    color: 'common.white',
+                  },
+                }}
+              >
+                Embed
+              </Button>
+            </Box>
+          )}
+
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.disabled',
+              fontSize: 11,
+              display: { xs: 'none', md: 'block' },
+            }}
+          >
+            <Box component="span" sx={{ color: 'common.white', fontWeight: 600 }}>F</Box> Fullscreen •{' '}
+            <Box component="span" sx={{ color: 'common.white', fontWeight: 600 }}>Space</Box> Pause
+          </Typography>
+        </Stack>
       </Stack>
     </Box>
   );

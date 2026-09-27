@@ -20,7 +20,7 @@ export default function Error({ error, reset }) {
         action={
           <Button
             component={RouterLink}
-            href={paths.post.root}
+            href={paths.movies || paths.post?.root || '/movies'}
             startIcon={<Iconify width={16} icon="eva:arrow-ios-back-fill" />}
             sx={{ mt: 3 }}
           >

@@ -8,4 +8,5 @@ Do NOT output raw JSON tool code or speculative internal monologues.
 """
 
 PARAMETER temperature 0.2
-PARAMETER num_ctx 40960
+PARAMETER num_ctx 65536
+PARAMETER num_predict 4096

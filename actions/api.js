@@ -139,6 +139,27 @@ export async function getMediaDetails(type, id) {
 // ----------------------------------------------------------------------
 
 /**
+ * Fetch TV Season Details including full episode list with stills, runtime, and overview
+ * @param {string|number} tvId - TMDB TV Show ID
+ * @param {number|string} seasonNumber - Season number
+ */
+export async function getSeasonDetails(tvId, seasonNumber) {
+  const url = endpoints.tmdb.seasonDetails(tvId, seasonNumber);
+
+  if (!url) return null;
+
+  try {
+    const res = await axios.get(url);
+    return res.data;
+  } catch (error) {
+    console.warn(`Failed to fetch season ${seasonNumber} details:`, error);
+    return null;
+  }
+}
+
+// ----------------------------------------------------------------------
+
+/**
  * Fetch Trending Content
  * @param {string} type - 'all', 'watch', 'tv', 'person'
  * @param {string} timeWindow - 'day' or 'week'

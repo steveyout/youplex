@@ -125,7 +125,11 @@ function HeroBannerItem({ item, isActive }) {
     : '/fallback-backdrop.jpg';
 
   const handleWatch = () => {
-    router.push(paths.watch.details(type, item.id));
+    router.push(paths.watch.details(type, item.id, title));
+  };
+
+  const handlePlayDirect = () => {
+    router.push(paths.watch.play(type, item.id, title));
   };
 
   return (
@@ -286,7 +290,7 @@ function HeroBannerItem({ item, isActive }) {
                 <Button
                   variant="contained"
                   className="youplex-shimmer"
-                  onClick={handleWatch}
+                  onClick={handlePlayDirect}
                   sx={{
                     px: 3.5,
                     py: 1.05,

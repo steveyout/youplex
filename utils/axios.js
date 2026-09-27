@@ -12,7 +12,7 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const token = process.env.NEXT_PUBLIC_TMDB_TOKEN;
     const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     } else if (apiKey) {
@@ -57,5 +57,6 @@ export const endpoints = {
     search: '/search/multi',
     credits: (type, id) => `/${type}/${id}/credits`,
     recommendations: (type, id) => `/${type}/${id}/recommendations`,
+    seasonDetails: (tvId, seasonNumber) => `/tv/${tvId}/season/${seasonNumber}`,
   },
 };

@@ -5,7 +5,7 @@ import { fDate } from '@/utils/format-time';
 import { Iconify } from '@/components/iconify';
 import { PostItem } from '@/sections/movies/post-item';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { getMovieOrShow, getRecommendations } from '@/actions/api';
+import { getMovieOrShow, getRecommendations, searchMedia } from '@/actions/api';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -33,31 +33,55 @@ export default function WatchPage() {
   useEffect(() => {
     let active = true;
 
-    if (!id) {
-      setIsLoading(false);
-      return undefined;
-    }
-
     setIsLoading(true);
     setError(null);
 
-    getMovieOrShow(type, id)
-      .then((data) => {
-        if (active) setMovieOrShow(data);
-      })
+    const resolveAndLoad = async () => {
+      let resolvedId = id;
+      if (!resolvedId && title) {
+        try {
+          const cleanQuery = decodeURIComponent(title).replace(/[-_]+/g, ' ').trim();
+          const searchRes = await searchMedia(cleanQuery);
+          const match = searchRes?.results?.find((item) => {
+            const mType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+            return mType === type || type === 'all';
+          }) || searchRes?.results?.[0];
+          if (match?.id) resolvedId = match.id;
+        } catch (searchErr) {
+          console.warn('Auto search recovery failed:', searchErr);
+        }
+      }
+
+      if (!resolvedId) {
+        throw new Error('Movie or TV show ID is missing or not found.');
+      }
+
+      const [movieData, recData] = await Promise.allSettled([
+        getMovieOrShow(type, resolvedId),
+        getRecommendations(type, resolvedId),
+      ]);
+
+      if (!active) return;
+
+      if (movieData.status === 'fulfilled' && movieData.value) {
+        setMovieOrShow(movieData.value);
+      } else {
+        throw new Error(movieData.reason?.message || 'Unable to load details for this title.');
+      }
+
+      if (recData.status === 'fulfilled' && recData.value?.results) {
+        setRecommendations(recData.value.results);
+      } else {
+        setRecommendations([]);
+      }
+    };
+
+    resolveAndLoad()
       .catch((err) => {
         if (active) setError(err?.message || 'Something went wrong while loading this title.');
       })
       .finally(() => {
         if (active) setIsLoading(false);
-      });
-
-    getRecommendations(type, id)
-      .then((data) => {
-        if (active) setRecommendations(data?.results || []);
-      })
-      .catch(() => {
-        if (active) setRecommendations([]);
       });
 
     return () => {

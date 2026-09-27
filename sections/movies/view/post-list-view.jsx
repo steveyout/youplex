@@ -82,7 +82,7 @@ export function PostListView({ posts = [], loading }) {
           results={searchResults}
           onSearch={handleSearch}
           loading={searchLoading}
-          hrefItem={(item) => paths.post.details(item.media_type || 'movie', item.id)}
+          hrefItem={(item) => paths.watch.details(item.media_type || 'movie', item.id, item.title || item.name || 'video')}
         />
 
         <PostSort sort={sortBy} onSort={handleSortBy} sortOptions={SORT_OPTIONS} />

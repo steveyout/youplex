@@ -20,8 +20,24 @@ export const paths = {
   torrents:'https://torrents.youplex.site/',
   discord:'https://discord.gg/5eWu9Vz6tQ',
   telegram:'https://t.me/youplexannouncments',
+  dashboard: {
+    root: '/movies',
+    post: {
+      root: '/movies',
+      details: (title) => paths.movies,
+      edit: (title) => paths.movies,
+    },
+  },
+  post: {
+    root: '/movies',
+    details: (type, id, title = 'video') => paths.watch.details(type, id, title),
+  },
   watch: {
-    root: `/watch`,
+    root: '/watch',
+    play: (type, id, title = 'video', sn = 1, ep = 1) => {
+      const base = '/watch/' + type + '/' + paramCase(title) + '/play?id=' + id;
+      return type === 'tv' ? base + '&season=' + sn + '&episode=' + ep : base;
+    },
     details: (type, id, title = 'video', sn = 1, ep = 1) => {
       const base = `/watch/${type}/${paramCase(title)}?id=${id}`;
       // For TV shows, we append season and episode to the query string
