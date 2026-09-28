@@ -168,9 +168,18 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
             const evt = JSON.parse(dataStr);
             onProgress(evt);
 
-            if (evt.type === 'success' || evt.type === 'failure') {
+            if (evt.type === 'success') {
+            finalResult = {
+              ...finalResult,
+              ...evt,
+              sources: evt.sources?.length ? evt.sources : finalResult?.sources || [],
+              subtitles: evt.subtitles?.length ? evt.subtitles : finalResult?.subtitles || [],
+            };
+          } else if (evt.type === 'failure') {
+            if (!finalResult || finalResult.type !== 'success') {
               finalResult = evt;
             }
+          }
           } catch (e) {
             // ignore malformed event lines
           }
@@ -207,6 +216,7 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
   }
 
   try {
+    params.delete('stream');
     const res = await fetch(`/api/scrape?${params.toString()}`);
     if (!res.ok) {
       return { sources: [], subtitles: [] };

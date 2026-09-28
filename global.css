@@ -270,14 +270,15 @@ input[type='number']::-webkit-inner-spin-button {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: var(--youplex-captions-bottom, 72px);
+  bottom: var(--youplex-captions-bottom, 80px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
   flex-wrap: wrap;
   padding: var(--youplex-captions-padding, 0 4%);
   text-align: center;
-  z-index: 1;
+  z-index: 15 !important;
+  pointer-events: none !important;
 }
 
 @media (max-width: 600px) {

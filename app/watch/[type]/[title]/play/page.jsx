@@ -19,6 +19,7 @@ import { alpha } from '@mui/material/styles';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import Typography from '@mui/material/Typography';
+import Skeleton from '@mui/material/Skeleton';
 import CardActionArea from '@mui/material/CardActionArea';
 
 import { Player } from '@/components/player';
@@ -295,7 +296,8 @@ export default function PlayPage() {
           provider: providerId,
           ...playbackOptions,
         };
-        const data = await getPlaySources(type, id, opts, handleScrapeProgress);
+        const targetId = id || movieOrShow?.id;
+        const data = await getPlaySources(type, targetId, opts, handleScrapeProgress);
         if (data?.success || (data?.sources || []).length > 0) {
           setDirectSources(data);
           return true;
@@ -321,7 +323,8 @@ export default function PlayPage() {
         const opts = {
           ...playbackOptions,
         };
-        const data = await getPlaySources(type, id, opts, handleScrapeProgress);
+        const targetId = id || movieOrShow?.id;
+        const data = await getPlaySources(type, targetId, opts, handleScrapeProgress);
         if (!data?.success) throw new Error('The providers did not return a stream yet.');
         setDirectSources(data);
       } catch (err) {
@@ -355,7 +358,7 @@ export default function PlayPage() {
 
   const currentEpisodeData = seasonEpisodes.find((ep) => ep.episode_number === selectedEpisode);
 
-  const navigateToEpisode = (nextSeason, nextEpisode) => {
+  const navigateToEpisode = useCallback((nextSeason, nextEpisode) => {
     setIsLoading(true);
     setSourcesLoading(true);
     setSourcesError(null);
@@ -364,7 +367,23 @@ export default function PlayPage() {
     params.set('season', String(nextSeason));
     params.set('episode', String(nextEpisode));
     router.push(`/watch/${type}/${title}/play?${params.toString()}`);
-  };
+  }, [id, movieOrShow?.id, type, title, router]);
+
+  const hasNextEpisode = useMemo(() => {
+    if (type !== 'tv') return false;
+    const currentEpNum = Number(selectedEpisode);
+    if (seasonEpisodes && seasonEpisodes.length > 0) {
+      return seasonEpisodes.some((ep) => Number(ep.episode_number) === currentEpNum + 1);
+    }
+    return episodeCount > 0 && currentEpNum < episodeCount;
+  }, [type, selectedEpisode, seasonEpisodes, episodeCount]);
+
+  const handleNextEpisode = useCallback(() => {
+    if (type !== 'tv') return;
+    const currentEpNum = Number(selectedEpisode);
+    const nextEpNum = currentEpNum + 1;
+    navigateToEpisode(selectedSeason, nextEpNum);
+  }, [type, selectedSeason, selectedEpisode, navigateToEpisode]);
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#050709', display: 'flex', flexDirection: 'column' }}>
@@ -484,144 +503,511 @@ export default function PlayPage() {
         onClose={() => setEpisodesDrawerOpen(false)}
         PaperProps={{
           sx: {
-            width: { xs: '88vw', sm: 400, md: 460 },
-            bgcolor: '#0d1117',
+            width: { xs: '92vw', sm: 480, md: 540, lg: 580 },
+            maxWidth: 620,
+            bgcolor: '#0a0e14',
             color: 'common.white',
             borderLeft: `1px solid ${alpha('#ffffff', 0.1)}`,
+            boxShadow: '-8px 0 32px rgba(0,0,0,0.65)',
           },
         }}
       >
-        <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: 1 }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Season {selectedSeason} Episodes
-            </Typography>
+        <Box
+          sx={{
+            p: { xs: 2, sm: 2.5 },
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'hidden',
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* Header */}
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mb: 2.5, flexShrink: 0 }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0, flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: { xs: 17, sm: 19 } }}>
+                Episodes
+              </Typography>
+              <Box
+                sx={{
+                  bgcolor: alpha('#FF3030', 0.18),
+                  border: `1px solid ${alpha('#FF3030', 0.4)}`,
+                  color: 'primary.light',
+                  px: 1,
+                  py: 0.3,
+                  borderRadius: 0.75,
+                  fontWeight: 700,
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                }}
+              >
+                S{selectedSeason} &bull; E{selectedEpisode}
+              </Box>
+              {seasons.length > 1 && (
+                <Select
+                  size="small"
+                  value={selectedSeason}
+                  onChange={(e) => {
+                    navigateToEpisode(Number(e.target.value), 1);
+                  }}
+                  sx={{
+                    typography: 'subtitle2',
+                    color: 'common.white',
+                    bgcolor: alpha('#ffffff', 0.08),
+                    borderRadius: 1,
+                    height: 34,
+                    '& .MuiSelect-select': { py: 0.5, px: 1.25 },
+                    '& .MuiSelect-icon': { color: 'common.white' },
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: alpha('#ffffff', 0.16),
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: alpha('#ffffff', 0.3),
+                    },
+                  }}
+                >
+                  {seasons.map((s) => (
+                    <MenuItem key={s.id || s.season_number} value={s.season_number}>
+                      Season {s.season_number}
+                    </MenuItem>
+                  ))}
+                </Select>
+              )}
+            </Stack>
             <IconButton onClick={() => setEpisodesDrawerOpen(false)} sx={{ color: 'common.white' }}>
-              <Iconify icon="eva:close-fill" />
+              <Iconify icon="eva:close-fill" width={22} />
             </IconButton>
           </Stack>
 
+          {/* List Content */}
           {seasonEpisodesLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-              <CircularProgress size={36} sx={{ color: 'primary.main' }} />
+            <Box
+              sx={{
+                flex: '1 1 auto',
+                minHeight: 0,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.75,
+                py: 1,
+              }}
+            >
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton
+                  key={i}
+                  variant="rounded"
+                  height={116}
+                  sx={{ bgcolor: alpha('#ffffff', 0.05), borderRadius: 2, flexShrink: 0 }}
+                />
+              ))}
             </Box>
           ) : seasonEpisodes.length > 0 ? (
-            <Stack spacing={1.5} sx={{ overflowY: 'auto', flexGrow: 1, pr: 0.5 }}>
+            <Box
+              sx={{
+                flex: '1 1 auto',
+                minHeight: 0,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.75,
+                pr: 0.5,
+              }}
+            >
               {seasonEpisodes.map((ep) => {
-                const isSelected = ep.episode_number === selectedEpisode;
+                const isSelected = Number(ep.episode_number) === Number(selectedEpisode);
+                const thumbSrc = ep.still_path
+                  ? (`https://image.tmdb.org/t/p/w300${ep.still_path}`)
+                  : movieOrShow?.backdrop_path
+                  ? (`https://image.tmdb.org/t/p/w300${movieOrShow.backdrop_path}`)
+                  : movieOrShow?.poster_path
+                  ? (`https://image.tmdb.org/t/p/w300${movieOrShow.poster_path}`)
+                  : null;
+
                 return (
-                  <Card
+                  <Box
                     key={ep.id || ep.episode_number}
+                    onClick={() => {
+                      setEpisodesDrawerOpen(false);
+                      navigateToEpisode(selectedSeason, ep.episode_number);
+                    }}
                     sx={{
-                      bgcolor: isSelected ? alpha('#FF3030', 0.12) : alpha('#ffffff', 0.04),
-                      border: `1px solid ${isSelected ? alpha('#FF3030', 0.5) : alpha('#ffffff', 0.08)}`,
-                      borderRadius: 1.5,
-                      transition: 'all 0.2s ease',
+                      flexShrink: 0,
+                      minHeight: { xs: 104, sm: 116 },
+                      width: '100%',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: { xs: 1.5, sm: 2 },
+                      p: { xs: 1.5, sm: 1.75 },
+                      boxSizing: 'border-box',
+                      bgcolor: isSelected ? alpha('#FF3030', 0.16) : alpha('#ffffff', 0.04),
+                      background: isSelected
+                        ? 'linear-gradient(90deg, rgba(255, 48, 48, 0.22) 0%, rgba(255, 48, 48, 0.05) 100%)'
+                        : alpha('#ffffff', 0.03),
+                      border: isSelected ? '2px solid #FF3030' : `1px solid ${alpha('#ffffff', 0.08)}`,
+                      borderLeft: isSelected ? '6px solid #FF3030' : '6px solid transparent',
+                      borderRadius: 2,
+                      boxShadow: isSelected
+                        ? '0 6px 24px rgba(255, 48, 48, 0.35)'
+                        : '0 2px 10px rgba(0, 0, 0, 0.3)',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       '&:hover': {
-                        bgcolor: isSelected ? alpha('#FF3030', 0.18) : alpha('#ffffff', 0.08),
+                        bgcolor: isSelected ? alpha('#FF3030', 0.22) : alpha('#ffffff', 0.08),
+                        borderColor: isSelected ? '#FF3030' : alpha('#ffffff', 0.22),
+                        transform: 'translateY(-1px)',
                       },
                     }}
                   >
-                    <CardActionArea
-                      onClick={() => {
-                        setEpisodesDrawerOpen(false);
-                        navigateToEpisode(selectedSeason, ep.episode_number);
+                    {/* Generous 16:9 Thumbnail Preview */}
+                    <Box
+                      sx={{
+                        width: { xs: 130, sm: 156 },
+                        height: { xs: 74, sm: 88 },
+                        minWidth: { xs: 130, sm: 156 },
+                        minHeight: { xs: 74, sm: 88 },
+                        borderRadius: 1.5,
+                        overflow: 'hidden',
+                        position: 'relative',
+                        flexShrink: 0,
+                        bgcolor: alpha('#ffffff', 0.08),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
                       }}
-                      sx={{ p: 1.5, display: 'flex', alignItems: 'flex-start', gap: 1.5 }}
                     >
-                      {ep.still_path ? (
-                        <CardMedia
+                      {/* Gradient Fallback Backdrop */}
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'linear-gradient(135deg, #1e2638 0%, #0d131f 100%)',
+                          color: alpha('#ffffff', 0.6),
+                          gap: 0.5,
+                          zIndex: 0,
+                        }}
+                      >
+                        <Iconify icon="solar:clapperboard-play-linear" width={26} />
+                        <Typography variant="caption" sx={{ fontSize: 10.5, fontWeight: 700, opacity: 0.75 }}>
+                          EP {ep.episode_number}
+                        </Typography>
+                      </Box>
+
+                      {thumbSrc && (
+                        <Box
                           component="img"
-                          image={`https://image.tmdb.org/t/p/w300${ep.still_path}`}
-                          alt={ep.name}
+                          src={thumbSrc}
+                          alt={ep.name || `Episode ${ep.episode_number}`}
+                          loading="lazy"
+                          onError={(ev) => {
+                            ev.currentTarget.style.display = 'none';
+                          }}
                           sx={{
-                            width: 88,
-                            height: 52,
-                            borderRadius: 1,
+                            position: 'relative',
+                            zIndex: 1,
+                            width: '100%',
+                            height: '100%',
                             objectFit: 'cover',
-                            flexShrink: 0,
+                            filter: isSelected ? 'none' : 'brightness(0.92)',
                           }}
                         />
-                      ) : (
+                      )}
+
+                      {/* Center Play Icon Overlay */}
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          inset: 0,
+                          zIndex: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          bgcolor: isSelected
+                            ? alpha('#000000', 0.35)
+                            : ep.still_path
+                            ? alpha('#000000', 0.2)
+                            : 'transparent',
+                        }}
+                      >
                         <Box
                           sx={{
-                            width: 88,
-                            height: 52,
-                            borderRadius: 1,
-                            bgcolor: alpha('#ffffff', 0.08),
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            bgcolor: isSelected ? 'primary.main' : alpha('#000000', 0.7),
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            boxShadow: isSelected ? '0 0 14px rgba(255, 48, 48, 0.75)' : '0 2px 6px rgba(0,0,0,0.5)',
+                          }}
+                        >
+                          <Iconify
+                            icon="solar:play-bold"
+                            width={16}
+                            sx={{
+                              color: 'common.white',
+                              ml: 0.2,
+                            }}
+                          />
+                        </Box>
+                      </Box>
+
+                      {/* Top-Left NOW PLAYING Tag on Thumbnail */}
+                      {isSelected && (
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            top: 5,
+                            left: 5,
+                            zIndex: 3,
+                            bgcolor: 'primary.main',
+                            color: 'common.white',
+                            px: 0.7,
+                            py: 0.2,
+                            borderRadius: 0.6,
+                            fontSize: 9.5,
+                            fontWeight: 800,
+                            letterSpacing: 0.5,
+                            textTransform: 'uppercase',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.7)',
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          Playing
+                        </Box>
+                      )}
+                    </Box>
+
+                    {/* Episode Info - Expanded to fit all content */}
+                    <Stack spacing={0.6} sx={{ minWidth: 0, flexGrow: 1, overflow: 'hidden' }}>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0, flexWrap: 'wrap', gap: 0.5 }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: isSelected ? 'primary.light' : alpha('#ffffff', 0.65),
+                            fontWeight: 800,
+                            fontSize: 11.5,
+                            letterSpacing: 0.6,
+                            textTransform: 'uppercase',
                             flexShrink: 0,
                           }}
                         >
-                          <Iconify icon="solar:play-stream-bold-duotone" width={24} sx={{ color: 'text.disabled' }} />
-                        </Box>
-                      )}
-
-                      <Stack spacing={0.25} sx={{ minWidth: 0, flexGrow: 1 }}>
-                        <Typography
-                          variant="subtitle2"
-                          noWrap
-                          sx={{
-                            color: isSelected ? 'primary.light' : 'common.white',
-                            fontWeight: isSelected ? 700 : 500,
-                            fontSize: 13,
-                          }}
-                        >
-                          {ep.episode_number}. {ep.name || `Episode ${ep.episode_number}`}
+                          EPISODE {ep.episode_number}
                         </Typography>
-                        {ep.overview && (
-                          <Typography
-                            variant="caption"
+
+                        {ep.runtime ? (
+                          <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.45), fontSize: 11 }}>
+                            &bull; {ep.runtime} min
+                          </Typography>
+                        ) : null}
+
+                        {ep.air_date ? (
+                          <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.4), fontSize: 11 }}>
+                            &bull; {ep.air_date.slice(0, 4)}
+                          </Typography>
+                        ) : null}
+
+                        {isSelected && (
+                          <Box
                             sx={{
-                              color: alpha('#ffffff', 0.5),
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                              lineHeight: 1.3,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 0.4,
+                              bgcolor: alpha('#FF3030', 0.22),
+                              border: `1px solid ${alpha('#FF3030', 0.45)}`,
+                              color: 'primary.light',
+                              px: 0.75,
+                              py: 0.15,
+                              borderRadius: 0.6,
+                              fontSize: 10,
+                              fontWeight: 800,
+                              letterSpacing: 0.4,
+                              lineHeight: 1.2,
+                              ml: 'auto',
                             }}
                           >
-                            {ep.overview}
-                          </Typography>
+                            <Iconify icon="solar:soundwave-bold" width={12} />
+                            NOW PLAYING
+                          </Box>
                         )}
                       </Stack>
-                    </CardActionArea>
-                  </Card>
+
+                      {/* Full Title (unclipped / up to 2 wrapped lines) */}
+                      <Typography
+                        variant="subtitle2"
+                        sx={{
+                          color: 'common.white',
+                          fontWeight: isSelected ? 700 : 600,
+                          fontSize: { xs: 14, sm: 15 },
+                          lineHeight: 1.35,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {ep.name || `Episode ${ep.episode_number}`}
+                      </Typography>
+
+                      {/* Overview (Expanded to up to 3 lines) */}
+                      {ep.overview ? (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: alpha('#ffffff', 0.6),
+                            display: '-webkit-box',
+                            WebkitLineClamp: { xs: 2, sm: 3 },
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            lineHeight: 1.45,
+                            fontSize: 12,
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {ep.overview}
+                        </Typography>
+                      ) : (
+                        <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.38), fontSize: 12 }}>
+                          Season {selectedSeason} &bull; Episode {ep.episode_number}
+                        </Typography>
+                      )}
+                    </Stack>
+                  </Box>
                 );
               })}
-            </Stack>
+            </Box>
           ) : (
             <Box
-              display="grid"
-              gridTemplateColumns="repeat(auto-fill, minmax(64px, 1fr))"
-              gap={1}
-              sx={{ py: 2 }}
+              sx={{
+                flex: '1 1 auto',
+                minHeight: 0,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.75,
+                pr: 0.5,
+              }}
             >
-              {Array.from({ length: episodeCount || 1 }, (_, index) => index + 1).map((number) => {
-                const isSelected = number === selectedEpisode;
+              {Array.from({ length: Math.max(1, episodeCount) }, (_, index) => index + 1).map((number) => {
+                const isSelected = Number(number) === Number(selectedEpisode);
                 return (
-                  <Button
-                    key={number}
-                    variant={isSelected ? 'contained' : 'outlined'}
+                  <Box
+                    key={`fallback-ep-${number}`}
                     onClick={() => {
                       setEpisodesDrawerOpen(false);
                       navigateToEpisode(selectedSeason, number);
                     }}
                     sx={{
-                      height: 44,
-                      borderRadius: 1.5,
-                      borderColor: alpha('#ffffff', 0.15),
-                      color: isSelected ? 'common.white' : alpha('#ffffff', 0.8),
-                      bgcolor: isSelected ? 'primary.main' : alpha('#ffffff', 0.04),
+                      flexShrink: 0,
+                      minHeight: { xs: 96, sm: 108 },
+                      width: '100%',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: { xs: 1.5, sm: 2 },
+                      p: { xs: 1.5, sm: 1.75 },
+                      boxSizing: 'border-box',
+                      bgcolor: isSelected ? alpha('#FF3030', 0.16) : alpha('#ffffff', 0.04),
+                      background: isSelected
+                        ? 'linear-gradient(90deg, rgba(255, 48, 48, 0.22) 0%, rgba(255, 48, 48, 0.05) 100%)'
+                        : alpha('#ffffff', 0.03),
+                      border: isSelected ? '2px solid #FF3030' : `1px solid ${alpha('#ffffff', 0.08)}`,
+                      borderLeft: isSelected ? '6px solid #FF3030' : '6px solid transparent',
+                      borderRadius: 2,
+                      boxShadow: isSelected
+                        ? '0 6px 24px rgba(255, 48, 48, 0.35)'
+                        : '0 2px 10px rgba(0, 0, 0, 0.3)',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       '&:hover': {
-                        bgcolor: isSelected ? 'primary.main' : alpha('#ffffff', 0.1),
+                        bgcolor: isSelected ? alpha('#FF3030', 0.22) : alpha('#ffffff', 0.08),
+                        borderColor: isSelected ? '#FF3030' : alpha('#ffffff', 0.22),
+                        transform: 'translateY(-1px)',
                       },
                     }}
                   >
-                    Ep {number}
-                  </Button>
+                    <Box
+                      sx={{
+                        width: { xs: 120, sm: 144 },
+                        height: { xs: 70, sm: 82 },
+                        minWidth: { xs: 120, sm: 144 },
+                        borderRadius: 1.5,
+                        overflow: 'hidden',
+                        bgcolor: alpha('#ffffff', 0.06),
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 0.5,
+                        flexShrink: 0,
+                        boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
+                      }}
+                    >
+                      <Iconify
+                        icon="solar:clapperboard-play-linear"
+                        width={26}
+                        sx={{ color: isSelected ? 'primary.light' : alpha('#ffffff', 0.5) }}
+                      />
+                      <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700, color: 'common.white' }}>
+                        EP {number}
+                      </Typography>
+                    </Box>
+
+                    <Stack spacing={0.5} sx={{ minWidth: 0, flexGrow: 1 }}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: isSelected ? 'primary.light' : alpha('#ffffff', 0.65),
+                            fontWeight: 800,
+                            fontSize: 11.5,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          EPISODE {number}
+                        </Typography>
+                        {isSelected && (
+                          <Box
+                            sx={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 0.4,
+                              bgcolor: alpha('#FF3030', 0.22),
+                              border: `1px solid ${alpha('#FF3030', 0.45)}`,
+                              color: 'primary.light',
+                              px: 0.75,
+                              py: 0.15,
+                              borderRadius: 0.6,
+                              fontSize: 10,
+                              fontWeight: 800,
+                            }}
+                          >
+                            <Iconify icon="solar:soundwave-bold" width={12} />
+                            NOW PLAYING
+                          </Box>
+                        )}
+                      </Stack>
+                      <Typography variant="subtitle2" sx={{ color: 'common.white', fontWeight: 600, fontSize: 15 }}>
+                        Episode {number}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.45), fontSize: 12 }}>
+                        Season {selectedSeason} &bull; Episode {number}
+                      </Typography>
+                    </Stack>
+                  </Box>
                 );
               })}
             </Box>
@@ -680,6 +1066,8 @@ export default function PlayPage() {
               scrapeFeedback={scrapeFeedback}
               onSelectExtractor={selectExtractor}
               onRetrySources={retrySources}
+              hasNextEpisode={hasNextEpisode}
+              onNextEpisode={handleNextEpisode}
             />
           </Container>
         )}

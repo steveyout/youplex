@@ -1,4 +1,5 @@
 allowBuilds:
+  '@p-stream/providers@file:packages/@p-stream/providers': true
   "@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9": true
   browser-tabs-lock: true
   protobufjs: true

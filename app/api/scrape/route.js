@@ -10,6 +10,32 @@ const DEFAULT_PROVIDER = null;
 const TMDB_BASE_URL = process.env.NEXT_PUBLIC_TMDB_BASE_URL || 'https://api.themoviedb.org/3';
 const TMDB_TOKEN = process.env.NEXT_PUBLIC_TMDB_TOKEN;
 
+function normalizeScraperSubtitles(subs) {
+  if (!Array.isArray(subs)) return [];
+  return subs.map((sub, idx) => {
+    const rawLang = sub.language || sub.lang || '';
+    let label = sub.label || sub.name || sub.lang || sub.language || `Subtitle ${idx + 1}`;
+    if (sub.url) {
+      if (/\.sdh\./i.test(sub.url) && !label.includes('[SDH]')) {
+        label += ' [SDH]';
+      } else {
+        const numMatch = sub.url.match(/\.(\d+)\.vtt/i);
+        if (numMatch && !label.includes(`(${numMatch[1]})`)) {
+          label += ` (${numMatch[1]})`;
+        }
+      }
+    }
+    return {
+      id: sub.id || sub.url || `sub-${idx}`,
+      url: sub.url,
+      language: rawLang || 'en',
+      label,
+      type: sub.type || 'vtt',
+      hasCorsRestrictions: false,
+    };
+  });
+}
+
 async function getTmdbMetadata(type, id, season, episode) {
   if (!TMDB_TOKEN) return {};
   const headers = {
@@ -155,12 +181,75 @@ export async function GET(request) {
             },
           });
 
-          if (!providerResult?.success) {
+          if (providerResult?.success && providerResult.sources?.length > 0) {
+            const cleanProvider = providerResult.provider || provider || 'providers';
             emit({
-              type: 'failure',
-              provider: provider || 'none',
-              error: providerResult?.error || 'All providers failed',
+              type: 'success',
+              provider: cleanProvider,
+              providerLabel: getProviderFriendlyName(cleanProvider),
+              sources: providerResult.sources.map((source) => ({
+                ...source,
+                alreadyProxied: true,
+              })),
+              subtitles: providerResult.subtitles || [],
             });
+          } else {
+            // Secondary fallback in SSE mode
+            let fallbackSucceeded = false;
+            try {
+              const params = new URLSearchParams({
+                id: String(id),
+                type,
+              });
+              if (Number.isFinite(season)) params.set('s', String(season));
+              if (Number.isFinite(episode)) params.set('e', String(episode));
+              if (provider) params.set('provider', provider);
+
+              const response = await fetch(`${SCRAPER_API_URL}/scrape?${params.toString()}`, {
+                signal: AbortSignal.timeout(SCRAPER_TIMEOUT_MS),
+                cache: 'no-store',
+              });
+              const data = await response.json();
+
+              if (response.ok && data?.success) {
+                const resolvedProvider =
+                  provider ||
+                  (String(data.provider || '').toLowerCase().includes('flixhq')
+                    ? 'yp-flixhq-1'
+                    : String(data.provider || '').toLowerCase().includes('moviebox')
+                      ? 'yp-moviebox-1'
+                      : String(data.provider || '').toLowerCase().includes('vidcore')
+                        ? 'yp-vidcore-1'
+                        : data.provider || 'none');
+
+                const remoteSources = Array.isArray(data.sources)
+                  ? data.sources
+                  : data.url
+                    ? [{ url: data.url, type: 'hls', title: data.provider, alreadyProxied: true }]
+                    : [];
+
+                if (remoteSources.length > 0) {
+                  emit({
+                    type: 'success',
+                    provider: resolvedProvider,
+                    providerLabel: getProviderFriendlyName(resolvedProvider),
+                    sources: remoteSources.map((source) => ({ ...source, alreadyProxied: true })),
+                    subtitles: normalizeScraperSubtitles(data.subtitles),
+                  });
+                  fallbackSucceeded = true;
+                }
+              }
+            } catch (fallbackErr) {
+              console.warn('SSE fallback scraper failed:', fallbackErr?.message);
+            }
+
+            if (!fallbackSucceeded) {
+              emit({
+                type: 'failure',
+                provider: provider || 'none',
+                error: providerResult?.error || 'All providers failed',
+              });
+            }
           }
         } catch (err) {
           emit({ type: 'failure', error: err?.message || 'Scrape failed' });
@@ -279,7 +368,7 @@ export async function GET(request) {
       provider: resolvedProvider,
       providerLabel: getProviderFriendlyName(resolvedProvider),
       sources: sources.map((source) => ({ ...source, alreadyProxied: true })),
-      subtitles: Array.isArray(data.subtitles) ? data.subtitles : [],
+      subtitles: normalizeScraperSubtitles(data.subtitles),
     });
   } catch (e) {
     return NextResponse.json(

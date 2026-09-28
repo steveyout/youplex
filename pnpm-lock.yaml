@@ -96,8 +96,8 @@ importers:
         specifier: ^16.1.6
         version: 16.3.4(next@16.3.4(@babel/core@7.29.7(supports-color@8.1.1))(@playwright/test@1.63.0)(@types/node@22.20.2)(babel-plugin-macros@3.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
       '@p-stream/providers':
-        specifier: file:./packages/@p-stream/providers
-        version: file:packages/@p-stream/providers
+        specifier: github:steveyout/providers#production
+        version: https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9
       '@react-pdf/renderer':
         specifier: ^3.4.4
         version: 3.4.5(react@19.3.0)
@@ -1949,8 +1949,9 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@p-stream/providers@file:packages/@p-stream/providers':
-    resolution: {directory: packages/@p-stream/providers, type: directory}
+  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9':
+    resolution: {gitHosted: true, integrity: sha512-zkqlp55EoVJaIYGGJXZvlQ8bEdO1W+09pBcJ2ScnnXmjwwpMwW6csw3Dm+OYbTcflnJvci2IAX0r/k9Z6vVUig==, tarball: https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9}
+    version: 3.2.0
 
   '@pkgr/core@0.3.6':
     resolution: {integrity: sha512-SEeaJLb3qBNF/OaXnaR1NmmBbFYk1zC0ZH/52fATcRPLFg/p791YrcyFFy44Bo9sLaGuSuLp5Q6axbb/O+v/RA==}
@@ -7744,7 +7745,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.3
 
-  '@p-stream/providers@file:packages/@p-stream/providers':
+  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9':
     dependencies:
       abort-controller: 3.0.0
       cheerio: 1.0.0-rc.12

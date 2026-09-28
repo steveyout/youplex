@@ -79,7 +79,14 @@ function toVidstackSrcs(sources) {
         s.url?.includes('/api/hls');
       const srcUrl = isAlreadyProxied ? s.url : toProxyUrl(s);
 
-      if (s.type === 'hls' || srcUrl.includes('.m3u8')) {
+      if (
+        s.type === 'hls' ||
+        Boolean(s.isM3U8) ||
+        srcUrl.includes('.m3u8') ||
+        srcUrl.includes('m3u8-proxy') ||
+        srcUrl.includes('/api/hls') ||
+        s.type === 'application/x-mpegurl'
+      ) {
         return { src: srcUrl, type: 'application/x-mpegurl' };
       }
       return { src: srcUrl, type: 'video/mp4' };
@@ -88,6 +95,14 @@ function toVidstackSrcs(sources) {
 
 function toProxyUrl(source) {
   if (!source?.url) return '';
+  const url = source.url;
+
+  // Subtitles always need CORS headers and proper VTT formatting
+  if (source.isSubtitle || url.endsWith('.vtt') || url.endsWith('.srt') || url.includes('.vtt?') || url.includes('.srt?')) {
+    if (url.startsWith('/api/subtitles') || (url.startsWith('/') && !url.startsWith('/proxy'))) return url;
+    return `/api/subtitles?url=${encodeURIComponent(url)}`;
+  }
+
   if (
     source.alreadyProxied ||
     source.url.includes('/proxy') ||
@@ -97,8 +112,11 @@ function toProxyUrl(source) {
     return source.url;
   }
 
-  const url = source.url;
-  const isDirectHls = url.includes('.m3u8') || source.type === 'hls';
+  const isDirectHls =
+    url.includes('.m3u8') ||
+    source.type === 'hls' ||
+    Boolean(source.isM3U8) ||
+    source.type === 'application/x-mpegurl';
 
   if (isDirectHls) {
     const params = new URLSearchParams({ url });
@@ -148,6 +166,8 @@ export default function Player({
   tmdbId,
   onBack,
   timelineSegments: initialTimelineSegments = [],
+  hasNextEpisode = false,
+  onNextEpisode = null,
 }) {
   const [isLoading, setIsLoading] = useState(true);
   const [embedLoading, setEmbedLoading] = useState(false);
@@ -164,16 +184,11 @@ export default function Player({
   const [embedSrvAnchor, setEmbedSrvAnchor] = useState(null);
   const [embedHeaderVisible, setEmbedHeaderVisible] = useState(true);
 
-  // Initialize mode: ALWAYS start with 'native' unless user previously chose otherwise
+  // Initialize mode: ALWAYS start with 'native' for each title/episode mount
   useEffect(() => {
-    const stored = getStoredMode();
-    if (stored === 'embed') {
-      setPlaybackMode('embed');
-      setIsLoading(false);
-    } else {
-      setPlaybackMode('native');
-    }
-  }, []);
+    setPlaybackMode('native');
+    setPlaybackError(null);
+  }, [id, season, episode]);
 
   const resolvedTmdbId = tmdbId || id;
   const resolvedSeasonNum = Number(season || 1);
@@ -283,14 +298,16 @@ export default function Player({
     }
   }, [resolvedMode, activeEmbedUrl]);
 
-  // Auto-fallback to Embed when native providers fail or return no streams
+  // Auto-fallback to Embed ONLY when native providers finished and explicitly failed or returned no streams
   useEffect(() => {
     if (
       allowEmbedMode &&
       embedAvailable &&
       resolvedMode === 'native' &&
       !sourcesLoading &&
-      !nativeReady
+      !loading &&
+      !nativeReady &&
+      (sourcesError || scrapeFeedback?.status === 'failure')
     ) {
       setAutoSwitchNotice('Native streams unavailable. Switched to Embed Player.');
       setTimeout(() => setAutoSwitchNotice(null), 4500);
@@ -303,7 +320,10 @@ export default function Player({
     embedAvailable,
     resolvedMode,
     sourcesLoading,
+    loading,
     nativeReady,
+    sourcesError,
+    scrapeFeedback?.status,
   ]);
 
   useEffect(() => {
@@ -553,9 +573,24 @@ export default function Player({
                   setVideoDurationMs(Math.round(dur * 1000));
                 }
               }}
-              onError={() => {
-                setIsAutoRetrying(false);
+              onError={(detail) => {
+                console.warn('Native player playback error:', detail);
                 setIsLoading(false);
+
+                // Auto-retry once on transient playback failure before falling back
+                if (autoRetryCountRef.current < 1) {
+                  autoRetryCountRef.current += 1;
+                  setIsAutoRetrying(true);
+                  setAutoSwitchNotice('Stream interrupted. Retrying native playback...');
+                  retryTimerRef.current = setTimeout(() => {
+                    setIsAutoRetrying(false);
+                    setAutoSwitchNotice(null);
+                    setPlaybackAttempt((prev) => prev + 1);
+                  }, 1200);
+                  return;
+                }
+
+                setIsAutoRetrying(false);
 
                 // Auto fallback to embed immediately when native stream fails (CORS, 502, dead stream)
                 if (allowEmbedMode && embedAvailable) {
@@ -575,16 +610,27 @@ export default function Player({
                 {subtitles
                   .filter((t) => t?.url)
                   .filter((track, index, tracks) => tracks.findIndex((item) => item.url === track.url) === index)
-                  .map((track, index) => (
-                    <Track
-                      key={`${track.url}-${index}`}
-                      src={toProxyUrl({ url: track.url })}
-                      kind="subtitles"
-                      label={track.label || track.language || `Track ${index + 1}`}
-                      lang={track.language || 'en'}
-                      default={index === 0}
-                    />
-                  ))}
+                  .map((track, index, list) => {
+                    const sameNameCount = list.filter((t) => (t.label || t.language) === (track.label || track.language)).length;
+                    let displayLabel = track.label || track.language || `Track ${index + 1}`;
+                    if (sameNameCount > 1) {
+                      const sameNameIdx = list.filter((t, i) => i <= index && (t.label || t.language) === (track.label || track.language)).length;
+                      if (sameNameIdx > 1) {
+                        displayLabel = `${displayLabel} (${sameNameIdx})`;
+                      }
+                    }
+                    return (
+                      <Track
+                        key={`${track.url}-${index}`}
+                        src={toProxyUrl({ url: track.url, isSubtitle: true })}
+                        type="vtt"
+                        kind="subtitles"
+                        label={displayLabel}
+                        lang={track.language || 'en'}
+                        default={index === 0}
+                      />
+                    );
+                  })}
               </MediaProvider>
               <Captions className="youplex-vds-captions vds-captions" />
               <NativeControls
@@ -601,6 +647,8 @@ export default function Player({
                 onSelectServer={handleSelectServer}
                 onModeChange={handleModeChange}
                 timelineSegments={timelineSegments}
+                hasNextEpisode={hasNextEpisode}
+                onNextEpisode={onNextEpisode}
               />
             </MediaPlayer>
           </Box>
@@ -798,7 +846,7 @@ export default function Player({
         <Typography variant="h6" sx={{ color: 'common.white' }}>
           {sourcesError ? 'Native stream unavailable' : 'No direct stream found'}
         </Typography>
-        <Typography variant="body2" sx={{ color: 'text.disabled', textAlign: 'center', maxWidth: 420 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', maxWidth: 420 }}>
           {sourcesError
             ? 'Native scraper could not resolve a stream immediately. You can switch to our fast Embed server or search again.'
             : 'Direct stream could not be loaded. You can switch to embed servers instantly to watch now.'}
