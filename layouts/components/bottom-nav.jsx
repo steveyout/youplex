@@ -46,15 +46,50 @@ export function BottomNav({ sx }) {
   const pathname = usePathname();
 
   const lastY = useRef(0);
+  const hiddenRef = useRef(false);
+  const [hidden, setHidden] = useState(false);
   const { scrollY } = useScroll();
 
-  const [hidden, setHidden] = useState(false);
-
   useMotionValueEvent(scrollY, 'change', (y) => {
-    const isScrollingDown = y > lastY.current;
-    setHidden(isScrollingDown && y > 120);
+    // Ignore bounce / negative scroll on mobile
+    if (y < 0) return;
+
+    // Near top: always keep visible
+    if (y <= 80) {
+      if (hiddenRef.current) {
+        hiddenRef.current = false;
+        setHidden(false);
+      }
+      lastY.current = y;
+      return;
+    }
+
+    const diff = y - lastY.current;
+
+    // Hysteresis threshold to prevent micro-jitter toggles
+    if (Math.abs(diff) < 14) return;
+
+    if (diff > 0 && y > 120) {
+      // Intentional scroll down -> smoothly hide
+      if (!hiddenRef.current) {
+        hiddenRef.current = true;
+        setHidden(true);
+      }
+    } else if (diff < -10) {
+      // Intentional scroll up -> smoothly show
+      if (hiddenRef.current) {
+        hiddenRef.current = false;
+        setHidden(false);
+      }
+    }
+
     lastY.current = y;
   });
+
+  // Do not render bottom nav on video playback screens
+  if (pathname?.includes('/play')) {
+    return null;
+  }
 
   return (
     <Box
@@ -75,10 +110,15 @@ export function BottomNav({ sx }) {
       }}
     >
       <m.div
-        initial={{ y: 120, opacity: 0 }}
-        animate={{ y: hidden ? 120 : 0, opacity: hidden ? 0 : 1 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-        style={{ pointerEvents: 'auto', maxWidth: '100%' }}
+        initial={{ y: 90, opacity: 0 }}
+        animate={{ y: hidden ? 90 : 0, opacity: hidden ? 0 : 1 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          pointerEvents: hidden ? 'none' : 'auto',
+          maxWidth: '100%',
+          willChange: 'transform, opacity',
+          transform: 'translateZ(0)',
+        }}
       >
         <Stack
           direction="row"
@@ -89,9 +129,11 @@ export function BottomNav({ sx }) {
             borderRadius: 999,
             border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.12)}`,
             background: `linear-gradient(180deg, ${varAlpha(theme.vars.palette.background.paperChannel, 0.88)}, ${varAlpha(theme.vars.palette.background.defaultChannel, 0.94)})`,
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
             boxShadow: `0 16px 36px -8px rgba(0, 0, 0, 0.56), 0 0 0 1px ${varAlpha(theme.vars.palette.common.whiteChannel, 0.06)}`,
+            transform: 'translateZ(0)',
+            contain: 'paint',
           }}
         >
           {NAV_ITEMS.map((item) => {
@@ -189,18 +231,16 @@ function isItemActive(pathname, item) {
   }
 
   if (item.key === 'movies') {
-    if (/^\/watch\/movie\//.test(pathname)) return true;
-    return pathname === '/movies' || pathname.startsWith('/movies/');
+    return pathname === paths.movies || pathname.startsWith('/movies') || pathname.startsWith('/watch/movie');
   }
 
   if (item.key === 'tv') {
-    if (/^\/watch\/tv\//.test(pathname)) return true;
-    return pathname === '/tv' || pathname.startsWith('/tv/');
+    return pathname === paths.tv || pathname.startsWith('/tv') || pathname.startsWith('/watch/tv');
   }
 
   if (item.key === 'live-tv') {
-    return pathname === '/live-tv' || pathname.startsWith('/live-tv/');
+    return pathname === paths.liveTv || pathname.startsWith('/live-tv');
   }
 
-  return false;
+  return pathname === item.path;
 }

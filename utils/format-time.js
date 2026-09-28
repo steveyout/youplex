@@ -8,6 +8,17 @@ dayjs.extend(duration);
 dayjs.extend(relativeTime);
 
 /**
+ * Normalizes common format tokens across dayjs and date-fns
+ */
+function normalizeFormat(format, defaultFormat) {
+  const fmt = format ?? defaultFormat;
+  return fmt
+    .replace(/yyyy/g, 'YYYY')
+    .replace(/yy/g, 'YY')
+    .replace(/\bd\b/g, 'D');
+}
+
+/**
  * Docs: https://day.js.org/docs/en/display/format
  */
 export const formatStr = {
@@ -25,7 +36,7 @@ export const formatStr = {
 };
 
 export function today(format) {
-  return dayjs(new Date()).startOf('day').format(format);
+  return dayjs(new Date()).startOf('day').format(normalizeFormat(format, formatStr.date));
 }
 
 // ----------------------------------------------------------------------
@@ -37,9 +48,15 @@ export function fDateTime(date, format) {
     return null;
   }
 
-  const isValid = dayjs(date).isValid();
+  const parsed = dayjs(date);
+  if (!parsed.isValid()) {
+    if (typeof date === 'string' && /^\d{4}$/.test(date.trim())) {
+      return date.trim();
+    }
+    return null;
+  }
 
-  return isValid ? dayjs(date).format(format ?? formatStr.dateTime) : 'Invalid time value';
+  return parsed.format(normalizeFormat(format, formatStr.dateTime));
 }
 
 // ----------------------------------------------------------------------
@@ -51,9 +68,15 @@ export function fDate(date, format) {
     return null;
   }
 
-  const isValid = dayjs(date).isValid();
+  const parsed = dayjs(date);
+  if (!parsed.isValid()) {
+    if (typeof date === 'string' && /^\d{4}$/.test(date.trim())) {
+      return date.trim();
+    }
+    return null;
+  }
 
-  return isValid ? dayjs(date).format(format ?? formatStr.date) : 'Invalid time value';
+  return parsed.format(normalizeFormat(format, formatStr.date));
 }
 
 // ----------------------------------------------------------------------
@@ -65,9 +88,12 @@ export function fTime(date, format) {
     return null;
   }
 
-  const isValid = dayjs(date).isValid();
+  const parsed = dayjs(date);
+  if (!parsed.isValid()) {
+    return null;
+  }
 
-  return isValid ? dayjs(date).format(format ?? formatStr.time) : 'Invalid time value';
+  return parsed.format(normalizeFormat(format, formatStr.time));
 }
 
 // ----------------------------------------------------------------------
@@ -81,7 +107,7 @@ export function fTimestamp(date) {
 
   const isValid = dayjs(date).isValid();
 
-  return isValid ? dayjs(date).valueOf() : 'Invalid time value';
+  return isValid ? dayjs(date).valueOf() : null;
 }
 
 // ----------------------------------------------------------------------
@@ -95,7 +121,7 @@ export function fToNow(date) {
 
   const isValid = dayjs(date).isValid();
 
-  return isValid ? dayjs(date).toNow(true) : 'Invalid time value';
+  return isValid ? dayjs(date).toNow(true) : null;
 }
 
 // ----------------------------------------------------------------------
@@ -138,7 +164,7 @@ export function fIsSame(startDate, endDate, units) {
   const isValid = dayjs(startDate).isValid() && dayjs(endDate).isValid();
 
   if (!isValid) {
-    return 'Invalid time value';
+    return false;
   }
 
   return dayjs(startDate).isSame(endDate, units ?? 'year');
@@ -158,7 +184,7 @@ export function fDateRangeShortLabel(startDate, endDate, initial) {
   const isAfter = fIsAfter(startDate, endDate);
 
   if (!isValid || isAfter) {
-    return 'Invalid time value';
+    return null;
   }
 
   let label = `${fDate(startDate)} - ${fDate(endDate)}`;

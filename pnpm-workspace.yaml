@@ -1,3 +1,4 @@
 allowBuilds:
+  '@p-stream/providers@file:packages/@p-stream/providers': true
   browser-tabs-lock: true
   protobufjs: true

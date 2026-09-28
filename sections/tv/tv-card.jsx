@@ -6,6 +6,7 @@ import { paths } from '@/routes/paths';
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import { alpha } from '@mui/material/styles';
 
 import { useTvFocus } from './tv-focus-context';
 
@@ -13,6 +14,14 @@ import { useTvFocus } from './tv-focus-context';
 
 const getPosterUrl = (path) =>
   path ? `https://image.tmdb.org/t/p/w500${path}` : '/assets/placeholder.jpg';
+
+function getSafeYear(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d.getFullYear();
+  if (typeof dateStr === 'string' && /^\d{4}/.test(dateStr)) return dateStr.slice(0, 4);
+  return null;
+}
 
 export function TvCard({ post, rowIndex, colIndex }) {
   const router = useRouter();
@@ -22,6 +31,8 @@ export function TvCard({ post, rowIndex, colIndex }) {
   const isFocused = focusRow === rowIndex && focusCol === colIndex;
 
   const displayTitle = post.title || post.name || 'Untitled';
+  const displayDate = post.release_date || post.first_air_date;
+  const releaseYear = getSafeYear(displayDate);
   const type = post.media_type || (post.release_date ? 'movie' : 'tv');
   const linkTo = paths.watch.details(type, post.id, displayTitle);
 
@@ -63,8 +74,10 @@ export function TvCard({ post, rowIndex, colIndex }) {
         overflow: 'hidden',
         outline: 'none',
         position: 'relative',
+        transform: 'translateZ(0)',
+        contentVisibility: 'auto',
         ...(isFocused && {
-          transform: 'scale(1.12)',
+          transform: 'scale(1.12) translateZ(0)',
           zIndex: 10,
           boxShadow: '0 0 0 3px #00e676, 0 8px 40px rgba(0,230,118,0.35)',
         }),
@@ -98,6 +111,20 @@ export function TvCard({ post, rowIndex, colIndex }) {
       >
         {displayTitle}
       </Typography>
+
+      {releaseYear && (
+        <Typography
+          variant="caption"
+          sx={{
+            px: 0.5,
+            color: isFocused ? alpha('#00e676', 0.8) : 'text.secondary',
+            fontSize: '0.75rem',
+            fontWeight: 500,
+          }}
+        >
+          {releaseYear}
+        </Typography>
+      )}
     </Box>
   );
 }

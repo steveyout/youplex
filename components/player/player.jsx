@@ -6,6 +6,7 @@ import '@vidstack/react/player/styles/default/captions.css';
 import { Iconify } from '@/components/iconify';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Track, Captions, MediaPlayer, MediaProvider } from '@vidstack/react';
+import { providers as defaultProviders, getEmbedUrl, DEFAULT_PROVIDER_ID } from '@/config/providers';
 
 import Box from '@mui/material/Box';
 import Menu from '@mui/material/Menu';
@@ -16,7 +17,9 @@ import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
+import LinearProgress from '@mui/material/LinearProgress';
 
+import { getIntroTimestamps } from '@/actions/api';
 import NativeControls from './native-controls';
 
 // ----------------------------------------------------------------------
@@ -58,61 +61,69 @@ function extractorAlias(id) {
   return EXTRACTOR_ALIASES[hash % EXTRACTOR_ALIASES.length];
 }
 
+/**
+ * Map direct stream objects into Vidstack source format.
+ * If alreadyProxied is true, the URL is used directly.
+ */
+function toVidstackSrcs(sources) {
+  const list = Array.isArray(sources) ? sources : sources?.sources;
+  if (!list || !Array.isArray(list) || list.length === 0) return [];
+
+  return list
+    .filter((s) => Boolean(s?.url))
+    .map((s) => {
+      const isAlreadyProxied =
+        s.alreadyProxied ||
+        s.url?.includes('youplex.site') ||
+        s.url?.includes('/proxy') ||
+        s.url?.includes('/api/hls');
+      const srcUrl = isAlreadyProxied ? s.url : toProxyUrl(s);
+
+      if (s.type === 'hls' || srcUrl.includes('.m3u8')) {
+        return { src: srcUrl, type: 'application/x-mpegurl' };
+      }
+      return { src: srcUrl, type: 'video/mp4' };
+    });
+}
+
+function toProxyUrl(source) {
+  if (!source?.url) return '';
+  if (
+    source.alreadyProxied ||
+    source.url.includes('/proxy') ||
+    source.url.includes('/api/hls') ||
+    source.url.includes('youplex.site')
+  ) {
+    return source.url;
+  }
+
+  const url = source.url;
+  const isDirectHls = url.includes('.m3u8') || source.type === 'hls';
+
+  if (isDirectHls) {
+    const params = new URLSearchParams({ url });
+    if (source.headers?.referer) params.set('referer', source.headers.referer);
+    return `/api/hls?${params.toString()}`;
+  }
+
+  return url;
+}
+
 function getStoredMode() {
   if (typeof window === 'undefined') return 'native';
   try {
     return localStorage.getItem(MODE_KEY) || 'native';
-  } catch (e) {
+  } catch {
     return 'native';
   }
 }
 
 function storeMode(mode) {
+  if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(MODE_KEY, mode);
-  } catch (e) {
-    // storage unavailable
-  }
+  } catch {}
 }
-
-function toMime(sourceType) {
-  const t = String(sourceType || '').toLowerCase();
-  if (t.includes('mpegurl') || t === 'hls') return 'application/x-mpegurl';
-  if (t.includes('dash') || t === 'dash') return 'application/dash+xml';
-  if (t.includes('mp4') || t === 'video/mp4') return 'video/mp4';
-  if (t.includes('webm')) return 'video/webm';
-  return 'video/mp4';
-}
-
-function toProxyUrl(source) {
-  if (!source?.url) return '';
-  if (source.alreadyProxied) return source.url;
-  const params = new URLSearchParams({ url: source.url });
-  if (source.referer) params.set('referer', source.referer);
-  if (source.origin) params.set('origin', source.origin);
-  if (source.userAgent) params.set('ua', source.userAgent);
-  if (source.tokenUrl) params.set('tokenUrl', source.tokenUrl);
-  return `/api/hls?${params.toString()}`;
-}
-
-function toVidstackSrcs(sources) {
-  const seen = new Set();
-  return (sources || [])
-    .filter((s) => s?.url)
-    .filter((s) => {
-      const key = s.url;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .map((s) => ({
-      src: toProxyUrl(s),
-      type: toMime(s.type),
-      ...(s.quality ? { quality: String(s.quality) } : {}),
-    }));
-}
-
-// ----------------------------------------------------------------------
 
 export default function Player({
   src,
@@ -124,6 +135,7 @@ export default function Player({
   sourcesLoading = false,
   loading = false,
   sourcesError = null,
+  scrapeFeedback = null,
   onSelectExtractor,
   onRetrySources,
   allowEmbedMode = true,
@@ -132,9 +144,13 @@ export default function Player({
   episode,
   backdrop,
   type,
+  id,
+  tmdbId,
   onBack,
+  timelineSegments: initialTimelineSegments = [],
 }) {
   const [isLoading, setIsLoading] = useState(true);
+  const [embedLoading, setEmbedLoading] = useState(false);
   const [playbackMode, setPlaybackMode] = useState('native');
   const [selectedEmbedId, setSelectedEmbedId] = useState(null);
   const [selectedExtractorId, setSelectedExtractorId] = useState(null);
@@ -142,6 +158,7 @@ export default function Player({
   const [playbackError, setPlaybackError] = useState(null);
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
   const [isAutoRetrying, setIsAutoRetrying] = useState(false);
+  const [autoSwitchNotice, setAutoSwitchNotice] = useState(null);
   const autoRetryCountRef = useRef(0);
   const retryTimerRef = useRef(null);
   const [embedSrvAnchor, setEmbedSrvAnchor] = useState(null);
@@ -152,27 +169,142 @@ export default function Player({
     const stored = getStoredMode();
     if (stored === 'embed') {
       setPlaybackMode('embed');
+      setIsLoading(false);
     } else {
       setPlaybackMode('native');
     }
   }, []);
 
+  const resolvedTmdbId = tmdbId || id;
+  const resolvedSeasonNum = Number(season || 1);
+  const resolvedEpisodeNum = Number(episode || 1);
+
+  const [timelineSegments, setTimelineSegments] = useState(initialTimelineSegments || []);
+  const [videoDurationMs, setVideoDurationMs] = useState(null);
+  const lastTimestampsKeyRef = useRef('');
+
+  useEffect(() => {
+    if (initialTimelineSegments && initialTimelineSegments.length > 0) {
+      setTimelineSegments(initialTimelineSegments);
+      return;
+    }
+
+    if (!resolvedTmdbId) {
+      setTimelineSegments([]);
+      return;
+    }
+
+    const isTv = type === 'tv';
+    const requestKey = `${resolvedTmdbId}:${type || 'movie'}:${isTv ? resolvedSeasonNum : 'm'}:${isTv ? resolvedEpisodeNum : 'm'}:${videoDurationMs || 'none'}`;
+    if (lastTimestampsKeyRef.current === requestKey) {
+      return;
+    }
+    lastTimestampsKeyRef.current = requestKey;
+
+    let active = true;
+
+    getIntroTimestamps({
+      tmdbId: resolvedTmdbId,
+      type: type || 'movie',
+      ...(isTv ? { season: resolvedSeasonNum, episode: resolvedEpisodeNum } : {}),
+      ...(videoDurationMs ? { durationMs: videoDurationMs } : {}),
+    })
+      .then((res) => {
+        if (active && res?.success && Array.isArray(res.segments)) {
+          setTimelineSegments(res.segments);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum, videoDurationMs]);
+
   // All native sources mapped to the Vidstack src array
   const nativeSrc = useMemo(() => toVidstackSrcs(directSources), [directSources]);
+  const nativeReady = nativeSrc.length > 0;
+
+  // Once native stream is mapped and ready, dismiss loading
+  useEffect(() => {
+    if (nativeReady) {
+      setIsLoading(false);
+    }
+  }, [nativeReady]);
+  const activeNativeSrc = nativeSrc[0]?.src;
+  const resolvedMode = playbackMode;
+
+  // Build server list based on mode
+  const serverList = useMemo(() => {
+    if (resolvedMode === 'native') {
+      return extractorProviders.map((ep) => ({
+        id: ep.id,
+        name: (ep.label || extractorAlias(ep.id)).replace(/\s*\([^)]*\)/g, '').trim(),
+        kind: 'extractor',
+      }));
+    }
+    const baseProviders = servers && servers.length > 0 ? servers : defaultProviders.filter((p) => p.enabled);
+    return baseProviders.map((s) => ({
+      id: s.id,
+      name: (s.name || '').replace(/\s*\([^)]*\)/g, '').trim(),
+      kind: 'embed',
+      url: resolvedTmdbId
+        ? getEmbedUrl(s.id, type, resolvedTmdbId, resolvedSeasonNum, resolvedEpisodeNum)
+        : s.url || src,
+    }));
+  }, [resolvedMode, extractorProviders, servers, resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum, src]);
 
   // Determine active embed URL
   const activeEmbedUrl = useMemo(() => {
     if (playbackMode === 'embed') {
-      const embedServer = servers.find((s) => s.id === selectedEmbedId);
-      return embedServer?.url || src;
+      const targetId = selectedEmbedId || servers[0]?.id || DEFAULT_PROVIDER_ID;
+      const matched = serverList.find((s) => s.id === targetId);
+      if (matched?.url) return matched.url;
+
+      if (resolvedTmdbId) {
+        return getEmbedUrl(DEFAULT_PROVIDER_ID, type, resolvedTmdbId, resolvedSeasonNum, resolvedEpisodeNum);
+      }
+      return src;
     }
     return src;
-  }, [playbackMode, servers, selectedEmbedId, src]);
+  }, [playbackMode, selectedEmbedId, servers, serverList, resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum, src]);
 
   const effectiveSelectedExtractor = selectedExtractorId ?? activeExtractorId;
-  const embedAvailable = allowEmbedMode && (Boolean(src) || servers.length > 0);
-  const nativeReady = nativeSrc.length > 0;
-  const activeNativeSrc = nativeSrc[0]?.src;
+  const embedAvailable = allowEmbedMode && (Boolean(activeEmbedUrl) || Boolean(src) || servers.length > 0);
+
+  // Auto-clear embed loading indicator after 1500ms max so player is never stuck behind a loader
+  useEffect(() => {
+    if (resolvedMode === 'embed') {
+      setIsLoading(false);
+      const timer = setTimeout(() => {
+        setEmbedLoading(false);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [resolvedMode, activeEmbedUrl]);
+
+  // Auto-fallback to Embed when native providers fail or return no streams
+  useEffect(() => {
+    if (
+      allowEmbedMode &&
+      embedAvailable &&
+      resolvedMode === 'native' &&
+      !sourcesLoading &&
+      !nativeReady
+    ) {
+      setAutoSwitchNotice('Native streams unavailable. Switched to Embed Player.');
+      setTimeout(() => setAutoSwitchNotice(null), 4500);
+      setPlaybackMode('embed');
+      setIsLoading(false);
+      setPlaybackError(null);
+    }
+  }, [
+    allowEmbedMode,
+    embedAvailable,
+    resolvedMode,
+    sourcesLoading,
+    nativeReady,
+  ]);
 
   useEffect(() => {
     autoRetryCountRef.current = 0;
@@ -187,47 +319,34 @@ export default function Player({
     };
   }, [activeNativeSrc, effectiveSelectedExtractor]);
 
-  const resolvedMode = playbackMode;
-
-  // Build server list based on mode
-  const serverList = useMemo(() => {
-    if (resolvedMode === 'native') {
-      return extractorProviders.map((ep) => ({
-        id: ep.id,
-        name: extractorAlias(ep.id),
-        kind: 'extractor',
-      }));
-    }
-    return servers.map((s) => ({
-      id: s.id,
-      name: s.name,
-      kind: 'embed',
-      url: s.url,
-    }));
-  }, [resolvedMode, extractorProviders, servers]);
-
   // Current server label
   const currentServerLabel = useMemo(() => {
     if (resolvedMode === 'native') {
       const active = extractorProviders.find((e) => e.id === effectiveSelectedExtractor);
-      return active ? extractorAlias(active.id) : 'Native Player';
+      return active ? (active.label || extractorAlias(active.id)) : 'Native Player';
     }
-    const embedServer = servers.find((s) => s.id === selectedEmbedId);
-    return embedServer?.name || (servers[0]?.name ?? 'Embed Server');
-  }, [resolvedMode, servers, selectedEmbedId, extractorProviders, effectiveSelectedExtractor]);
+    const embedServer = serverList.find((s) => s.id === selectedEmbedId);
+    return embedServer?.name || serverList[0]?.name || (servers[0]?.name ?? 'Embed Server');
+  }, [resolvedMode, serverList, selectedEmbedId, extractorProviders, effectiveSelectedExtractor, servers]);
 
   const handleModeChange = useCallback((newMode) => {
     if (newMode && newMode !== playbackMode) {
       setPlaybackMode(newMode);
       storeMode(newMode);
-      setIsLoading(true);
       setPlaybackError(null);
+      setAutoSwitchNotice(null);
+      if (newMode === 'native') {
+        setIsLoading(true);
+      } else {
+        setIsLoading(false);
+        setEmbedLoading(true);
+      }
       setPlaybackAttempt((attempt) => attempt + 1);
     }
   }, [playbackMode]);
 
   const handleSelectServer = useCallback(
-    async (server) => {
+    async (server, skipAutoNext = false) => {
       if (resolvedMode === 'native') {
         setFailedExtractorId(null);
         setSelectedExtractorId(server.id);
@@ -240,8 +359,24 @@ export default function Player({
           setIsLoading(false);
           setFailedExtractorId(ok ? null : server.id);
           if (!ok) {
+            // Auto switch to next extractor if available
+            if (!skipAutoNext && extractorProviders.length > 1) {
+              const curIdx = extractorProviders.findIndex((ep) => ep.id === server.id);
+              const nextEp = extractorProviders[curIdx + 1];
+              if (nextEp && nextEp.id !== server.id) {
+                const noticeMsg = `${server.name || server.id} unavailable. Auto-trying ${nextEp.label || nextEp.id}...`;
+                setAutoSwitchNotice(noticeMsg);
+                setTimeout(() => setAutoSwitchNotice(null), 4000);
+                await handleSelectServer({ id: nextEp.id, name: nextEp.label, kind: 'extractor' });
+                return;
+              }
+            }
+
             if (allowEmbedMode && embedAvailable) {
+              setAutoSwitchNotice('Native streams unavailable. Switched to Embed Player.');
+              setTimeout(() => setAutoSwitchNotice(null), 4000);
               setPlaybackMode('embed');
+              setIsLoading(false);
             } else {
               setPlaybackError('This direct stream could not be loaded.');
             }
@@ -251,28 +386,42 @@ export default function Player({
         }
       } else {
         setSelectedEmbedId(server.id);
-        setIsLoading(true);
+        setEmbedLoading(true);
+        setIsLoading(false);
         setPlaybackError(null);
         setPlaybackAttempt((attempt) => attempt + 1);
       }
     },
-    [resolvedMode, onSelectExtractor, allowEmbedMode, embedAvailable]
+    [resolvedMode, onSelectExtractor, extractorProviders, allowEmbedMode, embedAvailable]
   );
 
+  // In native mode: show spinner while scraping or buffering
+  // In embed mode: NEVER block the iframe with a full-screen opaque spinner!
   const scrapingNative = resolvedMode === 'native' && !nativeReady && sourcesLoading;
-  const showSpinner = !playbackError && (loading || scrapingNative || isLoading);
+  const showSpinner =
+    resolvedMode === 'native' &&
+    !playbackError &&
+    (scrapingNative || (isLoading && !nativeReady) || isAutoRetrying);
+
   const activeProviderName = useMemo(() => {
-    if (effectiveSelectedExtractor === 'dlhd') return 'DLHD';
-
-    const provider = extractorProviders.find((item) => item.id === effectiveSelectedExtractor);
-    if (provider?.label) return provider.label;
-
-    return effectiveSelectedExtractor
-      ? String(effectiveSelectedExtractor)
-          .replace(/[-_]/g, ' ')
-          .replace(/\b\w/g, (letter) => letter.toUpperCase())
-      : 'stream';
-  }, [effectiveSelectedExtractor, extractorProviders]);
+    let raw = scrapeFeedback?.activeProviderName;
+    if (!raw) {
+      if (effectiveSelectedExtractor === 'dlhd') raw = 'DLHD';
+      else {
+        const provider = extractorProviders.find((item) => item.id === effectiveSelectedExtractor);
+        if (provider?.label) raw = provider.label;
+        else if (effectiveSelectedExtractor) {
+          raw = String(effectiveSelectedExtractor)
+            .replace(/^yp-/, '')
+            .replace(/[-_]/g, ' ')
+            .replace(/\b\w/g, (letter) => letter.toUpperCase());
+        } else {
+          raw = 'stream';
+        }
+      }
+    }
+    return String(raw || '').replace(/\s*\([^)]*\)/g, '').trim();
+  }, [scrapeFeedback?.activeProviderName, effectiveSelectedExtractor, extractorProviders]);
 
   const loadingPhrases = useMemo(
     () =>
@@ -323,7 +472,15 @@ export default function Player({
     return () => clearTimeout(timer);
   }, [loadingPhrases, showSpinner]);
 
-  const spinnerLabel = typedLoadingLabel || loadingPhrases[0];
+  const rawSpinnerLabel =
+    autoSwitchNotice ||
+    (scrapeFeedback?.status === 'switching' ? 'Switching provider...' : scrapeFeedback?.message) ||
+    typedLoadingLabel ||
+    loadingPhrases[0];
+
+  const spinnerLabel = String(rawSpinnerLabel || '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .trim();
 
   const handleRetry = useCallback(async () => {
     setPlaybackError(null);
@@ -338,6 +495,7 @@ export default function Player({
       if (!ok) {
         if (allowEmbedMode && embedAvailable) {
           setPlaybackMode('embed');
+          setIsLoading(false);
         } else {
           setPlaybackError('This direct stream could not be loaded.');
         }
@@ -358,8 +516,6 @@ export default function Player({
             sx={{
               position: 'absolute',
               inset: 0,
-              // Keep native controls above the error layer so the provider
-              // selector remains usable after a stream fails.
               zIndex: playbackError ? 12 : 1,
               '& media-player': {
                 width: '100%',
@@ -379,33 +535,40 @@ export default function Player({
                 setIsAutoRetrying(false);
                 setPlaybackError(null);
               }}
+              onLoadedData={() => {
+                setIsLoading(false);
+              }}
+              onLoadedMetadata={() => {
+                setIsLoading(false);
+              }}
+              onPlaying={() => {
+                setIsLoading(false);
+              }}
+              onPlay={() => {
+                setIsLoading(false);
+              }}
+              onDurationChange={(detail) => {
+                const dur = typeof detail === 'number' ? detail : detail?.detail;
+                if (typeof dur === 'number' && Number.isFinite(dur) && dur > 60) {
+                  setVideoDurationMs(Math.round(dur * 1000));
+                }
+              }}
               onError={() => {
-                if (autoRetryCountRef.current < 1) {
-                  autoRetryCountRef.current += 1;
-                  setIsAutoRetrying(true);
-                  setIsLoading(true);
+                setIsAutoRetrying(false);
+                setIsLoading(false);
+
+                // Auto fallback to embed immediately when native stream fails (CORS, 502, dead stream)
+                if (allowEmbedMode && embedAvailable) {
+                  setAutoSwitchNotice('Native stream unavailable. Switched to Embed Player.');
+                  setTimeout(() => setAutoSwitchNotice(null), 4500);
+                  setPlaybackMode('embed');
                   setPlaybackError(null);
-                  retryTimerRef.current = setTimeout(() => {
-                    retryTimerRef.current = null;
-                    setPlaybackAttempt((attempt) => attempt + 1);
-                  }, 800);
                   return;
                 }
 
-                setIsAutoRetrying(false);
-                setIsLoading(false);
-                // Auto fallback to embed if native stream fails
-                if (allowEmbedMode && embedAvailable) {
-                  setPlaybackMode('embed');
-                  setPlaybackError(null);
-                  setIsLoading(true);
-                } else {
-                  setPlaybackError(
-                    allowEmbedMode
-                      ? 'The direct stream failed after automatic retries. Try another provider or switch to Embed.'
-                      : 'The direct stream failed after automatic retries. Try another provider.'
-                  );
-                }
+                setPlaybackError(
+                  'The direct stream failed across available providers. Try another server.'
+                );
               }}
             >
               <MediaProvider>
@@ -435,196 +598,186 @@ export default function Player({
                 effectiveSelectedExtractor={effectiveSelectedExtractor}
                 selectedEmbedId={selectedEmbedId}
                 failedExtractorId={failedExtractorId}
-                sourcesLoading={sourcesLoading}
+                onSelectServer={handleSelectServer}
                 onModeChange={handleModeChange}
-                handleSelectServer={handleSelectServer}
-                currentServerLabel={currentServerLabel}
+                timelineSegments={timelineSegments}
               />
             </MediaPlayer>
           </Box>
         );
       }
-
-      if (sourcesLoading) return null;
     }
 
-    // EMBED MODE: iframe with glass header overlay
-    if (allowEmbedMode && resolvedMode === 'embed' && activeEmbedUrl) {
+    if (resolvedMode === 'embed') {
       return (
-        <Box
-          onMouseEnter={() => setEmbedHeaderVisible(true)}
-          onMouseLeave={() => setEmbedHeaderVisible(false)}
-          sx={{ position: 'absolute', inset: 0, zIndex: 1 }}
-        >
-          {/* Embed Header Overlay */}
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
+        <Box sx={{ position: 'absolute', inset: 0, bgcolor: '#000' }}>
+          {/* Subtle Embed Controls overlay (top bar) */}
+          <Box
             sx={{
               position: 'absolute',
               top: 0,
               left: 0,
               right: 0,
-              p: 1.5,
-              zIndex: 3,
-              background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%)',
+              zIndex: 10,
+              p: { xs: 1, sm: 1.5 },
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               opacity: embedHeaderVisible ? 1 : 0,
-              transition: 'opacity 0.3s ease',
+              pointerEvents: embedHeaderVisible ? 'auto' : 'none',
+              transition: 'opacity 0.25s ease',
             }}
           >
-            <Typography variant="subtitle2" sx={{ color: 'common.white', fontWeight: 600 }}>
-              {title || 'Embed Playback'}
-            </Typography>
-
-            <Stack direction="row" alignItems="center" spacing={1}>
-              {/* Mode Toggle */}
-              <Box
-                sx={{
-                  bgcolor: alpha('#0d1117', 0.8),
-                  backdropFilter: 'blur(16px)',
-                  border: `1px solid ${alpha('#ffffff', 0.12)}`,
-                  p: 0.5,
-                  borderRadius: 3,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.5,
-                }}
-              >
-                <Box
-                  onClick={() => handleModeChange('native')}
+            <Stack direction="row" spacing={1} alignItems="center">
+              {onBack && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={onBack}
+                  startIcon={<Iconify icon="eva:arrow-ios-back-fill" width={16} />}
                   sx={{
-                    cursor: 'pointer',
-                    px: 1.5,
-                    py: 0.4,
-                    borderRadius: 2.5,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    color: alpha('#ffffff', 0.7),
-                    '&:hover': { color: 'common.white', bgcolor: alpha('#ffffff', 0.1) },
-                  }}
-                >
-                  <Iconify icon="solar:play-bold" width={13} />
-                  <span>Native</span>
-                </Box>
-                <Box
-                  sx={{
-                    cursor: 'default',
-                    px: 1.5,
-                    py: 0.4,
-                    borderRadius: 2.5,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
+                    bgcolor: alpha('#ffffff', 0.15),
                     color: 'common.white',
-                    bgcolor: 'primary.main',
-                    boxShadow: `0 2px 10px ${alpha('#FF3030', 0.45)}`,
+                    fontSize: 12,
+                    px: 1.25,
+                    backdropFilter: 'blur(8px)',
+                    '&:hover': { bgcolor: alpha('#ffffff', 0.25) },
                   }}
                 >
-                  <Iconify icon="solar:code-bold" width={13} />
-                  <span>Embed</span>
-                </Box>
-              </Box>
-
-              {/* Server selector */}
-              {serverList.length > 0 && (
-                <>
-                  <Box
-                    onClick={(e) => setEmbedSrvAnchor(e.currentTarget)}
-                    sx={{
-                      bgcolor: alpha('#0d1117', 0.8),
-                      backdropFilter: 'blur(16px)',
-                      border: `1px solid ${alpha('#ffffff', 0.12)}`,
-                      cursor: 'pointer',
-                      px: 1.75,
-                      py: 0.6,
-                      borderRadius: 3,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      color: 'common.white',
-                      '&:hover': { bgcolor: alpha('#ffffff', 0.18) },
-                    }}
-                  >
-                    <Iconify icon="solar:server-square-bold" width={14} sx={{ color: 'primary.light' }} />
-                    <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 12 }}>
-                      {currentServerLabel}
-                    </Typography>
-                    <Iconify icon="solar:alt-arrow-down-bold" width={12} sx={{ opacity: 0.7 }} />
-                  </Box>
-
-                  <Menu
-                    anchorEl={embedSrvAnchor}
-                    open={Boolean(embedSrvAnchor)}
-                    onClose={() => setEmbedSrvAnchor(null)}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                    slotProps={{
-                      paper: {
-                        sx: {
-                          bgcolor: alpha('#0d1117', 0.95),
-                          backdropFilter: 'blur(20px)',
-                          border: `1px solid ${alpha('#ffffff', 0.12)}`,
-                          p: 1.25,
-                          borderRadius: 2.5,
-                          width: 280,
-                        },
-                      },
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{ px: 1.5, py: 0.5, display: 'block', color: 'text.disabled', fontWeight: 700 }}
-                    >
-                      Select Embed Server
-                    </Typography>
-                    <Divider sx={{ my: 0.75, borderColor: alpha('#ffffff', 0.12) }} />
-                    {serverList.map((server) => (
-                      <MenuItem
-                        key={server.id}
-                        onClick={() => {
-                          handleSelectServer(server);
-                          setEmbedSrvAnchor(null);
-                        }}
-                        selected={selectedEmbedId === server.id}
-                        sx={{
-                          borderRadius: 1.5,
-                          px: 1.5,
-                          py: 1,
-                          justifyContent: 'space-between',
-                          '&.Mui-selected': { bgcolor: alpha('#FF3030', 0.18) },
-                        }}
-                      >
-                        <Stack direction="row" alignItems="center" spacing={1.5}>
-                          <Iconify icon="solar:server-square-bold" width={18} sx={{ color: 'primary.light' }} />
-                          <Typography variant="subtitle2">{server.name}</Typography>
-                        </Stack>
-                        {selectedEmbedId === server.id && (
-                          <Iconify icon="solar:check-circle-bold" width={18} sx={{ color: 'primary.light' }} />
-                        )}
-                      </MenuItem>
-                    ))}
-                  </Menu>
-                </>
+                  Back
+                </Button>
+              )}
+              {title && (
+                <Typography
+                  variant="subtitle2"
+                  noWrap
+                  sx={{
+                    color: 'common.white',
+                    fontWeight: 600,
+                    fontSize: { xs: 12, sm: 14 },
+                    maxWidth: { xs: 140, sm: 260 },
+                  }}
+                >
+                  {title} {season ? `• S${season} E${episode}` : ''}
+                </Typography>
               )}
             </Stack>
-          </Stack>
+
+            <Stack direction="row" spacing={1} alignItems="center">
+              {/* Embed Server Switcher button */}
+              <Button
+                size="small"
+                variant="contained"
+                onClick={(e) => setEmbedSrvAnchor(e.currentTarget)}
+                startIcon={<Iconify icon="solar:server-square-bold" width={16} />}
+                sx={{
+                  bgcolor: alpha('#ffffff', 0.15),
+                  color: 'common.white',
+                  fontSize: 12,
+                  px: 1.25,
+                  backdropFilter: 'blur(8px)',
+                  '&:hover': { bgcolor: alpha('#ffffff', 0.25) },
+                }}
+              >
+                {currentServerLabel}
+              </Button>
+
+              <Menu
+                anchorEl={embedSrvAnchor}
+                open={Boolean(embedSrvAnchor)}
+                onClose={() => setEmbedSrvAnchor(null)}
+                slotProps={{
+                  paper: {
+                    sx: {
+                      bgcolor: '#0d1117',
+                      color: 'common.white',
+                      border: `1px solid ${alpha('#ffffff', 0.15)}`,
+                      minWidth: 160,
+                    },
+                  },
+                }}
+              >
+                <Typography variant="caption" sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary' }}>
+                  Select Embed Server
+                </Typography>
+                <Divider sx={{ borderColor: alpha('#ffffff', 0.1) }} />
+                {serverList.map((srv) => {
+                  const isSelected = (selectedEmbedId || serverList[0]?.id) === srv.id;
+                  return (
+                    <MenuItem
+                      key={srv.id}
+                      selected={isSelected}
+                      onClick={() => {
+                        setEmbedSrvAnchor(null);
+                        handleSelectServer(srv);
+                      }}
+                      sx={{
+                        fontSize: 13,
+                        color: isSelected ? 'primary.main' : 'common.white',
+                        fontWeight: isSelected ? 600 : 400,
+                      }}
+                    >
+                      {srv.name}
+                    </MenuItem>
+                  );
+                })}
+              </Menu>
+
+              {/* Mode Toggle Button: Switch back to Native */}
+              {allowEmbedMode && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => handleModeChange('native')}
+                  startIcon={<Iconify icon="solar:play-stream-bold-duotone" width={16} />}
+                  sx={{
+                    bgcolor: 'primary.main',
+                    color: 'common.white',
+                    fontSize: 12,
+                    px: 1.25,
+                    '&:hover': { bgcolor: 'primary.dark' },
+                  }}
+                >
+                  Native Player
+                </Button>
+              )}
+            </Stack>
+          </Box>
+
+          {/* Embed Loading indicator (fade out quickly so iframe is never stuck) */}
+          {embedLoading && (
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: '#000',
+                zIndex: 2,
+                pointerEvents: 'none',
+              }}
+            >
+              <CircularProgress size={48} sx={{ color: 'primary.main' }} />
+            </Box>
+          )}
 
           <iframe
-            key={`${activeEmbedUrl}-${playbackAttempt}`}
+            key={`embed-${activeEmbedUrl}-${playbackAttempt}`}
             src={activeEmbedUrl}
             width="100%"
             height="100%"
             allowFullScreen
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             title="Media player"
-            onLoad={() => setIsLoading(false)}
+            onLoad={() => {
+              setIsLoading(false);
+              setEmbedLoading(false);
+            }}
             onError={() => {
               setIsLoading(false);
+              setEmbedLoading(false);
               setPlaybackError('The embed player failed to load. Try another server or switch to Native.');
             }}
             style={{ position: 'absolute', top: 0, left: 0, zIndex: 1, border: 0, overflow: 'hidden' }}
@@ -698,7 +851,40 @@ export default function Player({
       >
         {renderPlayer()}
 
-        {/* Loading / Buffering Overlay */}
+        {/* Floating Auto-Switch Banner Notice */}
+        {autoSwitchNotice && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: { xs: 16, sm: 24 },
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 25,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 1.25,
+              px: 2,
+              py: 0.9,
+              borderRadius: 3,
+              bgcolor: alpha('#050709', 0.92),
+              border: `1px solid ${alpha('#FF9800', 0.4)}`,
+              boxShadow: `0 8px 32px -4px ${alpha('#000000', 0.8)}`,
+              backdropFilter: 'blur(12px)',
+              pointerEvents: 'none',
+              maxWidth: '90%',
+            }}
+          >
+            <CircularProgress size={16} thickness={4} sx={{ color: 'warning.main' }} />
+            <Typography
+              variant="caption"
+              sx={{ color: 'common.white', fontWeight: 600, fontSize: { xs: 12, sm: 13 } }}
+            >
+              {autoSwitchNotice}
+            </Typography>
+          </Box>
+        )}
+
+        {/* Loading / Buffering Overlay (ONLY shown in Native mode when scraping or buffering) */}
         {showSpinner && (
           <Stack
             alignItems="center"
@@ -742,7 +928,7 @@ export default function Player({
                   width: 96,
                   height: 96,
                   borderRadius: '50%',
-                  bgcolor: alpha('#FF3030', 0.2),
+                  bgcolor: alpha(autoSwitchNotice ? '#FF9800' : '#FF3030', 0.2),
                   filter: 'blur(16px)',
                   animation: 'youplex-radar-pulse 2.2s ease-in-out infinite',
                 }}
@@ -751,7 +937,7 @@ export default function Player({
                 size={72}
                 thickness={2.8}
                 sx={{
-                  color: 'primary.main',
+                  color: autoSwitchNotice ? 'warning.main' : 'primary.main',
                   '& .MuiCircularProgress-circle': { strokeLinecap: 'round' },
                 }}
               />
@@ -762,6 +948,60 @@ export default function Player({
                   position: 'absolute',
                   color: 'common.white',
                   animation: 'youplex-glow-pulse 2s ease-in-out infinite',
+                }}
+              />
+            </Box>
+
+            {/* Live Provider & Scrape Status Badge */}
+            {(scrapeFeedback?.activeProviderName || activeProviderName) && (
+              <Box
+                sx={{
+                  zIndex: 1,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  px: 1.75,
+                  py: 0.5,
+                  borderRadius: 2,
+                  bgcolor: autoSwitchNotice ? alpha('#FF9800', 0.15) : alpha('#FF3030', 0.15),
+                  border: `1px solid ${autoSwitchNotice ? alpha('#FF9800', 0.35) : alpha('#FF3030', 0.35)}`,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    bgcolor: autoSwitchNotice ? 'warning.main' : 'primary.main',
+                    animation: 'youplex-glow-pulse 1.2s ease-in-out infinite',
+                  }}
+                />
+                <Typography variant="caption" sx={{ color: 'common.white', fontWeight: 600 }}>
+                  {autoSwitchNotice
+                    ? autoSwitchNotice
+                    : scrapeFeedback?.status === 'switching'
+                    ? `Switching provider...`
+                    : `Provider: ${scrapeFeedback?.activeProviderName || activeProviderName}`}
+                </Typography>
+              </Box>
+            )}
+
+            {/* Progress Bar with Real-time percentage */}
+            <Box sx={{ width: 1, maxWidth: 280, zIndex: 1, my: 0.5 }}>
+              <LinearProgress
+                variant={scrapeFeedback?.percentage ? 'determinate' : 'indeterminate'}
+                value={scrapeFeedback?.percentage || 0}
+                sx={{
+                  height: 5,
+                  borderRadius: 2.5,
+                  bgcolor: alpha('#ffffff', 0.1),
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 2.5,
+                    background: autoSwitchNotice
+                      ? 'linear-gradient(90deg, #FF9800 0%, #FF5722 100%)'
+                      : 'linear-gradient(90deg, #FF3030 0%, #FF6060 100%)',
+                    transition: 'transform 0.3s ease',
+                  },
                 }}
               />
             </Box>
@@ -785,7 +1025,7 @@ export default function Player({
               )}
             </Stack>
 
-            {allowEmbedMode && resolvedMode === 'native' && (
+            {allowEmbedMode && (
               <Button
                 size="small"
                 variant="outlined"
@@ -799,15 +1039,14 @@ export default function Player({
                   bgcolor: alpha('#ffffff', 0.06),
                   borderRadius: 2,
                   py: 0.6,
-                  px: 1.8,
+                  px: 1.75,
                   '&:hover': {
-                    color: 'common.white',
                     borderColor: 'primary.main',
                     bgcolor: alpha('#FF3030', 0.15),
                   },
                 }}
               >
-                Switch to Instant Embed Player
+                Instant Embed Player
               </Button>
             )}
           </Stack>
@@ -984,3 +1223,5 @@ export default function Player({
     </Box>
   );
 }
+
+export { Player };

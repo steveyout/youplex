@@ -15,7 +15,6 @@ import { detectSettings } from '@/components/settings/server';
 import { getInitColorSchemeScript } from '@/theme/color-scheme-script';
 import { SettingsDrawer, defaultSettings, SettingsProvider } from '@/components/settings';
 
-
 // ----------------------------------------------------------------------
 
 export const metadata = {
@@ -37,6 +36,42 @@ export const viewport = {
   themeColor: PRIMARY_COLOR.red.main,
 };
 
+const extensionErrorSuppressor = `
+  (function() {
+    function isExt(ev) {
+      try {
+        var fn = (ev && ev.filename) || '';
+        var stack = (ev && ev.error && ev.error.stack) || (ev && ev.reason && (ev.reason.stack || ev.reason.message)) || '';
+        var msg = (ev && ev.message) || (ev && ev.reason && ev.reason.message) || '';
+        return (
+          fn.indexOf('chrome-extension://') !== -1 ||
+          fn.indexOf('moz-extension://') !== -1 ||
+          stack.indexOf('chrome-extension://') !== -1 ||
+          stack.indexOf('moz-extension://') !== -1 ||
+          msg.indexOf('M_ID') !== -1 ||
+          stack.indexOf('M_ID') !== -1 ||
+          msg.indexOf('channel secret') !== -1 ||
+          msg.indexOf('broadcast system') !== -1
+        );
+      } catch (e) {
+        return false;
+      }
+    }
+    window.addEventListener('error', function(e) {
+      if (isExt(e)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    }, true);
+    window.addEventListener('unhandledrejection', function(e) {
+      if (isExt(e)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    }, true);
+  })();
+`;
+
 export default async function RootLayout({ children }) {
   const lang = CONFIG.isStaticExport ? 'en' : await detectLanguage();
 
@@ -44,6 +79,9 @@ export default async function RootLayout({ children }) {
 
   return (
     <html lang={lang ?? 'en'} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: extensionErrorSuppressor }} />
+      </head>
       <body>
         {getInitColorSchemeScript}
         <I18nProvider lang={CONFIG.isStaticExport ? undefined : lang}>

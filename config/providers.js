@@ -63,7 +63,7 @@ export const providers = [
   },
   {
     id: 'vidcore',
-    name: 'Server 11 (VidCore)',
+    name: 'Server 11 (Arcane)',
     baseUrl: 'https://vidcore.org',
     enabled: true,
   },

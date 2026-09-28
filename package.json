@@ -105,7 +105,8 @@
     "swr": "^2.2.5",
     "turndown": "^7.2.0",
     "yet-another-react-lightbox": "^3.20.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@p-stream/providers": "file:./packages/@p-stream/providers"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

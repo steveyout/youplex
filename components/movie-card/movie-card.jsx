@@ -2,6 +2,7 @@ import React from 'react';
 import { paths } from '@/routes/paths';
 import { Image } from '@/components/image';
 import { Label } from '@/components/label';
+import { fDate } from '@/utils/format-time';
 import { Iconify } from '@/components/iconify';
 import { RouterLink } from '@/routes/components';
 import { maxLine, varAlpha } from '@/theme/styles';
@@ -21,6 +22,14 @@ const getPosterUrl = (path) =>
       : `${process.env.NEXT_PUBLIC_TMDB_IMAGE_BASE_URL || 'https://image.tmdb.org/t/p/w500'}${path}`
     : '/assets/placeholder.jpg';
 
+function getSafeYear(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d.getFullYear();
+  if (typeof dateStr === 'string' && /^\d{4}/.test(dateStr)) return dateStr.slice(0, 4);
+  return null;
+}
+
 export default function MovieCard({ movie, index = 0 }) {
   const theme = useTheme();
 
@@ -29,7 +38,7 @@ export default function MovieCard({ movie, index = 0 }) {
 
   const displayTitle = title || name || 'Untitled';
   const displayDate = release_date || first_air_date;
-  const releaseYear = displayDate ? new Date(displayDate).getFullYear() : null;
+  const releaseYear = getSafeYear(displayDate);
   const type = media_type || (release_date ? 'movie' : 'tv');
 
   const linkTo = id ? paths.watch.details(type, id, displayTitle) : '#';
@@ -61,16 +70,19 @@ export default function MovieCard({ movie, index = 0 }) {
           position: 'relative',
           bgcolor: 'background.paper',
           border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.08)}`,
+          transform: 'translateZ(0)',
+          backfaceVisibility: 'hidden',
+          contentVisibility: 'auto',
           transition: theme.transitions.create(['transform', 'box-shadow', 'border-color'], {
-            duration: 0.35,
+            duration: 0.28,
             easing: theme.transitions.easing.easeOut,
           }),
           '&:hover': {
             transform: 'translateY(-6px)',
             borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.28),
-            boxShadow: `0 20px 40px -14px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.32)}, 0 0 0 1px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.16)}`,
+            boxShadow: `0 18px 36px -12px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.32)}, 0 0 0 1px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.16)}`,
           },
-          '&:hover .youplex-poster-img': { transform: 'scale(1.06)' },
+          '&:hover .youplex-poster-img': { transform: 'scale(1.05)' },
           '&:hover .youplex-poster-overlay': { opacity: 1 },
           '&:hover .youplex-card-fab': { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
           '&:hover .youplex-card-shine': { opacity: 1, left: '120%' },
@@ -89,8 +101,9 @@ export default function MovieCard({ movie, index = 0 }) {
                 borderRadius: 999,
                 fontWeight: 700,
                 fontSize: '0.72rem',
-                backdropFilter: 'blur(8px)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                bgcolor: 'rgba(8, 12, 18, 0.88)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
                 px: 0.8,
               }}
             >
@@ -109,8 +122,8 @@ export default function MovieCard({ movie, index = 0 }) {
                 px: 0.75,
                 py: 0.2,
                 borderRadius: 1,
-                bgcolor: 'rgba(0, 0, 0, 0.65)',
-                backdropFilter: 'blur(8px)',
+                bgcolor: 'rgba(8, 12, 18, 0.88)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
                 color: 'common.white',
                 fontSize: '0.68rem',
                 fontWeight: 600,
@@ -126,7 +139,8 @@ export default function MovieCard({ movie, index = 0 }) {
             sx={{
               width: 1,
               height: 1,
-              transition: 'transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)',
+              transition: 'transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)',
+              willChange: 'transform',
             }}
           >
             <Image
@@ -148,7 +162,7 @@ export default function MovieCard({ movie, index = 0 }) {
               zIndex: 7,
               opacity: 0,
               position: 'absolute',
-              transition: 'opacity 0.35s ease',
+              transition: 'opacity 0.25s ease',
               background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.15) 60%, transparent 100%)',
             }}
           />
@@ -166,7 +180,7 @@ export default function MovieCard({ movie, index = 0 }) {
               position: 'absolute',
               pointerEvents: 'none',
               transform: 'skewX(-24deg)',
-              transition: 'left 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease',
+              transition: 'left 0.6s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease',
               background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2) 50%, transparent)',
             }}
           />
@@ -186,12 +200,11 @@ export default function MovieCard({ movie, index = 0 }) {
               justifyContent: 'center',
               position: 'absolute',
               borderRadius: '50%',
-              transform: 'translate(-50%, -50%) scale(0.6)',
-              transition: 'opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
-              bgcolor: varAlpha(theme.vars.palette.primary.mainChannel, 0.9),
+              transform: 'translate(-50%, -50%) scale(0.7)',
+              transition: 'opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
+              bgcolor: varAlpha(theme.vars.palette.primary.mainChannel, 0.92),
               color: 'common.white',
               boxShadow: `0 8px 24px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.6)}`,
-              backdropFilter: 'blur(8px)',
             }}
           >
             <Iconify icon="solar:play-bold" width={22} sx={{ ml: 0.3 }} />
@@ -230,6 +243,12 @@ export default function MovieCard({ movie, index = 0 }) {
                 {type === 'tv' ? 'Series' : 'Movie'}
               </Box>
             </Stack>
+
+            {displayDate && (
+              <Box component="span" sx={{ fontSize: '0.72rem', color: 'text.secondary', fontWeight: 500 }}>
+                {fDate(displayDate, 'MMM YYYY')}
+              </Box>
+            )}
           </Stack>
         </CardContent>
       </Card>

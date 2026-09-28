@@ -26,7 +26,7 @@ function toTrack(file, subtitle, downloadUrl) {
   return {
     label,
     language,
-    url: `/api/subtitles/file?url=${encodeURIComponent(downloadUrl)}`,
+    url: `/api/subtitles?url=${encodeURIComponent(downloadUrl)}`,
     isCC: Boolean(subtitle.hearing_impaired),
   };
 }
@@ -60,7 +60,8 @@ export async function GET(request) {
     }
   }
 
-  const tmdbId = Number(searchParams.get('id'));
+  const rawId = searchParams.get('tmdb_id') || searchParams.get('id');
+  const tmdbId = Number(rawId);
   const type = searchParams.get('type') || 'movie';
   const season = Number(searchParams.get('season'));
   const episode = Number(searchParams.get('episode'));

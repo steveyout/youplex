@@ -2,7 +2,7 @@
 
 import { Iconify } from '@/components/iconify';
 import { usePlayerControls } from '@/hooks/use-player-controls';
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   formatTime,
   useMediaStore,
@@ -20,11 +20,31 @@ import Tooltip from '@mui/material/Tooltip';
 import Divider from '@mui/material/Divider';
 import { alpha } from '@mui/material/styles';
 import MenuItem from '@mui/material/MenuItem';
+import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 
 // ----------------------------------------------------------------------
+
+
+/**
+ * Custom Tooltip that disables touch listeners to eliminate double-tap requirements on mobile.
+ */
+function PlayerTooltip({ children, title, ...props }) {
+  if (!title) return children;
+  return (
+    <Tooltip
+      title={title}
+      disableTouchListener
+      enterDelay={350}
+      enterNextDelay={150}
+      {...props}
+    >
+      {children}
+    </Tooltip>
+  );
+}
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -90,6 +110,7 @@ export default function NativeControls({
   allowModeChange = true,
   handleSelectServer,
   currentServerLabel = 'Native Player',
+  timelineSegments = [],
 }) {
   const remote = useMediaRemote();
   const store = useMediaStore();
@@ -133,6 +154,36 @@ export default function NativeControls({
     : 'solar:volume-bold';
 
   const hasActiveCaption = captions.some((c) => c.selected && c.value !== 'off');
+
+  // Robust mute toggle that handles volume 0 and never requires double clicking
+  const handleToggleMute = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      if (isMuted) {
+        if (volume === 0) {
+          remote.changeVolume(0.5);
+        }
+        remote.changeMuted(false);
+      } else {
+        remote.changeMuted(true);
+      }
+    },
+    [isMuted, volume, remote]
+  );
+
+
+  // Active segment detection for Intro / Recap / Credits skip prompts
+  const activeSegment = useMemo(() => {
+    if (!timelineSegments || timelineSegments.length === 0 || !canSeek) return null;
+    return (
+      timelineSegments.find((seg) => {
+        const segStart = Number(seg.start) || 0;
+        const segEnd = seg.end != null ? Number(seg.end) : maxSeek;
+        return currentTime >= segStart && currentTime < segEnd - 0.5;
+      }) || null
+    );
+  }, [timelineSegments, currentTime, canSeek, maxSeek]);
+
 
   // Trigger brief center feedback badge
   const triggerFeedback = useCallback((type) => {
@@ -251,6 +302,14 @@ export default function NativeControls({
           e.preventDefault();
           if (store.canFullscreen) remote.toggleFullscreen();
           break;
+        case 's':
+          if (activeSegment) {
+            e.preventDefault();
+            const targetTime = activeSegment.end != null ? Number(activeSegment.end) : maxSeek;
+            remote.seek(targetTime);
+            triggerFeedback('forward');
+          }
+          break;
         case 'c':
           e.preventDefault();
           if (captions.length > 1) {
@@ -265,7 +324,7 @@ export default function NativeControls({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [remote, store.paused, store.canFullscreen, currentTime, maxSeek, volume, captions, showUI, triggerFeedback]);
+  }, [remote, store.paused, store.canFullscreen, currentTime, maxSeek, volume, captions, showUI, triggerFeedback, activeSegment]);
 
   // Format time display
   const timeFormatted = showRemainingTime
@@ -350,7 +409,7 @@ export default function NativeControls({
         {/* Left: Optional Back + Title Metadata */}
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
           {onBack && (
-            <Tooltip title="Back" arrow placement="bottom">
+            <PlayerTooltip title="Back" arrow placement="bottom">
               <IconButton
                 onClick={onBack}
                 sx={{
@@ -361,7 +420,7 @@ export default function NativeControls({
               >
                 <Iconify icon="solar:alt-arrow-left-bold" width={20} />
               </IconButton>
-            </Tooltip>
+            </PlayerTooltip>
           )}
 
           {title && (
@@ -437,7 +496,7 @@ export default function NativeControls({
                 }}
               >
                 <Iconify icon="solar:play-bold" width={13} />
-                <span>Native</span>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Native</Box>
               </Box>
 
               <Box
@@ -466,7 +525,7 @@ export default function NativeControls({
                 }}
               >
                 <Iconify icon="solar:code-bold" width={13} />
-                <span>Embed</span>
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Embed</Box>
               </Box>
             </Box>
           )}
@@ -474,7 +533,7 @@ export default function NativeControls({
           {/* Server / Extractor Dropdown Button */}
           {serverList.length > 0 && handleSelectServer && (
             <>
-              <Tooltip title="Switch stream provider / server" arrow placement="bottom">
+              <PlayerTooltip title="Switch stream provider / server" arrow placement="bottom">
                 <Box
                   onClick={(e) => setSrvAnchor(e.currentTarget)}
                   sx={{
@@ -512,7 +571,7 @@ export default function NativeControls({
                     sx={{
                       fontWeight: 600,
                       fontSize: { xs: 11, sm: 12 },
-                      maxWidth: { xs: 80, sm: 120 },
+                      maxWidth: { xs: 65, sm: 120 },
                     }}
                     noWrap
                   >
@@ -520,7 +579,7 @@ export default function NativeControls({
                   </Typography>
                   <Iconify icon="solar:alt-arrow-down-bold" width={12} sx={{ opacity: 0.7 }} />
                 </Box>
-              </Tooltip>
+              </PlayerTooltip>
 
               <Menu
                 anchorEl={srvAnchor}
@@ -561,7 +620,7 @@ export default function NativeControls({
                     <MenuItem
                       key={server.id}
                       onClick={() => {
-                        handleSelectServer(server);
+                        selectServerFn(server);
                         setSrvAnchor(null);
                       }}
                       selected={isSelected}
@@ -771,7 +830,10 @@ export default function NativeControls({
             alignItems: 'center',
             cursor: canSeek ? 'pointer' : 'default',
             '&:hover .seek-track': {
-              height: 7,
+              height: 6,
+            },
+            '&:hover .seek-segment': {
+              height: 8,
             },
             '&:hover .seek-thumb': {
               transform: 'translate(-50%, -50%) scale(1.25)',
@@ -779,7 +841,7 @@ export default function NativeControls({
             },
           }}
         >
-          {/* Hover Time Tooltip */}
+          {/* Hover Time & Segment Tooltip */}
           {hoverSeek && canSeek && (
             <Box
               sx={{
@@ -789,11 +851,15 @@ export default function NativeControls({
                 mb: 1.25,
                 transform: 'translateX(-50%)',
                 pointerEvents: 'none',
-                zIndex: 5,
+                zIndex: 7,
                 ...glassPanelSx,
                 px: 1.25,
-                py: 0.4,
+                py: 0.5,
                 borderRadius: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.85,
+                whiteSpace: 'nowrap',
               }}
             >
               <Typography
@@ -807,6 +873,54 @@ export default function NativeControls({
               >
                 {durationText(hoverSeek.time)}
               </Typography>
+
+              {(() => {
+                const seg = timelineSegments.find((s) => {
+                  const sStart = Number(s.start) || 0;
+                  const sEnd = s.end != null ? Number(s.end) : maxSeek;
+                  return hoverSeek.time >= sStart && hoverSeek.time <= sEnd;
+                });
+                if (!seg) return null;
+                const palette = SEGMENT_PALETTE[seg.type] || {
+                  color: seg.color || '#FFB800',
+                  label: seg.label || 'Segment',
+                };
+                return (
+                  <Box
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      px: 0.75,
+                      py: 0.15,
+                      borderRadius: 1,
+                      bgcolor: alpha(palette.color, 0.22),
+                      border: `1px solid ${alpha(palette.color, 0.55)}`,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        bgcolor: palette.color,
+                        boxShadow: `0 0 6px ${palette.color}`,
+                      }}
+                    />
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: palette.color,
+                        fontWeight: 700,
+                        fontSize: 11,
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {palette.label}
+                    </Typography>
+                  </Box>
+                );
+              })()}
             </Box>
           )}
 
@@ -822,6 +936,7 @@ export default function NativeControls({
               overflow: 'hidden',
               bgcolor: alpha('#ffffff', 0.2),
               transition: 'height 0.15s ease',
+              zIndex: 1,
             }}
           >
             {/* Buffered Progress */}
@@ -850,8 +965,97 @@ export default function NativeControls({
               background: 'linear-gradient(90deg, #FF3030 0%, #FF6060 100%)',
               transition: 'height 0.15s ease',
               boxShadow: `0 0 8px ${alpha('#FF3030', 0.4)}`,
+              zIndex: 2,
+              pointerEvents: 'none',
+              opacity: 0.88,
             }}
           />
+
+          {/* Colored Segments on Timeline (Intro: Amber, Recap: Cyan, Credits: Purple, Preview: Green) */}
+          {canSeek &&
+            timelineSegments.map((seg, idx) => {
+              const startSec = clamp(Number(seg.start) || 0, 0, maxSeek);
+              const endSec = clamp(seg.end != null ? Number(seg.end) : maxSeek, startSec, maxSeek);
+              if (endSec <= startSec) return null;
+
+              const leftPct = (startSec / maxSeek) * 100;
+              const widthPct = Math.max(0.5, ((endSec - startSec) / maxSeek) * 100);
+              const palette = SEGMENT_PALETTE[seg.type] || {
+                color: seg.color || '#FFB800',
+                borderColor: seg.borderColor || '#FDE047',
+                label: seg.label || 'Segment',
+              };
+
+              return (
+                <Box
+                  key={seg.id || `${seg.type}-${idx}-${startSec}`}
+                  className="seek-segment"
+                  sx={{
+                    position: 'absolute',
+                    left: `${leftPct}%`,
+                    width: `${widthPct}%`,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    height: 5,
+                    borderRadius: 1,
+                    bgcolor: palette.color,
+                    boxShadow: `0 0 10px ${alpha(palette.color, 0.85)}`,
+                    border: `1px solid ${alpha(palette.borderColor || palette.color, 0.8)}`,
+                    zIndex: 3,
+                    pointerEvents: 'none',
+                    transition: 'height 0.15s ease',
+                  }}
+                />
+              );
+            })}
+
+          {/* Segment Tick Markers (Start & End points for clear boundaries) */}
+          {canSeek &&
+            timelineSegments.map((seg, idx) => {
+              const startSec = clamp(Number(seg.start) || 0, 0, maxSeek);
+              const endSec = clamp(seg.end != null ? Number(seg.end) : maxSeek, startSec, maxSeek);
+              const palette = SEGMENT_PALETTE[seg.type] || {
+                color: seg.color || '#FFB800',
+              };
+
+              return (
+                <Box
+                  key={`tick-${seg.id || idx}`}
+                  sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4 }}
+                >
+                  {/* Start Tick Notch */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      left: `${(startSec / maxSeek) * 100}%`,
+                      top: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: 2,
+                      height: 10,
+                      borderRadius: 1,
+                      bgcolor: '#ffffff',
+                      boxShadow: `0 0 4px ${palette.color}`,
+                    }}
+                  />
+                  {/* End Tick Notch */}
+                  {seg.end != null && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        left: `${(endSec / maxSeek) * 100}%`,
+                        top: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: 2,
+                        height: 10,
+                        borderRadius: 1,
+                        bgcolor: palette.color,
+                        boxShadow: `0 0 4px ${palette.color}`,
+                      }}
+                    />
+                  )}
+                </Box>
+              );
+            })}
 
           {/* Scrub Thumb */}
           <Box
@@ -867,7 +1071,7 @@ export default function NativeControls({
               bgcolor: 'common.white',
               boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
               pointerEvents: 'none',
-              zIndex: 2,
+              zIndex: 5,
               transition: 'transform 0.15s ease, box-shadow 0.15s ease',
             }}
           />
@@ -891,6 +1095,7 @@ export default function NativeControls({
               opacity: 0,
               cursor: 'pointer',
               p: 0,
+              zIndex: 6,
               '& .MuiSlider-thumb': {
                 width: 24,
                 height: 24,
@@ -900,16 +1105,16 @@ export default function NativeControls({
         </Box>
 
         {/* ================= CONTROLS ROW ================= */}
-        <Stack direction="row" alignItems="center" spacing={0.75}>
+        <Stack direction="row" alignItems="center" spacing={{ xs: 0.25, sm: 0.75 }}>
           {/* Play / Pause */}
-          <Tooltip title={store.playing ? 'Pause (k)' : 'Play (k)'} placement="top" arrow>
+          <PlayerTooltip title={store.playing ? 'Pause (k)' : 'Play (k)'} placement="top" arrow>
             <IconButton onClick={() => remote.togglePaused()} sx={controlButtonSx}>
               <Iconify icon={store.playing ? 'solar:pause-bold' : 'solar:play-bold'} width={26} />
             </IconButton>
-          </Tooltip>
+          </PlayerTooltip>
 
           {/* 10s Rewind */}
-          <Tooltip title="Rewind 10s (j)" placement="top" arrow>
+          <PlayerTooltip title="Rewind 10s (j)" placement="top" arrow>
             <IconButton
               onClick={() => {
                 remote.seek(Math.max(0, currentTime - 10));
@@ -919,10 +1124,10 @@ export default function NativeControls({
             >
               <Iconify icon="ic:round-replay-10" width={25} />
             </IconButton>
-          </Tooltip>
+          </PlayerTooltip>
 
           {/* 10s Forward */}
-          <Tooltip title="Forward 10s (l)" placement="top" arrow>
+          <PlayerTooltip title="Forward 10s (l)" placement="top" arrow>
             <IconButton
               onClick={() => {
                 remote.seek(Math.min(maxSeek, currentTime + 10));
@@ -932,7 +1137,7 @@ export default function NativeControls({
             >
               <Iconify icon="ic:round-forward-10" width={25} />
             </IconButton>
-          </Tooltip>
+          </PlayerTooltip>
 
           {/* Volume Control with Expandable Slider */}
           <Stack
@@ -943,11 +1148,11 @@ export default function NativeControls({
             onMouseLeave={() => setIsVolHovered(false)}
             sx={{ ml: 0.5 }}
           >
-            <Tooltip title={isMuted ? 'Unmute (m)' : 'Mute (m)'} placement="top" arrow>
+            <PlayerTooltip title={isMuted ? 'Unmute (m)' : 'Mute (m)'} placement="top" arrow>
               <IconButton onClick={() => remote.toggleMuted()} sx={controlButtonSx}>
                 <Iconify icon={volIcon} width={24} />
               </IconButton>
-            </Tooltip>
+            </PlayerTooltip>
 
             <Box
               sx={{
@@ -982,8 +1187,75 @@ export default function NativeControls({
             </Box>
           </Stack>
 
+{/* Timestamp Segment Badges (Intro, Recap, Credits, etc.) */}
+          {timelineSegments.length > 0 && (
+            <Stack
+              direction="row"
+              spacing={0.75}
+              alignItems="center"
+              sx={{ ml: 1, display: { xs: 'none', md: 'flex' } }}
+            >
+              {timelineSegments.map((seg, idx) => {
+                const palette = SEGMENT_PALETTE[seg.type] || {
+                  color: seg.color || '#FFB800',
+                  label: seg.label || 'Segment',
+                };
+                return (
+                  <PlayerTooltip
+                    key={seg.id || `${seg.type}-${idx}`}
+                    title={`Jump to ${palette.label} (${durationText(seg.start)})`}
+                    arrow
+                    placement="top"
+                  >
+                    <Box
+                      onClick={() => remote.seek(Number(seg.start) || 0)}
+                      sx={{
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        px: 0.85,
+                        py: 0.25,
+                        borderRadius: 1.5,
+                        bgcolor: alpha(palette.color, 0.14),
+                        border: `1px solid ${alpha(palette.color, 0.4)}`,
+                        transition: 'all 0.15s ease',
+                        '&:hover': {
+                          bgcolor: alpha(palette.color, 0.28),
+                          borderColor: palette.color,
+                          transform: 'scale(1.05)',
+                        },
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          bgcolor: palette.color,
+                          boxShadow: `0 0 4px ${palette.color}`,
+                        }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: palette.color,
+                          fontWeight: 700,
+                          fontSize: 10.5,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {palette.label}
+                      </Typography>
+                    </Box>
+                  </PlayerTooltip>
+                );
+              })}
+            </Stack>
+          )}
+
           {/* Timestamp Display */}
-          <Tooltip title="Click to toggle remaining time" arrow placement="top">
+          <PlayerTooltip title="Click to toggle remaining time" arrow placement="top">
             <Typography
               variant="caption"
               onClick={() => setShowRemainingTime((prev) => !prev)}
@@ -1007,12 +1279,12 @@ export default function NativeControls({
               </Box>{' '}
               {durationText(duration)}
             </Typography>
-          </Tooltip>
+          </PlayerTooltip>
 
           <Box sx={{ flexGrow: 1 }} />
 
           {/* Captions / Subtitles Menu */}
-          <Tooltip title="Subtitles & Audio (c)" placement="top" arrow>
+          <PlayerTooltip title="Subtitles & Audio (c)" placement="top" arrow>
             <IconButton
               onClick={(e) => setCapAnchor(e.currentTarget)}
               sx={{
@@ -1036,30 +1308,30 @@ export default function NativeControls({
                 />
               )}
             </IconButton>
-          </Tooltip>
+          </PlayerTooltip>
 
           {/* Quality & Speed Settings Menu */}
-          <Tooltip title="Settings" placement="top" arrow>
+          <PlayerTooltip title="Settings" placement="top" arrow>
             <IconButton onClick={(e) => setSetAnchor(e.currentTarget)} sx={controlButtonSx}>
               <Iconify icon="solar:settings-minimalistic-bold" width={23} />
             </IconButton>
-          </Tooltip>
+          </PlayerTooltip>
 
           {/* Picture in Picture */}
           {store.canPictureInPicture && (
-            <Tooltip title="Picture in Picture" placement="top" arrow>
+            <PlayerTooltip title="Picture in Picture" placement="top" arrow>
               <IconButton
                 onClick={() => remote.togglePictureInPicture()}
                 sx={{ ...controlButtonSx, display: { xs: 'none', sm: 'inline-flex' } }}
               >
                 <Iconify icon="ic:round-picture-in-picture" width={23} />
               </IconButton>
-            </Tooltip>
+            </PlayerTooltip>
           )}
 
           {/* Fullscreen */}
           {store.canFullscreen && (
-            <Tooltip
+            <PlayerTooltip
               title={store.fullscreen ? 'Exit Fullscreen (f)' : 'Fullscreen (f)'}
               placement="top"
               arrow
@@ -1070,10 +1342,152 @@ export default function NativeControls({
                   width={24}
                 />
               </IconButton>
-            </Tooltip>
+            </PlayerTooltip>
           )}
         </Stack>
       </Stack>
+
+      
+      {/* Center Mobile Play / Pause & 10s Seek Controls */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 4,
+          display: { xs: 'flex', sm: 'none' },
+          alignItems: 'center',
+          gap: 2.25,
+          pointerEvents: uiVisible ? 'auto' : 'none',
+          opacity: uiVisible ? 1 : 0,
+          transition: 'opacity 0.25s ease',
+        }}
+      >
+        <IconButton
+          onClick={(e) => {
+            e.stopPropagation();
+            remote.seek(Math.max(0, currentTime - 10));
+            triggerFeedback('rewind');
+          }}
+          sx={{
+            color: 'common.white',
+            bgcolor: alpha('#000000', 0.45),
+            backdropFilter: 'blur(8px)',
+            p: 1.25,
+            touchAction: 'manipulation',
+            '&:active': { bgcolor: alpha('#000000', 0.75), transform: 'scale(0.92)' },
+          }}
+        >
+          <Iconify icon="ic:round-replay-10" width={26} />
+        </IconButton>
+
+        <IconButton
+          onClick={(e) => {
+            e.stopPropagation();
+            remote.togglePaused();
+            triggerFeedback(store.paused ? 'play' : 'pause');
+          }}
+          sx={{
+            color: 'common.white',
+            bgcolor: 'primary.main',
+            boxShadow: `0 4px 20px ${alpha('#FF3030', 0.5)}`,
+            p: 1.5,
+            touchAction: 'manipulation',
+            '&:active': { transform: 'scale(0.92)' },
+          }}
+        >
+          <Iconify icon={store.playing ? 'solar:pause-bold' : 'solar:play-bold'} width={32} />
+        </IconButton>
+
+        <IconButton
+          onClick={(e) => {
+            e.stopPropagation();
+            remote.seek(Math.min(maxSeek, currentTime + 10));
+            triggerFeedback('forward');
+          }}
+          sx={{
+            color: 'common.white',
+            bgcolor: alpha('#000000', 0.45),
+            backdropFilter: 'blur(8px)',
+            p: 1.25,
+            touchAction: 'manipulation',
+            '&:active': { bgcolor: alpha('#000000', 0.75), transform: 'scale(0.92)' },
+          }}
+        >
+          <Iconify icon="ic:round-forward-10" width={26} />
+        </IconButton>
+      </Box>
+
+
+      {/* ===================== FLOATING SKIP BUTTON (NETFLIX STYLE) ===================== */}
+      {activeSegment && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: { xs: 85, sm: 95 },
+            right: { xs: 16, sm: 28 },
+            zIndex: 6,
+            animation: 'youplex-fade-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both',
+          }}
+        >
+          <Button
+            variant="contained"
+            onClick={() => {
+              const target = activeSegment.end != null ? Number(activeSegment.end) : maxSeek;
+              remote.seek(target);
+              triggerFeedback('forward');
+            }}
+            startIcon={
+              <Iconify
+                icon={activeSegment.icon || 'solar:double-alt-arrow-right-bold'}
+                width={18}
+                sx={{ color: activeSegment.color || '#FFB800' }}
+              />
+            }
+            sx={{
+              ...glassPanelSx,
+              bgcolor: alpha('#0a0d14', 0.88),
+              color: 'common.white',
+              border: `1px solid ${alpha(activeSegment.color || '#FFB800', 0.55)}`,
+              boxShadow: `0 8px 24px -2px rgba(0,0,0,0.85), 0 0 16px ${alpha(activeSegment.color || '#FFB800', 0.3)}`,
+              backdropFilter: 'blur(16px)',
+              py: { xs: 0.75, sm: 1 },
+              px: { xs: 1.75, sm: 2.25 },
+              borderRadius: 2.5,
+              fontSize: { xs: 12, sm: 13 },
+              fontWeight: 700,
+              letterSpacing: 0.2,
+              textTransform: 'none',
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                bgcolor: alpha('#0a0d14', 0.98),
+                borderColor: activeSegment.color || '#FFB800',
+                transform: 'translateY(-2px) scale(1.03)',
+                boxShadow: `0 12px 28px -2px rgba(0,0,0,0.9), 0 0 20px ${alpha(activeSegment.color || '#FFB800', 0.45)}`,
+              },
+            }}
+          >
+            Skip {activeSegment.label || 'Intro'}
+            <Typography
+              component="span"
+              sx={{
+                ml: 1,
+                px: 0.6,
+                py: 0.1,
+                borderRadius: 0.8,
+                bgcolor: alpha('#ffffff', 0.15),
+                color: alpha('#ffffff', 0.75),
+                fontSize: 10,
+                fontWeight: 700,
+                display: { xs: 'none', sm: 'inline-block' },
+              }}
+            >
+              S
+            </Typography>
+          </Button>
+        </Box>
+      )}
 
       {/* ===================== CAPTIONS MENU ===================== */}
       <Menu
