@@ -380,71 +380,289 @@ export async function getCredits(type, id) {
 }
 
 // ----------------------------------------------------------------------
+// Intro DB (TheIntroDB API v3) - Client-side integrations
+// TheIntroDB explicitly supports CORS and should be called client-side in the browser
+// to avoid Cloudflare datacenter/server-side bot protection triggers in production.
+// ----------------------------------------------------------------------
+
+const INTRO_DB_BASE_URL = 'https://api.theintrodb.org/v3/media';
+const INTRO_DB_SUBMIT_URL = 'https://api.theintrodb.org/v3/submit';
+
+const INTRO_DB_SEGMENT_METADATA = {
+  intro: {
+    label: 'Intro',
+    color: '#E5A00D', // Amber / Gold
+    borderColor: '#FDE047',
+    icon: 'solar:play-bold',
+  },
+  recap: {
+    label: 'Recap',
+    color: '#00B8D9', // Cyan / Teal
+    borderColor: '#67E8F9',
+    icon: 'solar:history-bold',
+  },
+  credits: {
+    label: 'Credits',
+    color: '#8E33FF', // Royal Purple
+    borderColor: '#C084FC',
+    icon: 'solar:clapperboard-play-bold',
+  },
+  preview: {
+    label: 'Preview',
+    color: '#22C55E', // Emerald Green
+    borderColor: '#86EFAC',
+    icon: 'solar:eye-bold',
+  },
+};
 
 /**
- * Fetch Intro/Recap/Credits/Preview timestamps from Intro DB
+ * Normalizes raw Intro DB payload into clean, chronological video segments in seconds.
+ */
+function normalizeIntroDbSegments(data, durationSec = null) {
+  if (!data) return [];
+
+  const segments = [];
+  const categoryKeys = ['recap', 'intro', 'preview', 'credits'];
+
+  for (const cat of categoryKeys) {
+    const list = data[cat];
+    if (Array.isArray(list)) {
+      list.forEach((item, index) => {
+        const startSec = item.start_ms != null ? Math.max(0, item.start_ms / 1000) : 0;
+        const endSec = item.end_ms != null ? Math.max(0, item.end_ms / 1000) : durationSec;
+
+        const meta = INTRO_DB_SEGMENT_METADATA[cat] || {
+          label: cat.charAt(0).toUpperCase() + cat.slice(1),
+          color: '#E5A00D',
+          borderColor: '#FDE047',
+          icon: 'solar:play-bold',
+        };
+
+        segments.push({
+          id: `${cat}-${index}-${startSec}`,
+          type: cat,
+          label: meta.label,
+          color: meta.color,
+          borderColor: meta.borderColor,
+          icon: meta.icon,
+          start: startSec,
+          end: endSec,
+          startMs: item.start_ms,
+          endMs: item.end_ms,
+        });
+      });
+    }
+  }
+
+  // Sort segments chronologically
+  segments.sort((a, b) => a.start - b.start);
+
+  return segments;
+}
+
+// Client-side cache to avoid repeat network requests and respect IntroDB rate limits
+const introDbCache = new Map();
+const INTRO_DB_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function getFromIntroDbCache(key) {
+  const now = Date.now();
+  if (introDbCache.has(key)) {
+    const entry = introDbCache.get(key);
+    if (now - entry.timestamp < INTRO_DB_CACHE_TTL_MS) {
+      return entry.data;
+    }
+    introDbCache.delete(key);
+  }
+
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      const stored = window.sessionStorage.getItem(`tidb_${key}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (now - parsed.timestamp < INTRO_DB_CACHE_TTL_MS) {
+          introDbCache.set(key, parsed);
+          return parsed.data;
+        }
+        window.sessionStorage.removeItem(`tidb_${key}`);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+function setToIntroDbCache(key, data) {
+  const entry = { data, timestamp: Date.now() };
+  introDbCache.set(key, entry);
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem(`tidb_${key}`, JSON.stringify(entry));
+    } catch {
+      // ignore quota limits
+    }
+  }
+}
+
+/**
+ * Fetch Intro/Recap/Credits/Preview timestamps from Intro DB directly client-side.
+ * Client-side querying bypasses Cloudflare bot protection which blocks server-side IP calls in production.
+ *
  * @param {Object} params
  * @param {string|number} params.tmdbId - TMDB ID
  * @param {string} [params.imdbId] - Optional IMDB ID
+ * @param {string|number} [params.tvdbId] - Optional TVDB ID
  * @param {'movie'|'tv'} [params.type='movie'] - Media type
  * @param {number|string} [params.season] - TV Season number
  * @param {number|string} [params.episode] - TV Episode number
  * @param {number|string} [params.durationMs] - Video duration in ms
  */
-export async function getIntroTimestamps({ tmdbId, imdbId, type = 'movie', season, episode, durationMs } = {}) {
-  if (!tmdbId && !imdbId) return { success: false, segments: [] };
+export async function getIntroTimestamps({ tmdbId, imdbId, tvdbId, type = 'movie', season, episode, durationMs } = {}) {
+  if (!tmdbId && !imdbId && !tvdbId) return { success: false, segments: [] };
+
+  const isTv = type === 'tv' || type === 'show' || Boolean(season);
+  const cacheKey = [
+    tmdbId || imdbId || tvdbId,
+    isTv ? 'tv' : 'movie',
+    season || '1',
+    episode || '1',
+    durationMs ? Math.round(Number(durationMs)) : 'none',
+  ].join(':');
+
+  const cached = getFromIntroDbCache(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
   try {
-    const params = new URLSearchParams();
-    if (tmdbId) params.set('tmdb_id', String(tmdbId));
-    if (imdbId) params.set('imdb_id', String(imdbId));
-    if (type) params.set('type', type);
-    if (type === 'tv') {
-      if (season) params.set('season', String(season));
-      if (episode) params.set('episode', String(episode));
-    }
-    if (durationMs) params.set('duration_ms', String(durationMs));
+    const url = new URL(INTRO_DB_BASE_URL);
+    if (tmdbId) url.searchParams.set('tmdb_id', String(tmdbId));
+    if (imdbId) url.searchParams.set('imdb_id', String(imdbId));
+    if (tvdbId) url.searchParams.set('tvdb_id', String(tvdbId));
 
-    const res = await fetch(`/api/timestamps?${params.toString()}`);
-    if (!res.ok) return { success: false, segments: [] };
+    if (isTv) {
+      url.searchParams.set('season', String(season || 1));
+      url.searchParams.set('episode', String(episode || 1));
+    }
+
+    if (durationMs && Number(durationMs) > 0) {
+      url.searchParams.set('duration_ms', String(Math.round(Number(durationMs))));
+    }
+
+    // Direct client-side fetch to IntroDB API (bypasses server bot protection in production)
+    const res = await fetch(url.toString(), {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        const notFoundData = {
+          success: false,
+          segments: [],
+          message: 'No intro/credits timestamps available for this title',
+        };
+        setToIntroDbCache(cacheKey, notFoundData);
+        return notFoundData;
+      }
+
+      return { success: false, segments: [] };
+    }
 
     const data = await res.json();
-    return data;
+    const durationSec = durationMs ? Math.round(Number(durationMs) / 1000) : null;
+    const segments = normalizeIntroDbSegments(data, durationSec);
+
+    const result = {
+      success: true,
+      tmdb_id: data.tmdb_id,
+      type: data.type || (isTv ? 'tv' : 'movie'),
+      season: data.season,
+      episode: data.episode,
+      segments,
+      raw: data,
+    };
+
+    setToIntroDbCache(cacheKey, result);
+    return result;
   } catch (error) {
-    console.warn('Failed to fetch Intro DB timestamps:', error);
+    console.warn('Failed to fetch Intro DB timestamps client-side:', error);
     return { success: false, segments: [] };
   }
 }
 
 /**
- * Submit timestamps to TheIntroDB (/v3/submit)
+ * Submit timestamps to TheIntroDB (/v3/submit) directly client-side.
  * @param {Object} payload
  */
 export async function submitIntroTimestamp(payload) {
   try {
-    const res = await fetch('/api/timestamps', {
+    const {
+      tmdbId,
+      imdbId,
+      tvdbId,
+      type = 'movie',
+      season,
+      episode,
+      segment,
+      videoDurationMs,
+      startMs,
+      endMs,
+    } = payload || {};
+
+    if (!tmdbId && !imdbId && !tvdbId) {
+      return { success: false, error: 'One of tmdbId, imdbId, or tvdbId is required' };
+    }
+
+    if (!segment || startMs == null || endMs == null) {
+      return { success: false, error: 'segment, startMs, and endMs are required' };
+    }
+
+    const body = {
+      ...(tmdbId ? { tmdb_id: Number(tmdbId) } : {}),
+      ...(imdbId ? { imdb_id: String(imdbId) } : {}),
+      ...(tvdbId ? { tvdb_id: Number(tvdbId) } : {}),
+      type: type === 'show' ? 'tv' : type,
+      segment,
+      start_ms: Number(startMs),
+      end_ms: Number(endMs),
+      ...(videoDurationMs != null ? { video_duration_ms: Number(videoDurationMs) } : {}),
+      ...(type === 'tv' || season ? { season: Number(season || 1), episode: Number(episode || 1) } : {}),
+    };
+
+    // Direct client-side POST to IntroDB (bypasses server bot protection in production)
+    const res = await fetch(INTRO_DB_SUBMIT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
-      body: JSON.stringify({
-        tmdb_id: payload.tmdbId,
-        imdb_id: payload.imdbId,
-        tvdb_id: payload.tvdbId,
-        type: payload.type || 'movie',
-        season: payload.season,
-        episode: payload.episode,
-        segment: payload.segment,
-        video_duration_ms: payload.videoDurationMs,
-        start_ms: payload.startMs,
-        end_ms: payload.endMs,
-      }),
+      body: JSON.stringify(body),
     });
 
     const data = await res.json();
-    return data;
+
+    if (!res.ok) {
+      return {
+        success: false,
+        error: data?.message || data?.error || 'Failed to submit timestamp to TheIntroDB',
+      };
+    }
+
+    const submissions = Array.isArray(data.submissions)
+      ? data.submissions
+      : data.submission
+      ? [data.submission]
+      : [];
+
+    return {
+      success: true,
+      submissions,
+      raw: data,
+    };
   } catch (error) {
-    console.warn('Failed to submit Intro DB timestamp:', error);
+    console.warn('Failed to submit Intro DB timestamp client-side:', error);
     return { success: false, error: error?.message || 'Network error' };
   }
 }
