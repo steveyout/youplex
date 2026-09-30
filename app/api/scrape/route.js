@@ -191,6 +191,7 @@ export async function GET(request) {
                 ...source,
                 alreadyProxied: true,
               })),
+              thumbnailTrack: providerResult.thumbnailTrack || providerResult.sources?.[0]?.thumbnailTrack || null,
               subtitles: providerResult.subtitles || [],
             });
           } else {
@@ -310,6 +311,7 @@ export async function GET(request) {
           ...source,
           alreadyProxied: true,
         })),
+        thumbnailTrack: providerResult.thumbnailTrack || providerResult.sources?.[0]?.thumbnailTrack || null,
         subtitles: providerResult.subtitles || [],
       });
     }

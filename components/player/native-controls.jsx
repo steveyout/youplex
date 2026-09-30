@@ -2,14 +2,20 @@
 
 import { Iconify } from '@/components/iconify';
 import { usePlayerControls } from '@/hooks/use-player-controls';
+import { useMovieChapters } from './use-movie-chapters';
+import { useVideoPreview } from './use-video-preview';
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   formatTime,
+  Thumbnail,
   useMediaStore,
+  useMediaState,
   useMediaRemote,
   useCaptionOptions,
   useVideoQualityOptions,
   usePlaybackRateOptions,
+  GoogleCastButton,
+  AirPlayButton,
 } from '@vidstack/react';
 
 import Box from '@mui/material/Box';
@@ -21,6 +27,8 @@ import Divider from '@mui/material/Divider';
 import { alpha } from '@mui/material/styles';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
+import Drawer from '@mui/material/Drawer';
+import Avatar from '@mui/material/Avatar';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -173,13 +181,50 @@ export default function NativeControls({
   onModeChange,
   allowModeChange = true,
   handleSelectServer,
+  onSelectServer,
   currentServerLabel = 'Native Player',
+  videoSrc = null,
+  thumbnailsUrl = null,
   timelineSegments = [],
   hasNextEpisode = false,
   onNextEpisode = null,
+  backdrop = null,
+  type = 'movie',
+  chapters: explicitChapters = null,
+  cast = [],
 }) {
   const remote = useMediaRemote();
   const store = useMediaStore();
+
+  // Cast & AirPlay remote playback states
+  const canGoogleCast = useMediaState('canGoogleCast');
+  const canAirPlay = useMediaState('canAirPlay');
+  const isGoogleCastConnected = useMediaState('isGoogleCastConnected');
+  const isAirPlayConnected = useMediaState('isAirPlayConnected');
+  const remotePlaybackType = useMediaState('remotePlaybackType');
+  const remotePlaybackState = useMediaState('remotePlaybackState');
+  const remotePlaybackInfo = useMediaState('remotePlaybackInfo');
+  const selectServer = onSelectServer || handleSelectServer;
+
+  // Keyboard shortcut 'r' / 'R' for Who's this? (Cast & Characters)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName) ||
+        e.target?.isContentEditable
+      ) {
+        return;
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        if (cast.length > 0) {
+          e.preventDefault();
+          setCastOpen((prev) => !prev);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cast.length]);
 
   const captions = useCaptionOptions({ off: 'Off' });
   const qualities = useVideoQualityOptions({ auto: 'Auto' });
@@ -190,7 +235,8 @@ export default function NativeControls({
   const [setAnchor, setSetAnchor] = useState(null);
   const [srvAnchor, setSrvAnchor] = useState(null);
 
-  const isMenuOpen = Boolean(capAnchor || setAnchor || srvAnchor);
+  const [castOpen, setCastOpen] = useState(false);
+  const isMenuOpen = Boolean(capAnchor || setAnchor || srvAnchor || castOpen);
   const { visible: uiVisible, show: showUI } = usePlayerControls(store.paused, isMenuOpen);
 
   // Seekbar interactive state
@@ -218,6 +264,33 @@ export default function NativeControls({
     : volume < 0.4
     ? 'solar:volume-small-bold'
     : 'solar:volume-bold';
+
+  // Compute movie chapters & active chapter info
+  const { chapters, getChapterAtTime } = useMovieChapters({
+    duration: maxSeek,
+    timelineSegments,
+    explicitChapters,
+    type,
+  });
+
+  const currentActiveChapter = getChapterAtTime(active);
+  const hoveredChapter = hoverSeek ? getChapterAtTime(hoverSeek.time) : null;
+
+  // Live video chunk & cached frame preview for hover scrub (like Netflix / YouTube)
+  const { previewCanvasRef, hasFrame } = useVideoPreview({
+    videoSrc,
+    hoverTime: hoverSeek?.time,
+    isHovering: Boolean(hoverSeek && canSeek),
+  });
+
+  // Clamped horizontal coordinate for preview tooltip card to prevent clipping
+  const previewCardWidth = 220;
+  const previewHalfWidth = previewCardWidth / 2;
+  const clampedPreviewX = hoverSeek
+    ? hoverSeek.width > previewCardWidth + 16
+      ? clamp(hoverSeek.x, previewHalfWidth + 8, hoverSeek.width - previewHalfWidth - 8)
+      : hoverSeek.x
+    : 0;
 
   const hasActiveCaption = captions.some((c) => c.selected && c.value !== 'off');
 
@@ -624,7 +697,7 @@ export default function NativeControls({
           )}
 
           {/* Server / Extractor Dropdown Button */}
-          {serverList.length > 0 && handleSelectServer && (
+          {serverList.length > 0 && selectServer && (
             <>
               <PlayerTooltip title="Switch stream provider / server" arrow placement="bottom">
                 <Box
@@ -713,7 +786,7 @@ export default function NativeControls({
                     <MenuItem
                       key={server.id}
                       onClick={() => {
-                        handleSelectServer?.(server);
+                        selectServer?.(server);
                         setSrvAnchor(null);
                       }}
                       selected={isSelected}
@@ -806,7 +879,10 @@ export default function NativeControls({
           justifyContent="center"
           sx={{
             position: 'absolute',
-            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: { xs: 76, sm: 88 },
             zIndex: 4,
             pointerEvents: 'none',
             animation: 'youplex-fade-scale 0.5s ease-out both',
@@ -815,7 +891,7 @@ export default function NativeControls({
           <Box
             sx={{
               ...glassPanelSx,
-              p: 2.5,
+              p: { xs: 1.5, sm: 2.5 },
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
@@ -823,10 +899,18 @@ export default function NativeControls({
               color: 'common.white',
             }}
           >
-            {seekFeedback.type === 'rewind' && <Iconify icon="ic:round-replay-10" width={48} />}
-            {seekFeedback.type === 'forward' && <Iconify icon="ic:round-forward-10" width={48} />}
-            {seekFeedback.type === 'play' && <Iconify icon="solar:play-bold" width={48} />}
-            {seekFeedback.type === 'pause' && <Iconify icon="solar:pause-bold" width={48} />}
+            {seekFeedback.type === 'rewind' && (
+              <Iconify icon="ic:round-replay-10" sx={{ width: { xs: 34, sm: 48 }, height: { xs: 34, sm: 48 } }} />
+            )}
+            {seekFeedback.type === 'forward' && (
+              <Iconify icon="ic:round-forward-10" sx={{ width: { xs: 34, sm: 48 }, height: { xs: 34, sm: 48 } }} />
+            )}
+            {seekFeedback.type === 'play' && (
+              <Iconify icon="solar:play-bold" sx={{ width: { xs: 34, sm: 48 }, height: { xs: 34, sm: 48 } }} />
+            )}
+            {seekFeedback.type === 'pause' && (
+              <Iconify icon="solar:pause-bold" sx={{ width: { xs: 34, sm: 48 }, height: { xs: 34, sm: 48 } }} />
+            )}
           </Box>
         </Stack>
       )}
@@ -836,19 +920,31 @@ export default function NativeControls({
         <Stack
           alignItems="center"
           justifyContent="center"
-          sx={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none' }}
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: { xs: 76, sm: 88 },
+            zIndex: 3,
+            pointerEvents: 'none',
+          }}
         >
           <Box
             sx={{
               ...glassPanelSx,
-              p: 2.5,
+              p: { xs: 1.75, sm: 2.5 },
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <CircularProgress size={56} thickness={3.5} sx={{ color: 'primary.main' }} />
+            <CircularProgress
+              size={48}
+              thickness={3.5}
+              sx={{ color: 'primary.main', width: { xs: 40, sm: 52 }, height: { xs: 40, sm: 52 } }}
+            />
           </Box>
         </Stack>
       ) : (
@@ -859,9 +955,13 @@ export default function NativeControls({
             justifyContent="center"
             sx={{
               position: 'absolute',
-              inset: 0,
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: { xs: 76, sm: 88 },
               zIndex: 3,
               pointerEvents: 'none',
+              display: { xs: 'none', sm: 'flex' },
               opacity: uiVisible ? 1 : 0,
               transform: uiVisible ? 'scale(1)' : 'scale(0.9)',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -876,7 +976,7 @@ export default function NativeControls({
                 pointerEvents: 'auto',
                 color: 'common.white',
                 ...glassPanelSx,
-                p: { xs: 2.25, sm: 3 },
+                p: { xs: 2, sm: 3 },
                 borderRadius: '50%',
                 transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 '&:hover': {
@@ -900,9 +1000,9 @@ export default function NativeControls({
           bottom: 0,
           left: 0,
           right: 0,
-          px: { xs: 1.5, sm: 3 },
-          pb: { xs: 1.5, sm: 2 },
-          pt: 3,
+          px: { xs: 1.25, sm: 3 },
+          pb: { xs: 1.25, sm: 2 },
+          pt: { xs: 1.5, sm: 3 },
           zIndex: 10,
           opacity: uiVisible ? 1 : 0,
           transform: uiVisible ? 'translateY(0)' : 'translateY(10px)',
@@ -934,86 +1034,282 @@ export default function NativeControls({
             },
           }}
         >
-          {/* Hover Time & Segment Tooltip */}
+          {/* Hover Time & Video Frame Preview (Netflix / YouTube Style) */}
           {hoverSeek && canSeek && (
             <Box
               sx={{
                 position: 'absolute',
-                left: `${hoverSeek.pct}%`,
-                bottom: '100%',
-                mb: 1.25,
+                left: `${clampedPreviewX}px`,
+                bottom: 'calc(100% + 14px)',
                 transform: 'translateX(-50%)',
                 pointerEvents: 'none',
-                zIndex: 7,
+                zIndex: 30,
+                width: { xs: 190, sm: 220 },
                 ...glassPanelSx,
-                px: 1.25,
-                py: 0.5,
-                borderRadius: 1.5,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.85,
-                whiteSpace: 'nowrap',
+                bgcolor: alpha('#0a0d14', 0.94),
+                border: `1px solid ${alpha('#ffffff', 0.16)}`,
+                borderRadius: 1.75,
+                boxShadow: `0 16px 40px -4px rgba(0,0,0,0.85), 0 0 20px ${alpha('#000000', 0.6)}`,
+                overflow: 'hidden',
+                animation: 'youplex-fade-up 0.18s cubic-bezier(0.16, 1, 0.3, 1) both',
               }}
             >
-              <Typography
-                variant="caption"
+              {/* 16:9 Thumbnail / Live Video Chunk Area */}
+              <Box
                 sx={{
-                  color: 'common.white',
-                  fontWeight: 700,
-                  fontSize: 12,
-                  fontVariantNumeric: 'tabular-nums',
+                  position: 'relative',
+                  width: 1,
+                  aspectRatio: '16/9',
+                  bgcolor: '#050709',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                {durationText(hoverSeek.time)}
-              </Typography>
+                {/* 1. WebVTT Storyboard thumbnail spritesheet if provided */}
+                {thumbnailsUrl && (
+                  <Thumbnail.Root
+                    src={thumbnailsUrl}
+                    time={hoverSeek.time}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      overflow: 'hidden',
+                      zIndex: 1,
+                    }}
+                  >
+                    <Thumbnail.Img
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  </Thumbnail.Root>
+                )}
 
-              {(() => {
-                const seg = timelineSegments.find((s) => {
-                  const sStart = Number(s.start) || 0;
-                  const sEnd = s.end != null ? Number(s.end) : maxSeek;
-                  return hoverSeek.time >= sStart && hoverSeek.time <= sEnd;
-                });
-                if (!seg) return null;
-                const palette = SEGMENT_PALETTE[seg.type] || {
-                  color: seg.color || '#FFB800',
-                  label: seg.label || 'Segment',
-                };
-                return (
+                {/* 2. Live Canvas Video Frame Preview (Always displays on played & scrubbed frames, zero CORS error) */}
+                {!thumbnailsUrl && (
+                  <canvas
+                    ref={previewCanvasRef}
+                    width={320}
+                    height={180}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      zIndex: 2,
+                    }}
+                  />
+                )}
+
+                {/* 3. Dark cinematic placeholder while initial chunk decodes */}
+                {!hasFrame && !thumbnailsUrl && (
                   <Box
                     sx={{
-                      display: 'inline-flex',
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'radial-gradient(circle at center, #141b26 0%, #06090e 100%)',
+                    }}
+                  >
+                    <Iconify icon="solar:clapperboard-play-bold" width={28} sx={{ color: alpha('#ffffff', 0.25) }} />
+                  </Box>
+                )}
+
+                {/* Subtle vignette gradient */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    zIndex: 3,
+                    background:
+                      'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.85) 100%)',
+                    pointerEvents: 'none',
+                  }}
+                />
+
+                {/* Top-Left Segment / Real Chapter Badge */}
+                {hoveredChapter && (hoveredChapter.isRealChapter || hoveredChapter.isSegment) && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 7,
+                      left: 7,
+                      px: 0.85,
+                      py: 0.3,
+                      borderRadius: 1,
+                      bgcolor: alpha('#000000', 0.8),
+                      backdropFilter: 'blur(8px)',
+                      border: `1px solid ${alpha(
+                        hoveredChapter.type === 'intro'
+                          ? '#FFB800'
+                          : hoveredChapter.type === 'credits' || hoveredChapter.type === 'outro'
+                          ? '#8E33FF'
+                          : hoveredChapter.type === 'recap'
+                          ? '#00B8D9'
+                          : '#ffffff',
+                        0.35
+                      )}`,
+                      display: 'flex',
                       alignItems: 'center',
                       gap: 0.5,
-                      px: 0.75,
-                      py: 0.15,
-                      borderRadius: 1,
-                      bgcolor: alpha(palette.color, 0.22),
-                      border: `1px solid ${alpha(palette.color, 0.55)}`,
+                      zIndex: 4,
                     }}
                   >
                     <Box
                       sx={{
-                        width: 6,
-                        height: 6,
+                        width: 5,
+                        height: 5,
                         borderRadius: '50%',
-                        bgcolor: palette.color,
-                        boxShadow: `0 0 6px ${palette.color}`,
+                        bgcolor:
+                          hoveredChapter.type === 'intro'
+                            ? '#FFB800'
+                            : hoveredChapter.type === 'credits' || hoveredChapter.type === 'outro'
+                            ? '#8E33FF'
+                            : hoveredChapter.type === 'recap'
+                            ? '#00B8D9'
+                            : 'primary.light',
                       }}
                     />
                     <Typography
                       variant="caption"
                       sx={{
-                        color: palette.color,
+                        color: 'common.white',
                         fontWeight: 700,
-                        fontSize: 11,
-                        lineHeight: 1.1,
+                        fontSize: 9.5,
+                        letterSpacing: 0.4,
+                        textTransform: 'uppercase',
+                        lineHeight: 1,
                       }}
                     >
-                      {palette.label}
+                      {hoveredChapter.badge || hoveredChapter.title}
                     </Typography>
                   </Box>
-                );
-              })()}
+                )}
+
+                {/* Bottom-Right Monospace Timestamp */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: 6,
+                    right: 6,
+                    px: 0.85,
+                    py: 0.25,
+                    borderRadius: 1,
+                    bgcolor: alpha('#000000', 0.85),
+                    backdropFilter: 'blur(8px)',
+                    border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                    zIndex: 4,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'common.white',
+                      fontWeight: 700,
+                      fontSize: 11.5,
+                      fontVariantNumeric: 'tabular-nums',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {durationText(hoverSeek.time)}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Video Preview Metadata Footer */}
+              <Box sx={{ p: 1.25, pt: 1 }}>
+                <Typography
+                  variant="caption"
+                  noWrap
+                  sx={{
+                    display: 'block',
+                    color: 'common.white',
+                    fontWeight: 700,
+                    fontSize: { xs: 11.5, sm: 12.5 },
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {hoveredChapter?.title || (title ? `${title}${season ? ` • S${season} E${episode}` : ''}` : 'Preview')}
+                </Typography>
+
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  spacing={1}
+                  sx={{ mt: 0.35 }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: alpha('#ffffff', 0.6),
+                      fontSize: 10.5,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {hoveredChapter && hoveredChapter.isRealChapter
+                      ? `${durationText(hoveredChapter.start)} - ${durationText(hoveredChapter.end)}`
+                      : durationText(hoverSeek.time)}
+                  </Typography>
+
+                  {/* Matched intro/recap/credits badge */}
+                  {(() => {
+                    const seg = timelineSegments.find((s) => {
+                      const sStart = Number(s.start) || 0;
+                      const sEnd = s.end != null ? Number(s.end) : maxSeek;
+                      return hoverSeek.time >= sStart && hoverSeek.time <= sEnd;
+                    });
+                    if (!seg) return null;
+                    const palette = SEGMENT_PALETTE[seg.type] || {
+                      color: seg.color || '#FFB800',
+                      label: seg.label || 'Segment',
+                    };
+                    return (
+                      <Box
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 0.4,
+                          px: 0.6,
+                          py: 0.1,
+                          borderRadius: 0.75,
+                          bgcolor: alpha(palette.color, 0.22),
+                          border: `1px solid ${alpha(palette.color, 0.55)}`,
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 4,
+                            height: 4,
+                            borderRadius: '50%',
+                            bgcolor: palette.color,
+                          }}
+                        />
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: palette.color,
+                            fontWeight: 700,
+                            fontSize: 9.5,
+                            lineHeight: 1,
+                          }}
+                        >
+                          {palette.label}
+                        </Typography>
+                      </Box>
+                    );
+                  })()}
+                </Stack>
+              </Box>
             </Box>
           )}
 
@@ -1151,6 +1447,31 @@ export default function NativeControls({
                 </Box>
               );
             })}
+
+          {/* Chapter Dividers on Timeline (Only for real chapter markers) */}
+          {canSeek &&
+            chapters
+              .filter((ch) => ch.isRealChapter && ch.start > 0)
+              .map((ch, idx) => {
+                const leftPct = (ch.start / maxSeek) * 100;
+                return (
+                  <Box
+                    key={`ch-div-${ch.id || idx}`}
+                    sx={{
+                      position: 'absolute',
+                      left: `${leftPct}%`,
+                      top: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: 2,
+                      height: 8,
+                      bgcolor: '#050709',
+                      borderRadius: 0.5,
+                      zIndex: 4,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                );
+              })}
 
           {/* Scrub Thumb */}
           <Box
@@ -1312,7 +1633,91 @@ export default function NativeControls({
             </Typography>
           </PlayerTooltip>
 
+          {/* Active Chapter / Segment Label (Only for real chapters/segments) */}
+          {currentActiveChapter && (currentActiveChapter.isRealChapter || currentActiveChapter.isSegment) && (
+            <Box
+              sx={{
+                display: { xs: 'none', md: 'flex' },
+                alignItems: 'center',
+                gap: 0.75,
+                px: 1,
+                py: 0.3,
+                borderRadius: 1,
+                bgcolor: alpha('#ffffff', 0.08),
+                border: `1px solid ${alpha('#ffffff', 0.12)}`,
+                maxWidth: 220,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: '50%',
+                  bgcolor:
+                    currentActiveChapter.type === 'intro'
+                      ? '#FFB800'
+                      : currentActiveChapter.type === 'credits' || currentActiveChapter.type === 'outro'
+                      ? '#8E33FF'
+                      : currentActiveChapter.type === 'recap'
+                      ? '#00B8D9'
+                      : 'primary.light',
+                  flexShrink: 0,
+                }}
+              />
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{
+                  color: alpha('#ffffff', 0.9),
+                  fontWeight: 600,
+                  fontSize: 11.5,
+                }}
+              >
+                {currentActiveChapter.title}
+              </Typography>
+            </Box>
+          )}
+
           <Box sx={{ flexGrow: 1 }} />
+
+          {/* Who's this? / Cast Button */}
+          {cast.length > 0 && (
+            <PlayerTooltip title="Who's this? / Actors (r)" placement="top" arrow>
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCastOpen((prev) => !prev);
+                }}
+                sx={{
+                  ...controlButtonSx,
+                  position: 'relative',
+                  color: castOpen ? 'primary.main' : 'common.white',
+                  bgcolor: castOpen ? alpha('#FF3030', 0.16) : 'transparent',
+                }}
+              >
+                <Iconify icon="solar:users-group-rounded-bold" width={22} />
+              </IconButton>
+            </PlayerTooltip>
+          )}
+
+          {/* Server Switcher Button (Next to Subtitles) */}
+          {serverList.length > 0 && selectServer && (
+            <PlayerTooltip title={`Servers (${currentServerLabel})`} placement="top" arrow>
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSrvAnchor(e.currentTarget);
+                }}
+                sx={{
+                  ...controlButtonSx,
+                  position: 'relative',
+                  color: 'common.white',
+                }}
+              >
+                <Iconify icon="solar:server-2-bold" width={22} />
+              </IconButton>
+            </PlayerTooltip>
+          )}
 
           {/* Captions / Subtitles Menu */}
           <PlayerTooltip title="Subtitles & Audio (c)" placement="top" arrow>
@@ -1360,6 +1765,54 @@ export default function NativeControls({
             </PlayerTooltip>
           )}
 
+          {/* Apple AirPlay */}
+          {canAirPlay && (
+            <PlayerTooltip
+              title={isAirPlayConnected ? 'AirPlay Connected (Tap to Disconnect)' : 'Apple AirPlay'}
+              placement="top"
+              arrow
+            >
+              <AirPlayButton asChild>
+                <IconButton
+                  sx={{
+                    ...controlButtonSx,
+                    color: isAirPlayConnected ? 'primary.light' : 'common.white',
+                    bgcolor: isAirPlayConnected ? alpha('#FF3030', 0.16) : 'transparent',
+                  }}
+                >
+                  <Iconify
+                    icon={isAirPlayConnected ? 'material-symbols:airplay' : 'material-symbols:airplay-rounded'}
+                    width={22}
+                  />
+                </IconButton>
+              </AirPlayButton>
+            </PlayerTooltip>
+          )}
+
+          {/* Google Cast / Chromecast */}
+          {(canGoogleCast || (!canAirPlay && typeof window !== 'undefined' && !!window.chrome)) && (
+            <PlayerTooltip
+              title={isGoogleCastConnected ? 'Chromecast Connected (Tap to Disconnect)' : 'Cast to TV (Chromecast)'}
+              placement="top"
+              arrow
+            >
+              <GoogleCastButton asChild>
+                <IconButton
+                  sx={{
+                    ...controlButtonSx,
+                    color: isGoogleCastConnected ? 'primary.light' : 'common.white',
+                    bgcolor: isGoogleCastConnected ? alpha('#FF3030', 0.16) : 'transparent',
+                  }}
+                >
+                  <Iconify
+                    icon={isGoogleCastConnected ? 'solar:screencast-bold' : 'solar:screencast-2-bold'}
+                    width={22}
+                  />
+                </IconButton>
+              </GoogleCastButton>
+            </PlayerTooltip>
+          )}
+
           {/* Fullscreen */}
           {store.canFullscreen && (
             <PlayerTooltip
@@ -1383,7 +1836,7 @@ export default function NativeControls({
       <Box
         sx={{
           position: 'absolute',
-          top: '50%',
+          top: '44%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
           zIndex: 4,
@@ -1451,13 +1904,84 @@ export default function NativeControls({
       </Box>
 
 
-      {/* ===================== FLOATING SKIP BUTTON (NETFLIX STYLE) ===================== */}
+      {/* ===================== FLOATING "WHO'S THIS?" BUTTON (NETFLIX / CINECAT STYLE) ===================== */}
+      {cast.length > 0 && uiVisible && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: activeSegment ? { xs: 120, sm: 144 } : { xs: 74, sm: 96 },
+            right: { xs: 12, sm: 24 },
+            zIndex: 24,
+            pointerEvents: 'auto',
+            animation: 'youplex-fade-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both',
+          }}
+        >
+          <Button
+            variant="contained"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCastOpen(true);
+            }}
+            startIcon={
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 18,
+                  height: 18,
+                  borderRadius: 0.5,
+                  bgcolor: alpha('#ffffff', 0.22),
+                  color: 'common.white',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  mr: 0.25,
+                }}
+              >
+                R
+              </Box>
+            }
+            sx={{
+              ...glassPanelSx,
+              bgcolor: alpha('#0d1117', 0.88),
+              color: 'common.white',
+              border: `1px solid ${alpha('#ffffff', 0.3)}`,
+              boxShadow: `0 6px 24px rgba(0, 0, 0, 0.6), 0 0 12px ${alpha('#000000', 0.4)}`,
+              backdropFilter: 'blur(16px)',
+              py: { xs: 0.7, sm: 0.85 },
+              px: { xs: 1.5, sm: 2 },
+              borderRadius: 1.25,
+              fontSize: { xs: 12, sm: 13 },
+              fontWeight: 600,
+              letterSpacing: 0.2,
+              textTransform: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              '&:hover': {
+                bgcolor: alpha('#161c24', 0.98),
+                borderColor: alpha('#ffffff', 0.6),
+                transform: 'translateY(-1px)',
+                boxShadow: `0 8px 28px rgba(0, 0, 0, 0.75), 0 0 16px ${alpha('#ffffff', 0.2)}`,
+              },
+              '&:active': {
+                transform: 'translateY(0) scale(0.98)',
+              },
+            }}
+          >
+            Who&apos;s this?
+          </Button>
+        </Box>
+      )}
+
+      {/* ===================== FLOATING SKIP BUTTON (THEMED UI STYLE) ===================== */}
       {activeSegment && (
         <Box
           sx={{
             position: 'absolute',
-            bottom: { xs: 88, sm: 104 },
-            right: { xs: 16, sm: 28 },
+            bottom: { xs: 74, sm: 96 },
+            right: { xs: 12, sm: 24 },
             zIndex: 25,
             pointerEvents: 'auto',
             animation: 'youplex-fade-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both',
@@ -1493,17 +2017,17 @@ export default function NativeControls({
                 }
                 sx={{
                   ...glassPanelSx,
-                  bgcolor: alpha('#0d1117', 0.9),
+                  bgcolor: alpha('#0d1117', 0.88),
                   color: 'common.white',
-                  border: `1.5px solid ${alpha(palette.color || '#ffffff', 0.45)}`,
-                  boxShadow: `0 8px 32px rgba(0, 0, 0, 0.75), 0 0 16px ${alpha(palette.color || '#FF3030', 0.25)}`,
+                  border: `1px solid ${alpha(palette.color || '#ffffff', 0.4)}`,
+                  boxShadow: `0 6px 24px rgba(0, 0, 0, 0.6), 0 0 12px ${alpha(palette.color || '#FF3030', 0.2)}`,
                   backdropFilter: 'blur(16px)',
-                  py: { xs: 0.85, sm: 1 },
-                  px: { xs: 2, sm: 2.25 },
-                  borderRadius: 2.5,
-                  fontSize: { xs: 13, sm: 14 },
-                  fontWeight: 700,
-                  letterSpacing: 0.3,
+                  py: { xs: 0.75, sm: 0.9 },
+                  px: { xs: 1.75, sm: 2.25 },
+                  borderRadius: 1.25, // somewhat rounded (10px / 8px) matching UI buttons, NOT pill!
+                  fontSize: { xs: 12.5, sm: 13.5 },
+                  fontWeight: 600,
+                  letterSpacing: 0.2,
                   textTransform: 'none',
                   cursor: 'pointer',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1511,8 +2035,8 @@ export default function NativeControls({
                     bgcolor: alpha('#161c24', 0.98),
                     borderColor: palette.color || '#FF3030',
                     color: 'common.white',
-                    transform: 'translateY(-2px) scale(1.03)',
-                    boxShadow: `0 12px 32px rgba(0, 0, 0, 0.85), 0 0 20px ${alpha(palette.color || '#FF3030', 0.45)}`,
+                    transform: 'translateY(-1px)',
+                    boxShadow: `0 8px 28px rgba(0, 0, 0, 0.75), 0 0 16px ${alpha(palette.color || '#FF3030', 0.35)}`,
                   },
                   '&:active': {
                     transform: 'translateY(0) scale(0.98)',

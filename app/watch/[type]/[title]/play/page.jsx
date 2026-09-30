@@ -347,16 +347,34 @@ export default function PlayPage() {
 
   const parsedFallbackTitle = cleanSlugTitle(title);
   const displayTitle = movieOrShow?.title || movieOrShow?.name || parsedFallbackTitle || '';
-  const backdropUrl = movieOrShow?.backdrop_path
-    ? `https://image.tmdb.org/t/p/original${movieOrShow.backdrop_path}`
-    : '';
   const seasons = movieOrShow?.seasons?.filter((item) => item.season_number > 0) || [];
   const selectedSeason = resolvedSeason;
   const selectedEpisode = resolvedEpisode;
+  const currentEpisodeData = seasonEpisodes.find((ep) => ep.episode_number === selectedEpisode);
+  const episodeStillUrl = currentEpisodeData?.still_path
+    ? `https://image.tmdb.org/t/p/w780${currentEpisodeData.still_path}`
+    : null;
+  const backdropUrl =
+    episodeStillUrl ||
+    (movieOrShow?.backdrop_path ? `https://image.tmdb.org/t/p/original${movieOrShow.backdrop_path}` : '') ||
+    movieOrShow?.backdrop ||
+    '';
   const currentSeason = seasons.find((item) => item.season_number === selectedSeason);
   const episodeCount = currentSeason?.episode_count || seasonEpisodes.length || 0;
 
-  const currentEpisodeData = seasonEpisodes.find((ep) => ep.episode_number === selectedEpisode);
+  const combinedCast = useMemo(() => {
+    const mainCast = movieOrShow?.cast || movieOrShow?.credits?.cast || [];
+    const guestStars = currentEpisodeData?.guest_stars || [];
+    const seen = new Set();
+    const result = [];
+    for (const person of [...guestStars, ...mainCast]) {
+      if (person?.id && !seen.has(person.id)) {
+        seen.add(person.id);
+        result.push(person);
+      }
+    }
+    return result;
+  }, [movieOrShow?.cast, movieOrShow?.credits?.cast, currentEpisodeData?.guest_stars]);
 
   const navigateToEpisode = useCallback((nextSeason, nextEpisode) => {
     setIsLoading(true);
@@ -1016,13 +1034,14 @@ export default function PlayPage() {
       </Drawer>
 
       {/* Player */}
-      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', px: { xs: 1, sm: 3 }, pb: 3 }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', px: { xs: 0, sm: 3 }, pb: { xs: 1.5, sm: 3 } }}>
         {isLoading && !movieOrShow && !error ? (
           <VideoLoadingState
             title={displayTitle}
             season={type === 'tv' ? selectedSeason : null}
             episode={type === 'tv' ? selectedEpisode : null}
             backdrop={backdropUrl}
+              cast={combinedCast}
             feedback={scrapeFeedback}
           />
         ) : error || !movieOrShow ? (
@@ -1044,7 +1063,7 @@ export default function PlayPage() {
             </Stack>
           </Container>
         ) : (
-          <Container maxWidth="xl" sx={{ width: 1 }}>
+          <Container maxWidth="xl" disableGutters sx={{ width: 1, px: { xs: 0.5, sm: 2 } }}>
             <Player
               title={displayTitle}
               type={type}

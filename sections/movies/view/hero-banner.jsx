@@ -23,13 +23,23 @@ import {
 // ----------------------------------------------------------------------
 
 const contentVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.13, delayChildren: 0.2 } },
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.06,
+      delayChildren: 0.05,
+    },
+  },
 };
 
 const contentItemVariants = {
-  hidden: { opacity: 0, y: 28 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } },
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.42, ease: [0.22, 1, 0.36, 1] },
+  },
 };
 
 // ----------------------------------------------------------------------
@@ -44,6 +54,8 @@ export function HeroBanner({ items }) {
   );
 
   if (!items || items.length === 0) return null;
+
+  const activeIndex = carousel?.dots?.selectedIndex ?? 0;
 
   return (
     <Box
@@ -67,9 +79,9 @@ export function HeroBanner({ items }) {
       >
         {items.map((item, index) => (
           <HeroBannerItem
-            key={item.id}
+            key={`${item.id}-${index}`}
             item={item}
-            isActive={index === carousel?.dots?.selectedIndex}
+            isActive={index === activeIndex}
           />
         ))}
       </Carousel>
@@ -184,7 +196,7 @@ function HeroBannerItem({ item, isActive }) {
       >
         <m.div
           variants={contentVariants}
-          initial="hidden"
+          initial={false}
           animate={isActive ? 'visible' : 'hidden'}
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 16 }}
         >
@@ -283,58 +295,64 @@ function HeroBannerItem({ item, isActive }) {
             </Typography>
           </m.div>
 
-          {/* Actions */}
+          {/* Actions - Always rendered and accessible without variant collision */}
           <m.div variants={contentItemVariants}>
-            <Stack direction="row" spacing={1.5}>
-              <m.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.96 }}>
-                <Button
-                  variant="contained"
-                  className="youplex-shimmer"
-                  onClick={handlePlayDirect}
-                  sx={{
-                    px: 3.5,
-                    py: 1.05,
-                    borderRadius: 999,
-                    fontWeight: 800,
-                    textTransform: 'none',
-                    color: 'common.white',
-                    background: `linear-gradient(110deg, ${theme.vars.palette.primary.darker} 0%, ${theme.vars.palette.primary.main} 35%, ${theme.vars.palette.primary.light} 50%, ${theme.vars.palette.primary.main} 65%, ${theme.vars.palette.primary.darker} 100%)`,
-                    boxShadow: `0 12px 32px -8px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.75)}`,
-                    '&:hover': {
-                      boxShadow: `0 16px 40px -8px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.9)}`,
-                    },
-                  }}
-                >
-                  <Iconify icon="solar:play-bold" width={18} sx={{ mr: 0.75 }} />
-                  Play Now
-                </Button>
-              </m.div>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Button
+                variant="contained"
+                className="youplex-shimmer"
+                onClick={handlePlayDirect}
+                sx={{
+                  px: 3.5,
+                  py: 1.05,
+                  borderRadius: 999,
+                  fontWeight: 800,
+                  textTransform: 'none',
+                  color: 'common.white',
+                  background: `linear-gradient(110deg, ${theme.vars.palette.primary.darker} 0%, ${theme.vars.palette.primary.main} 35%, ${theme.vars.palette.primary.light} 50%, ${theme.vars.palette.primary.main} 65%, ${theme.vars.palette.primary.darker} 100%)`,
+                  boxShadow: `0 12px 32px -8px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.75)}`,
+                  transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease',
+                  '&:hover': {
+                    transform: 'scale(1.05)',
+                    boxShadow: `0 16px 40px -8px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.9)}`,
+                  },
+                  '&:active': {
+                    transform: 'scale(0.96)',
+                  },
+                }}
+              >
+                <Iconify icon="solar:play-bold" width={18} sx={{ mr: 0.75 }} />
+                Play Now
+              </Button>
 
-              <m.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.96 }}>
-                <Button
-                  variant="soft"
-                  color="inherit"
-                  onClick={handleWatch}
-                  sx={{
-                    px: 3.5,
-                    py: 1.05,
-                    borderRadius: 999,
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    color: 'common.white',
-                    border: '1px solid',
-                    borderColor: 'rgba(255,255,255,0.2)',
-                    bgcolor: 'rgba(255,255,255,0.08)',
-                    backdropFilter: 'blur(10px)',
-                    '&:hover': {
-                      bgcolor: 'rgba(255,255,255,0.18)',
-                      borderColor: 'rgba(255,255,255,0.32)',
-                    },
-                  }}
-                >
-                  More Info
-                </Button>
-              </m.div>
+              <Button
+                variant="soft"
+                color="inherit"
+                onClick={handleWatch}
+                sx={{
+                  px: 3.5,
+                  py: 1.05,
+                  borderRadius: 999,
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  color: 'common.white',
+                  border: '1px solid',
+                  borderColor: 'rgba(255,255,255,0.2)',
+                  bgcolor: 'rgba(255,255,255,0.08)',
+                  backdropFilter: 'blur(10px)',
+                  transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, border-color 0.2s ease',
+                  '&:hover': {
+                    transform: 'scale(1.05)',
+                    bgcolor: 'rgba(255,255,255,0.18)',
+                    borderColor: 'rgba(255,255,255,0.32)',
+                  },
+                  '&:active': {
+                    transform: 'scale(0.96)',
+                  },
+                }}
+              >
+                More Info
+              </Button>
             </Stack>
           </m.div>
         </m.div>
