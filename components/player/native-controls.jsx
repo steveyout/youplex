@@ -24,7 +24,7 @@ import Stack from '@mui/material/Stack';
 import Slider from '@mui/material/Slider';
 import Tooltip from '@mui/material/Tooltip';
 import Divider from '@mui/material/Divider';
-import { alpha } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
 import Drawer from '@mui/material/Drawer';
@@ -193,6 +193,10 @@ export default function NativeControls({
   chapters: explicitChapters = null,
   cast = [],
 }) {
+  const theme = useTheme();
+  const primaryColor = theme?.palette?.primary?.main || '#FF3030';
+  const primaryLight = theme?.palette?.primary?.light || '#FF6060';
+
   const remote = useMediaRemote();
   const store = useMediaStore();
 
@@ -652,7 +656,7 @@ export default function NativeControls({
                   bgcolor: resolvedMode === 'native' ? 'primary.main' : 'transparent',
                   boxShadow:
                     resolvedMode === 'native'
-                      ? `0 2px 10px ${alpha('#FF3030', 0.45)}`
+                      ? `0 2px 10px ${alpha(primaryColor, 0.45)}`
                       : 'none',
                   transition: 'all 0.2s ease',
                   '&:hover': {
@@ -681,7 +685,7 @@ export default function NativeControls({
                   bgcolor: resolvedMode === 'embed' ? 'primary.main' : 'transparent',
                   boxShadow:
                     resolvedMode === 'embed'
-                      ? `0 2px 10px ${alpha('#FF3030', 0.45)}`
+                      ? `0 2px 10px ${alpha(primaryColor, 0.45)}`
                       : 'none',
                   transition: 'all 0.2s ease',
                   '&:hover': {
@@ -799,8 +803,8 @@ export default function NativeControls({
                         justifyContent: 'space-between',
                         gap: 1.5,
                         '&.Mui-selected': {
-                          bgcolor: alpha('#FF3030', 0.18),
-                          '&:hover': { bgcolor: alpha('#FF3030', 0.28) },
+                          bgcolor: alpha(primaryColor, 0.18),
+                          '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
                         },
                       }}
                     >
@@ -982,7 +986,7 @@ export default function NativeControls({
                 '&:hover': {
                   bgcolor: alpha('#000000', 0.8),
                   transform: 'scale(1.12)',
-                  boxShadow: `0 0 30px ${alpha('#FF3030', 0.5)}`,
+                  boxShadow: `0 0 30px ${alpha(primaryColor, 0.5)}`,
                 },
               }}
             >
@@ -1030,7 +1034,7 @@ export default function NativeControls({
             },
             '&:hover .seek-thumb': {
               transform: 'translate(-50%, -50%) scale(1.25)',
-              boxShadow: `0 0 12px ${alpha('#FF3030', 0.8)}, 0 2px 6px rgba(0,0,0,0.6)`,
+              boxShadow: `0 0 12px ${alpha(primaryColor, 0.8)}, 0 2px 6px rgba(0,0,0,0.6)`,
             },
           }}
         >
@@ -1351,9 +1355,9 @@ export default function NativeControls({
               width: `${playedPct}%`,
               height: 4,
               borderRadius: 2,
-              background: 'linear-gradient(90deg, #FF3030 0%, #FF6060 100%)',
+              background: `linear-gradient(90deg, ${primaryColor} 0%, ${primaryLight} 100%)`,
               transition: 'height 0.15s ease',
-              boxShadow: `0 0 8px ${alpha('#FF3030', 0.4)}`,
+              boxShadow: `0 0 8px ${alpha(primaryColor, 0.4)}`,
               zIndex: 2,
               pointerEvents: 'none',
               opacity: 0.88,
@@ -1692,7 +1696,7 @@ export default function NativeControls({
                   ...controlButtonSx,
                   position: 'relative',
                   color: castOpen ? 'primary.main' : 'common.white',
-                  bgcolor: castOpen ? alpha('#FF3030', 0.16) : 'transparent',
+                  bgcolor: castOpen ? alpha(primaryColor, 0.16) : 'transparent',
                 }}
               >
                 <Iconify icon="solar:users-group-rounded-bold" width={22} />
@@ -1777,7 +1781,7 @@ export default function NativeControls({
                   sx={{
                     ...controlButtonSx,
                     color: isAirPlayConnected ? 'primary.light' : 'common.white',
-                    bgcolor: isAirPlayConnected ? alpha('#FF3030', 0.16) : 'transparent',
+                    bgcolor: isAirPlayConnected ? alpha(primaryColor, 0.16) : 'transparent',
                   }}
                 >
                   <Iconify
@@ -1801,7 +1805,7 @@ export default function NativeControls({
                   sx={{
                     ...controlButtonSx,
                     color: isGoogleCastConnected ? 'primary.light' : 'common.white',
-                    bgcolor: isGoogleCastConnected ? alpha('#FF3030', 0.16) : 'transparent',
+                    bgcolor: isGoogleCastConnected ? alpha(primaryColor, 0.16) : 'transparent',
                   }}
                 >
                   <Iconify
@@ -1875,7 +1879,7 @@ export default function NativeControls({
           sx={{
             color: 'common.white',
             bgcolor: 'primary.main',
-            boxShadow: `0 4px 20px ${alpha('#FF3030', 0.5)}`,
+            boxShadow: `0 4px 20px ${alpha(primaryColor, 0.5)}`,
             p: 1.5,
             touchAction: 'manipulation',
             '&:active': { transform: 'scale(0.92)' },
@@ -2020,7 +2024,7 @@ export default function NativeControls({
                   bgcolor: alpha('#0d1117', 0.88),
                   color: 'common.white',
                   border: `1px solid ${alpha(palette.color || '#ffffff', 0.4)}`,
-                  boxShadow: `0 6px 24px rgba(0, 0, 0, 0.6), 0 0 12px ${alpha(palette.color || '#FF3030', 0.2)}`,
+                  boxShadow: `0 6px 24px rgba(0, 0, 0, 0.6), 0 0 12px ${alpha(palette.color || primaryColor, 0.2)}`,
                   backdropFilter: 'blur(16px)',
                   py: { xs: 0.75, sm: 0.9 },
                   px: { xs: 1.75, sm: 2.25 },
@@ -2033,10 +2037,10 @@ export default function NativeControls({
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
                     bgcolor: alpha('#161c24', 0.98),
-                    borderColor: palette.color || '#FF3030',
+                    borderColor: palette.color || primaryColor,
                     color: 'common.white',
                     transform: 'translateY(-1px)',
-                    boxShadow: `0 8px 28px rgba(0, 0, 0, 0.75), 0 0 16px ${alpha(palette.color || '#FF3030', 0.35)}`,
+                    boxShadow: `0 8px 28px rgba(0, 0, 0, 0.75), 0 0 16px ${alpha(palette.color || primaryColor, 0.35)}`,
                   },
                   '&:active': {
                     transform: 'translateY(0) scale(0.98)',
@@ -2123,8 +2127,8 @@ export default function NativeControls({
               justifyContent: 'space-between',
               gap: 2,
               '&.Mui-selected': {
-                bgcolor: alpha('#FF3030', 0.18),
-                '&:hover': { bgcolor: alpha('#FF3030', 0.28) },
+                bgcolor: alpha(primaryColor, 0.18),
+                '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
               },
             }}
           >
@@ -2183,8 +2187,8 @@ export default function NativeControls({
                   justifyContent: 'space-between',
                   gap: 2,
                   '&.Mui-selected': {
-                    bgcolor: alpha('#FF3030', 0.18),
-                    '&:hover': { bgcolor: alpha('#FF3030', 0.28) },
+                    bgcolor: alpha(primaryColor, 0.18),
+                    '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
                   },
                 }}
               >
@@ -2232,8 +2236,8 @@ export default function NativeControls({
               justifyContent: 'space-between',
               gap: 2,
               '&.Mui-selected': {
-                bgcolor: alpha('#FF3030', 0.18),
-                '&:hover': { bgcolor: alpha('#FF3030', 0.28) },
+                bgcolor: alpha(primaryColor, 0.18),
+                '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
               },
             }}
           >

@@ -1,7 +1,6 @@
 import React from 'react';
 import { paths } from '@/routes/paths';
 import { Image } from '@/components/image';
-import { Label } from '@/components/label';
 import { fDate } from '@/utils/format-time';
 import { Iconify } from '@/components/iconify';
 import { RouterLink } from '@/routes/components';
@@ -42,6 +41,15 @@ export default function MovieCard({ movie, index = 0 }) {
   const type = media_type || (release_date ? 'movie' : 'tv');
 
   const linkTo = id ? paths.watch.details(type, id, displayTitle) : '#';
+
+  const isHighRating = vote_average >= 7;
+  const isMedRating = vote_average >= 5;
+  const ratingBg = isHighRating ? '#10B981' : isMedRating ? '#F59E0B' : '#EF4444';
+  const ratingGlow = isHighRating
+    ? 'rgba(16, 185, 129, 0.45)'
+    : isMedRating
+    ? 'rgba(245, 158, 11, 0.45)'
+    : 'rgba(239, 68, 68, 0.45)';
 
   return (
     <Link
@@ -90,26 +98,30 @@ export default function MovieCard({ movie, index = 0 }) {
       >
         <Box sx={{ position: 'relative', overflow: 'hidden', width: 1, aspectRatio: '2/3', bgcolor: 'grey.900' }}>
           {vote_average > 0 && (
-            <Label
-              variant="filled"
-              color={(vote_average >= 7 && 'success') || (vote_average >= 5 && 'warning') || 'error'}
+            <Box
               sx={{
                 top: 8,
                 right: 8,
                 zIndex: 9,
                 position: 'absolute',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.35,
+                px: 0.85,
+                py: 0.25,
                 borderRadius: 999,
-                fontWeight: 700,
+                fontWeight: 800,
                 fontSize: '0.72rem',
-                bgcolor: 'rgba(8, 12, 18, 0.88)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                px: 0.8,
+                lineHeight: 1,
+                color: '#FFFFFF',
+                bgcolor: ratingBg,
+                boxShadow: `0 2px 10px ${ratingGlow}, 0 1px 3px rgba(0,0,0,0.6)`,
+                border: '1px solid rgba(255, 255, 255, 0.3)',
               }}
             >
-              <Iconify icon="solar:star-bold" width={11} sx={{ mr: 0.4 }} />
+              <Iconify icon="solar:star-bold" width={11} sx={{ color: '#FFFFFF' }} />
               {Number(vote_average).toFixed(1)}
-            </Label>
+            </Box>
           )}
 
           {releaseYear && (
@@ -167,7 +179,7 @@ export default function MovieCard({ movie, index = 0 }) {
             }}
           />
 
-          {/* Glass shine sweep */}
+          {/* Glass shine sweep on hover */}
           <Box
             className="youplex-card-shine"
             sx={{
@@ -225,12 +237,6 @@ export default function MovieCard({ movie, index = 0 }) {
           >
             {displayTitle}
           </Typography>
-
-          {overview && (
-            <Typography variant="caption" sx={{ ...maxLine({ line: 2 }), color: 'text.secondary', mt: 0.5 }}>
-              {overview}
-            </Typography>
-          )}
 
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 0.75, typography: 'caption', color: 'text.secondary' }}>
             <Stack direction="row" alignItems="center" spacing={0.5}>

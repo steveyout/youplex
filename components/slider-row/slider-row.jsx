@@ -2,7 +2,7 @@
 
 import { varAlpha } from '@/theme/styles';
 import { Iconify } from '@/components/iconify';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
@@ -10,33 +10,31 @@ import IconButton from '@mui/material/IconButton';
 
 // ----------------------------------------------------------------------
 
-export function SliderRow({ children, sx, itemWidth = { xs: 150, sm: 180, md: 200 }, gap = 2, ...other }) {
+export function SliderRow({ children, sx, itemWidth = { xs: 145, sm: 175, md: 195 }, gap = 2, ...other }) {
   const theme = useTheme();
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
-  const checkScroll = () => {
+  const checkScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     const { scrollLeft, scrollWidth, clientWidth } = el;
     setCanScrollLeft(scrollLeft > 10);
     setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
-  };
+  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) {
-      return undefined;
-    }
+    if (!el) return undefined;
     checkScroll();
     el.addEventListener('scroll', checkScroll, { passive: true });
-    window.addEventListener('resize', checkScroll);
+    window.addEventListener('resize', checkScroll, { passive: true });
     return () => {
       el.removeEventListener('scroll', checkScroll);
       window.removeEventListener('resize', checkScroll);
     };
-  }, [children]);
+  }, [children, checkScroll]);
 
   const handleScroll = (direction) => {
     const el = scrollRef.current;
@@ -64,16 +62,16 @@ export function SliderRow({ children, sx, itemWidth = { xs: 150, sm: 180, md: 20
             zIndex: 10,
             width: 42,
             height: 42,
-            bgcolor: varAlpha(theme.vars.palette.background.paperChannel, 0.85),
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
+            bgcolor: varAlpha(theme.vars.palette.background.paperChannel, 0.9),
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
             border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.2)}`,
             color: 'text.primary',
             boxShadow: `0 8px 24px ${varAlpha(theme.vars.palette.common.blackChannel, 0.4)}`,
             transition: 'all 0.2s ease',
             '&:hover': {
               bgcolor: 'primary.main',
-              color: 'common.white',
+              color: 'primary.contrastText',
               transform: 'translateY(-50%) scale(1.1)',
               boxShadow: `0 10px 28px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.6)}`,
             },
@@ -95,6 +93,8 @@ export function SliderRow({ children, sx, itemWidth = { xs: 150, sm: 180, md: 20
           overflowY: 'hidden',
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehaviorX: 'contain',
           '&::-webkit-scrollbar': { display: 'none' },
           '& > *': {
             flexShrink: 0,
@@ -120,16 +120,16 @@ export function SliderRow({ children, sx, itemWidth = { xs: 150, sm: 180, md: 20
             zIndex: 10,
             width: 42,
             height: 42,
-            bgcolor: varAlpha(theme.vars.palette.background.paperChannel, 0.85),
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
+            bgcolor: varAlpha(theme.vars.palette.background.paperChannel, 0.9),
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
             border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.2)}`,
             color: 'text.primary',
             boxShadow: `0 8px 24px ${varAlpha(theme.vars.palette.common.blackChannel, 0.4)}`,
             transition: 'all 0.2s ease',
             '&:hover': {
               bgcolor: 'primary.main',
-              color: 'common.white',
+              color: 'primary.contrastText',
               transform: 'translateY(-50%) scale(1.1)',
               boxShadow: `0 10px 28px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.6)}`,
             },

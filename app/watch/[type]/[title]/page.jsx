@@ -362,6 +362,15 @@ function WatchContent({
 
   // Recommendations tab
   const [recTab, setRecTab] = useState('recommended');
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const handleWatchClick = useCallback(
+    (targetPath) => {
+      setIsNavigating(true);
+      router.push(targetPath || playPath);
+    },
+    [router, playPath]
+  );
 
   const displayedRecs = useMemo(() => {
     if (recTab === 'similar' && similarTitles.length > 0) {
@@ -790,23 +799,41 @@ function WatchContent({
                 <Button
                   size="large"
                   variant="contained"
-                  startIcon={<Iconify icon="solar:play-bold" width={22} />}
-                  onClick={() => router.push(playPath)}
+                  disabled={isNavigating}
+                  startIcon={
+                    isNavigating ? (
+                      <CircularProgress size={18} thickness={4} sx={{ color: 'primary.contrastText' }} />
+                    ) : (
+                      <Iconify icon="solar:play-bold" width={20} />
+                    )
+                  }
+                  onClick={() => handleWatchClick(playPath)}
                   sx={{
                     borderRadius: 2,
-                    px: 4,
-                    py: 1.4,
-                    fontWeight: 800,
-                    fontSize: '1rem',
-                    boxShadow: `0 10px 28px ${alpha(theme.palette.primary.main, 0.5)}`,
-                    transition: 'all 0.25s ease',
+                    px: { xs: 3, sm: 4 },
+                    py: 1.35,
+                    fontWeight: 700,
+                    fontSize: '0.95rem',
+                    letterSpacing: 0.2,
+                    textTransform: 'none',
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    boxShadow: 'none',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    transition: 'all 0.2s ease',
                     '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: `0 14px 34px ${alpha(theme.palette.primary.main, 0.65)}`,
+                      boxShadow: 'none',
+                      bgcolor: 'primary.dark',
+                      transform: 'translateY(-1px)',
+                    },
+                    '&.Mui-disabled': {
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                      opacity: 0.85,
                     },
                   }}
                 >
-                  Watch Now
+                  {isNavigating ? 'Loading Stream...' : 'Watch Now'}
                 </Button>
 
                 {trailer && (
@@ -818,20 +845,24 @@ function WatchContent({
                     sx={{
                       borderRadius: 2,
                       px: 3,
-                      py: 1.4,
+                      py: 1.35,
                       color: 'common.white',
-                      bgcolor: 'rgba(255, 255, 255, 0.1)',
-                      borderColor: 'rgba(255, 255, 255, 0.3)',
+                      bgcolor: 'rgba(255, 255, 255, 0.08)',
+                      borderColor: 'rgba(255, 255, 255, 0.25)',
+                      boxShadow: 'none',
                       backdropFilter: 'blur(8px)',
                       fontWeight: 700,
                       textTransform: 'none',
+                      transition: 'all 0.2s ease',
                       '&:hover': {
-                        bgcolor: 'rgba(255, 255, 255, 0.2)',
-                        borderColor: 'rgba(255, 255, 255, 0.5)',
+                        bgcolor: 'rgba(255, 255, 255, 0.16)',
+                        borderColor: 'rgba(255, 255, 255, 0.45)',
+                        boxShadow: 'none',
+                        transform: 'translateY(-1px)',
                       },
                     }}
                   >
-                    Trailer
+                    Watch Trailer
                   </Button>
                 )}
 
@@ -1020,7 +1051,7 @@ function WatchContent({
                           },
                         }}
                       >
-                        <CardActionArea onClick={() => router.push(epPlayPath)}>
+                        <CardActionArea onClick={() => handleWatchClick(epPlayPath)}>
                           <Box sx={{ position: 'relative', width: 1, aspectRatio: '16/9', bgcolor: 'grey.900' }}>
                             {stillImg && (
                               <CardMedia
@@ -1177,37 +1208,48 @@ function WatchContent({
             </Stack>
           </Box>
 
-          {/* Top Cast Section */}
+          {/* Top Cast Section - Mobile Optimized Touch Scroll */}
           {hasCredits && (
-            <Box>
+            <Box sx={{ width: 1, overflow: 'hidden' }}>
               <SectionHeading title="Top Cast" icon="solar:users-group-two-rounded-bold" />
               <Box
                 sx={{
-                  display: 'grid',
+                  display: { xs: 'flex', md: 'grid' },
+                  overflowX: { xs: 'auto', md: 'visible' },
+                  overflowY: 'hidden',
+                  scrollSnapType: { xs: 'x mandatory', md: 'none' },
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
+                  '&::-webkit-scrollbar': { display: 'none' },
+                  pb: { xs: 1.5, md: 0 },
+                  pt: 0.5,
                   gridTemplateColumns: {
-                    xs: 'repeat(3, 1fr)',
-                    sm: 'repeat(4, 1fr)',
                     md: 'repeat(6, 1fr)',
                     lg: 'repeat(8, 1fr)',
                   },
-                  gap: 2,
+                  gap: { xs: 1.5, sm: 2 },
+                  '& > *': {
+                    flexShrink: { xs: 0, md: 1 },
+                    scrollSnapAlign: { xs: 'start', md: 'none' },
+                    width: { xs: 105, sm: 120, md: 'auto' },
+                  },
                 }}
               >
                 {cast.map((actor) => (
                   <Stack
                     key={actor.id}
                     alignItems="center"
-                    spacing={1.2}
+                    spacing={1}
                     sx={{
-                      p: 1.5,
-                      borderRadius: 2.5,
+                      p: { xs: 1.25, md: 1.5 },
+                      borderRadius: 2,
                       bgcolor: alpha(theme.palette.background.paper, 0.6),
                       border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
                       backdropFilter: 'blur(8px)',
                       textAlign: 'center',
                       transition: 'all 0.25s ease',
                       '&:hover': {
-                        transform: 'translateY(-3px)',
+                        transform: 'translateY(-2px)',
                         bgcolor: alpha(theme.palette.background.paper, 0.9),
                         borderColor: alpha(theme.palette.primary.main, 0.4),
                       },
@@ -1222,22 +1264,31 @@ function WatchContent({
                       }
                       alt={actor.name}
                       sx={{
-                        width: { xs: 68, sm: 80 },
-                        height: { xs: 68, sm: 80 },
+                        width: { xs: 60, sm: 70, md: 80 },
+                        height: { xs: 60, sm: 70, md: 80 },
                         borderRadius: '50%',
                         objectFit: 'cover',
                         bgcolor: 'background.neutral',
-                        border: `2px solid ${alpha(theme.palette.primary.main, 0.4)}`,
+                        border: `2px solid ${alpha(theme.palette.primary.main, 0.35)}`,
                       }}
                     />
-                    <Box sx={{ width: 1 }}>
-                      <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.82rem' }}>
+                    <Box sx={{ width: 1, minWidth: 0 }}>
+                      <Typography
+                        variant="subtitle2"
+                        noWrap
+                        sx={{ fontWeight: 700, fontSize: { xs: '0.78rem', sm: '0.82rem' } }}
+                      >
                         {actor.name}
                       </Typography>
                       <Typography
                         variant="caption"
                         noWrap
-                        sx={{ color: 'text.secondary', fontSize: '0.72rem', display: 'block', fontWeight: 600 }}
+                        sx={{
+                          color: 'text.secondary',
+                          fontSize: '0.7rem',
+                          display: 'block',
+                          fontWeight: 500,
+                        }}
                       >
                         {actor.character || 'Cast'}
                       </Typography>

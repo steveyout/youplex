@@ -15,7 +15,7 @@ import IconButton from '@mui/material/IconButton';
 import CardContent from '@mui/material/CardContent';
 import CircularProgress from '@mui/material/CircularProgress';
 import LinearProgress from '@mui/material/LinearProgress';
-import { alpha } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import Typography from '@mui/material/Typography';
@@ -40,6 +40,7 @@ function cleanSlugTitle(slug) {
 }
 
 export default function PlayPage() {
+  const theme = useTheme();
   const { type, title } = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -553,8 +554,8 @@ export default function PlayPage() {
               </Typography>
               <Box
                 sx={{
-                  bgcolor: alpha('#FF3030', 0.18),
-                  border: `1px solid ${alpha('#FF3030', 0.4)}`,
+                  bgcolor: alpha(theme.palette.primary.main, 0.18),
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.4)}`,
                   color: 'primary.light',
                   px: 1,
                   py: 0.3,
@@ -665,20 +666,20 @@ export default function PlayPage() {
                       gap: { xs: 1.5, sm: 2 },
                       p: { xs: 1.5, sm: 1.75 },
                       boxSizing: 'border-box',
-                      bgcolor: isSelected ? alpha('#FF3030', 0.16) : alpha('#ffffff', 0.04),
+                      bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.16) : alpha('#ffffff', 0.04),
                       background: isSelected
-                        ? 'linear-gradient(90deg, rgba(255, 48, 48, 0.22) 0%, rgba(255, 48, 48, 0.05) 100%)'
+                        ? `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.22)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`
                         : alpha('#ffffff', 0.03),
-                      border: isSelected ? '2px solid #FF3030' : `1px solid ${alpha('#ffffff', 0.08)}`,
-                      borderLeft: isSelected ? '6px solid #FF3030' : '6px solid transparent',
+                      border: isSelected ? `2px solid ${theme.palette.primary.main}` : `1px solid ${alpha('#ffffff', 0.08)}`,
+                      borderLeft: isSelected ? `6px solid ${theme.palette.primary.main}` : '6px solid transparent',
                       borderRadius: 2,
                       boxShadow: isSelected
-                        ? '0 6px 24px rgba(255, 48, 48, 0.35)'
+                        ? `0 6px 24px ${alpha(theme.palette.primary.main, 0.35)}`
                         : '0 2px 10px rgba(0, 0, 0, 0.3)',
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       '&:hover': {
-                        bgcolor: isSelected ? alpha('#FF3030', 0.22) : alpha('#ffffff', 0.08),
-                        borderColor: isSelected ? '#FF3030' : alpha('#ffffff', 0.22),
+                        bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.22) : alpha('#ffffff', 0.08),
+                        borderColor: isSelected ? theme.palette.primary.main : alpha('#ffffff', 0.22),
                         transform: 'translateY(-1px)',
                       },
                     }}
@@ -842,8 +843,8 @@ export default function PlayPage() {
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 0.4,
-                              bgcolor: alpha('#FF3030', 0.22),
-                              border: `1px solid ${alpha('#FF3030', 0.45)}`,
+                              bgcolor: alpha(theme.palette.primary.main, 0.22),
+                              border: `1px solid ${alpha(theme.palette.primary.main, 0.45)}`,
                               color: 'primary.light',
                               px: 0.75,
                               py: 0.15,
@@ -939,20 +940,20 @@ export default function PlayPage() {
                       gap: { xs: 1.5, sm: 2 },
                       p: { xs: 1.5, sm: 1.75 },
                       boxSizing: 'border-box',
-                      bgcolor: isSelected ? alpha('#FF3030', 0.16) : alpha('#ffffff', 0.04),
+                      bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.16) : alpha('#ffffff', 0.04),
                       background: isSelected
-                        ? 'linear-gradient(90deg, rgba(255, 48, 48, 0.22) 0%, rgba(255, 48, 48, 0.05) 100%)'
+                        ? `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.22)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`
                         : alpha('#ffffff', 0.03),
-                      border: isSelected ? '2px solid #FF3030' : `1px solid ${alpha('#ffffff', 0.08)}`,
-                      borderLeft: isSelected ? '6px solid #FF3030' : '6px solid transparent',
+                      border: isSelected ? `2px solid ${theme.palette.primary.main}` : `1px solid ${alpha('#ffffff', 0.08)}`,
+                      borderLeft: isSelected ? `6px solid ${theme.palette.primary.main}` : '6px solid transparent',
                       borderRadius: 2,
                       boxShadow: isSelected
-                        ? '0 6px 24px rgba(255, 48, 48, 0.35)'
+                        ? `0 6px 24px ${alpha(theme.palette.primary.main, 0.35)}`
                         : '0 2px 10px rgba(0, 0, 0, 0.3)',
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       '&:hover': {
-                        bgcolor: isSelected ? alpha('#FF3030', 0.22) : alpha('#ffffff', 0.08),
-                        borderColor: isSelected ? '#FF3030' : alpha('#ffffff', 0.22),
+                        bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.22) : alpha('#ffffff', 0.08),
+                        borderColor: isSelected ? theme.palette.primary.main : alpha('#ffffff', 0.22),
                         transform: 'translateY(-1px)',
                       },
                     }}
@@ -1003,8 +1004,8 @@ export default function PlayPage() {
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 0.4,
-                              bgcolor: alpha('#FF3030', 0.22),
-                              border: `1px solid ${alpha('#FF3030', 0.45)}`,
+                              bgcolor: alpha(theme.palette.primary.main, 0.22),
+                              border: `1px solid ${alpha(theme.palette.primary.main, 0.45)}`,
                               color: 'primary.light',
                               px: 0.75,
                               py: 0.15,
@@ -1096,6 +1097,7 @@ export default function PlayPage() {
 }
 
 function VideoLoadingState({ title, season, episode, backdrop, feedback }) {
+  const theme = useTheme();
   const [activeStep, setActiveStep] = useState(0);
 
   const steps = [
@@ -1160,7 +1162,7 @@ function VideoLoadingState({ title, season, episode, backdrop, feedback }) {
                 width: 100,
                 height: 100,
                 borderRadius: '50%',
-                bgcolor: alpha(isSwitching ? '#FF9800' : '#FF3030', 0.25),
+                bgcolor: alpha(isSwitching ? '#FF9800' : theme.palette.primary.main, 0.25),
                 filter: 'blur(20px)',
                 animation: 'youplex-radar-pulse 2s ease-in-out infinite',
               }}
@@ -1205,8 +1207,8 @@ function VideoLoadingState({ title, season, episode, backdrop, feedback }) {
                 px: 2,
                 py: 0.6,
                 borderRadius: 2,
-                bgcolor: alpha(isSwitching ? '#FF9800' : '#FF3030', 0.12),
-                border: `1px solid ${alpha(isSwitching ? '#FF9800' : '#FF3030', 0.3)}`
+                bgcolor: alpha(isSwitching ? '#FF9800' : theme.palette.primary.main, 0.12),
+                border: `1px solid ${alpha(isSwitching ? '#FF9800' : theme.palette.primary.main, 0.3)}`
               }}
             >
               <Box
@@ -1237,7 +1239,7 @@ function VideoLoadingState({ title, season, episode, backdrop, feedback }) {
                   borderRadius: 3,
                   background: isSwitching
                     ? 'linear-gradient(90deg, #FF9800 0%, #FF5722 100%)'
-                    : 'linear-gradient(90deg, #FF3030 0%, #FF6060 100%)',
+                    : `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.light} 100%)`,
                   transition: 'transform 0.3s ease',
                 },
               }}

@@ -31,6 +31,47 @@ function getSafeYear(dateStr) {
 
 // ----------------------------------------------------------------------
 
+export function RatingPill({ rating, size = 'small', sx }) {
+  if (!rating || rating <= 0) return null;
+  const isHigh = rating >= 7;
+  const isMedium = rating >= 5;
+
+  const bg = isHigh ? '#10B981' : isMedium ? '#F59E0B' : '#EF4444';
+  const glow = isHigh
+    ? 'rgba(16, 185, 129, 0.45)'
+    : isMedium
+    ? 'rgba(245, 158, 11, 0.45)'
+    : 'rgba(239, 68, 68, 0.45)';
+
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.35,
+        px: size === 'small' ? 0.85 : 1,
+        py: size === 'small' ? 0.25 : 0.4,
+        borderRadius: 999,
+        fontWeight: 800,
+        fontSize: size === 'small' ? '0.72rem' : '0.8rem',
+        lineHeight: 1,
+        color: '#FFFFFF',
+        bgcolor: bg,
+        border: '1px solid rgba(255, 255, 255, 0.32)',
+        boxShadow: `0 2px 10px ${glow}, 0 1px 4px rgba(0, 0, 0, 0.6)`,
+        ...sx,
+      }}
+    >
+      <Iconify icon="solar:star-bold" width={size === 'small' ? 11 : 13} sx={{ color: '#FFFFFF' }} />
+      <Box component="span" sx={{ color: '#FFFFFF', fontWeight: 800 }}>
+        {Number(rating).toFixed(1)}
+      </Box>
+    </Box>
+  );
+}
+
+// ----------------------------------------------------------------------
+
 export function PostItem({ post, index = 0 }) {
   const theme = useTheme();
 
@@ -80,41 +121,27 @@ export function PostItem({ post, index = 0 }) {
           }),
           '&:hover': {
             transform: 'translateY(-6px)',
-            borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.28),
+            borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.35),
             boxShadow: `0 18px 36px -12px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.32)}, 0 0 0 1px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.16)}`,
           },
           '&:hover .youplex-poster-img': { transform: 'scale(1.05)' },
           '&:hover .youplex-poster-overlay': { opacity: 1 },
           '&:hover .youplex-card-fab': { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
           '&:hover .youplex-card-shine': { opacity: 1, left: '120%' },
-          ...(index < 8 && {
-            animation: 'youplex-fade-up 0.4s ease-out both',
-            animationDelay: `${(index % 8) * 35}ms`,
-          }),
         }}
       >
         <Box sx={{ position: 'relative', overflow: 'hidden', width: 1, aspectRatio: '2/3', bgcolor: 'grey.900' }}>
           {vote_average > 0 && (
-            <Label
-              variant="filled"
-              color={(vote_average >= 7 && 'success') || (vote_average >= 5 && 'warning') || 'error'}
+            <RatingPill
+              rating={vote_average}
+              size="small"
               sx={{
                 top: 8,
                 right: 8,
                 zIndex: 9,
                 position: 'absolute',
-                borderRadius: 999,
-                fontWeight: 700,
-                fontSize: '0.72rem',
-                bgcolor: 'rgba(8, 12, 18, 0.88)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                px: 0.8,
               }}
-            >
-              <Iconify icon="solar:star-bold" width={11} sx={{ mr: 0.4 }} />
-              {Number(vote_average).toFixed(1)}
-            </Label>
+            />
           )}
 
           {releaseYear && (
@@ -264,14 +291,13 @@ export function PostItemLatest({ post, index = 0 }) {
 
   const displayTitle = title || name || 'Untitled';
   const displayDate = release_date || first_air_date;
-  const releaseYear = getSafeYear(displayDate);
   const type = media_type || (release_date ? 'movie' : 'tv');
 
   const linkTo = paths.watch.details(type, id, displayTitle);
 
   const backdropUrl = backdrop_path
-    ? `https://image.tmdb.org/t/p/original${backdrop_path}`
-    : getPosterUrl(post.poster_path);
+    ? `https://image.tmdb.org/t/p/w780${backdrop_path}`
+    : '/assets/placeholder-backdrop.jpg';
 
   return (
     <Link
@@ -285,17 +311,20 @@ export function PostItemLatest({ post, index = 0 }) {
         color: 'inherit',
         outline: 'none',
         '&:focus-visible': {
-          borderRadius: 3,
+          borderRadius: 2.5,
           boxShadow: `0 0 0 2px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.8)}`,
         },
       }}
     >
       <Card
         sx={{
-          height: 380,
-          position: 'relative',
-          borderRadius: 3,
+          height: { xs: 260, md: 300 },
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 2.5,
           overflow: 'hidden',
+          position: 'relative',
+          bgcolor: 'grey.900',
           border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.1)}`,
           transform: 'translateZ(0)',
           backfaceVisibility: 'hidden',
@@ -312,28 +341,14 @@ export function PostItemLatest({ post, index = 0 }) {
           '&:hover .youplex-poster-img': { transform: 'scale(1.05)' },
           '&:hover .youplex-card-fab': { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
           '&:hover .youplex-card-shine': { opacity: 1, left: '120%' },
-          ...(index < 4 && {
-            animation: 'youplex-fade-up 0.45s ease-out both',
-            animationDelay: `${(index % 4) * 45}ms`,
-          }),
         }}
       >
         <Stack direction="row" spacing={1} sx={{ top: 16, right: 16, zIndex: 9, position: 'absolute' }}>
           {vote_average > 0 && (
-            <Label
-              variant="filled"
-              color={(vote_average >= 7 && 'success') || (vote_average >= 5 && 'warning') || 'error'}
-              sx={{
-                borderRadius: 999,
-                fontWeight: 700,
-                bgcolor: 'rgba(8, 12, 18, 0.88)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-              }}
-            >
-              <Iconify icon="solar:star-bold" width={12} sx={{ mr: 0.4 }} />
-              {Number(vote_average).toFixed(1)}
-            </Label>
+            <RatingPill
+              rating={vote_average}
+              size="medium"
+            />
           )}
 
           <Label
@@ -454,14 +469,95 @@ export function PostItemLatest({ post, index = 0 }) {
             </Stack>
 
             {vote_average > 0 && (
-              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: 'warning.light' }}>
-                <Iconify icon="solar:star-bold" width={16} />
-                {Number(vote_average).toFixed(1)} Rating
+              <Stack direction="row" alignItems="center" spacing={0.5}>
+                <RatingPill rating={vote_average} size="small" />
               </Stack>
             )}
           </Stack>
         </Box>
       </Card>
+    </Link>
+  );
+}
+
+// ----------------------------------------------------------------------
+
+export function PostItemCarousel({ post }) {
+  const theme = useTheme();
+
+  const { id, title, name, release_date, first_air_date, backdrop_path, vote_average, media_type } = post;
+
+  const displayTitle = title || name || 'Untitled';
+  const displayDate = release_date || first_air_date;
+  const type = media_type || (release_date ? 'movie' : 'tv');
+
+  const linkTo = paths.watch.details(type, id, displayTitle);
+
+  const backdropUrl = backdrop_path
+    ? `https://image.tmdb.org/t/p/w780${backdrop_path}`
+    : '/assets/placeholder-backdrop.jpg';
+
+  return (
+    <Link
+      component={RouterLink}
+      href={linkTo}
+      sx={{
+        display: 'block',
+        height: '100%',
+        cursor: 'pointer',
+        textDecoration: 'none',
+        color: 'inherit',
+      }}
+    >
+      <Box
+        sx={{
+          borderRadius: 2.5,
+          overflow: 'hidden',
+          position: 'relative',
+          bgcolor: 'grey.900',
+          aspectRatio: '16/9',
+          border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.1)}`,
+          transition: theme.transitions.create(['transform', 'box-shadow', 'border-color'], {
+            duration: 0.28,
+            easing: theme.transitions.easing.easeOut,
+          }),
+          '&:hover': {
+            transform: 'translateY(-4px)',
+            borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.4),
+            boxShadow: `0 16px 32px -10px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.35)}`,
+          },
+        }}
+      >
+        <Image alt={displayTitle} src={backdropUrl} sx={{ width: 1, height: 1 }} />
+
+        <Box
+          sx={{
+            p: 2.5,
+            inset: 0,
+            zIndex: 2,
+            position: 'absolute',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)',
+          }}
+        >
+          <Typography variant="subtitle1" sx={{ color: 'common.white', fontWeight: 700 }}>
+            {displayTitle}
+          </Typography>
+
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mt: 0.5 }}>
+            {vote_average > 0 && (
+              <RatingPill rating={vote_average} size="small" />
+            )}
+            {displayDate && (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {fDate(displayDate, 'YYYY')}
+              </Typography>
+            )}
+          </Stack>
+        </Box>
+      </Box>
     </Link>
   );
 }
