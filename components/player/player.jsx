@@ -4,22 +4,22 @@ import '@vidstack/react/player/styles/base.css';
 import '@vidstack/react/player/styles/default/captions.css';
 
 import { Iconify } from '@/components/iconify';
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { getIntroTimestamps } from '@/actions/api';
+import { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import { Track, Captions, MediaPlayer, MediaProvider } from '@vidstack/react';
-import { providers as defaultProviders, getEmbedUrl, DEFAULT_PROVIDER_ID } from '@/config/providers';
+import { getEmbedUrl, DEFAULT_PROVIDER_ID, providers as defaultProviders } from '@/config/providers';
 
 import Box from '@mui/material/Box';
 import Menu from '@mui/material/Menu';
 import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
 import { alpha } from '@mui/material/styles';
 import MenuItem from '@mui/material/MenuItem';
-import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import CircularProgress from '@mui/material/CircularProgress';
 import LinearProgress from '@mui/material/LinearProgress';
+import CircularProgress from '@mui/material/CircularProgress';
 
-import { getIntroTimestamps } from '@/actions/api';
 import NativeControls from './native-controls';
 
 // ----------------------------------------------------------------------
@@ -65,6 +65,41 @@ function extractorAlias(id) {
  * Map direct stream objects into Vidstack source format.
  * If alreadyProxied is true, the URL is used directly.
  */
+function isUrlProxied(url) {
+  if (!url || typeof url !== 'string') return false;
+  return (
+    url.startsWith('/api/hls') ||
+    url.startsWith('/proxy') ||
+    url.startsWith('/api/subtitles') ||
+    url.includes('proxy.youplex.site') ||
+    url.includes('/api/hls?') ||
+    url.includes('/proxy?') ||
+    url.includes('m3u8-proxy')
+  );
+}
+
+function toProxyUrl(source) {
+  if (!source?.url) return '';
+  const { url } = source;
+
+  // Subtitles always need CORS headers and proper VTT formatting
+  if (source.isSubtitle || url.endsWith('.vtt') || url.endsWith('.srt') || url.includes('.vtt?') || url.includes('.srt?')) {
+    if (url.startsWith('/api/subtitles') || (url.startsWith('/') && !url.startsWith('/proxy'))) return url;
+    return `/api/subtitles?url=${encodeURIComponent(url)}`;
+  }
+
+  if (isUrlProxied(url)) {
+    return url;
+  }
+
+  const params = new URLSearchParams({ url });
+  if (source.headers?.referer) params.set('referer', source.headers.referer);
+  if (source.headers?.origin) params.set('origin', source.headers.origin);
+  const ua = source.headers?.['user-agent'] || source.headers?.['User-Agent'];
+  if (ua) params.set('ua', ua);
+  return `/api/hls?${params.toString()}`;
+}
+
 function toVidstackSrcs(sources) {
   const list = Array.isArray(sources) ? sources : sources?.sources;
   if (!list || !Array.isArray(list) || list.length === 0) return [];
@@ -72,12 +107,7 @@ function toVidstackSrcs(sources) {
   return list
     .filter((s) => Boolean(s?.url))
     .map((s) => {
-      const isAlreadyProxied =
-        s.alreadyProxied ||
-        s.url?.includes('youplex.site') ||
-        s.url?.includes('/proxy') ||
-        s.url?.includes('/api/hls');
-      const srcUrl = isAlreadyProxied ? s.url : toProxyUrl(s);
+      const srcUrl = isUrlProxied(s.url) ? s.url : toProxyUrl(s);
 
       if (
         s.type === 'hls' ||
@@ -93,54 +123,12 @@ function toVidstackSrcs(sources) {
     });
 }
 
-function toProxyUrl(source) {
-  if (!source?.url) return '';
-  const url = source.url;
-
-  // Subtitles always need CORS headers and proper VTT formatting
-  if (source.isSubtitle || url.endsWith('.vtt') || url.endsWith('.srt') || url.includes('.vtt?') || url.includes('.srt?')) {
-    if (url.startsWith('/api/subtitles') || (url.startsWith('/') && !url.startsWith('/proxy'))) return url;
-    return `/api/subtitles?url=${encodeURIComponent(url)}`;
-  }
-
-  if (
-    source.alreadyProxied ||
-    source.url.includes('/proxy') ||
-    source.url.includes('/api/hls') ||
-    source.url.includes('youplex.site')
-  ) {
-    return source.url;
-  }
-
-  const isDirectHls =
-    url.includes('.m3u8') ||
-    source.type === 'hls' ||
-    Boolean(source.isM3U8) ||
-    source.type === 'application/x-mpegurl';
-
-  if (isDirectHls) {
-    const params = new URLSearchParams({ url });
-    if (source.headers?.referer) params.set('referer', source.headers.referer);
-    return `/api/hls?${params.toString()}`;
-  }
-
-  return url;
-}
-
 function getStoredMode() {
-  if (typeof window === 'undefined') return 'native';
-  try {
-    return localStorage.getItem(MODE_KEY) || 'native';
-  } catch {
-    return 'native';
-  }
+  return 'native';
 }
 
 function storeMode(mode) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(MODE_KEY, mode);
-  } catch {}
+  // Intentionally no-op: every movie/show starts from native player first
 }
 
 export default function Player({
@@ -189,15 +177,34 @@ export default function Player({
   const autoRetryCountRef = useRef(0);
   const retryTimerRef = useRef(null);
 
-  // Sync mode from localStorage after mount
+  const resolvedTmdbId = tmdbId || id;
+  const resolvedSeasonNum = season ? Number(season) : undefined;
+  const resolvedEpisodeNum = episode ? Number(episode) : undefined;
+
+  // Always ensure each movie/show starts from native player first and clear legacy stored embed mode
   useEffect(() => {
-    const stored = getStoredMode();
-    if (!allowEmbedMode) {
-      setPlaybackMode('native');
-    } else {
-      setPlaybackMode(stored);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(MODE_KEY);
+      } catch {
+        // ignore
+      }
     }
-  }, [allowEmbedMode]);
+  }, []);
+
+  // Always reset to native player whenever media changes (movie/show or episode)
+  useEffect(() => {
+    setPlaybackMode('native');
+    setPlaybackError(null);
+    setSelectedExtractorId(null);
+    setFailedExtractorId(null);
+    setSelectedEmbedId(null);
+    setIsLoading(true);
+    setPlaybackAttempt(0);
+    autoRetryCountRef.current = 0;
+    setIsAutoRetrying(false);
+    setAutoSwitchNotice(null);
+  }, [resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum]);
 
   // Load Google Cast Web SDK for Chromecast support
   useEffect(() => {
@@ -224,59 +231,52 @@ export default function Player({
     }
   }, [initialTimelineSegments]);
 
-  const resolvedTmdbId = tmdbId || id;
-  const resolvedSeasonNum = season ? Number(season) : undefined;
-  const resolvedEpisodeNum = episode ? Number(episode) : undefined;
-
   // Auto-fetch intro/outro timestamps if not passed from server
   const lastTimestampsKeyRef = useRef('');
 
   useEffect(() => {
-    if (initialTimelineSegments && initialTimelineSegments.length > 0) {
-      setTimelineSegments(initialTimelineSegments);
-      return;
-    }
-
-    if (!resolvedTmdbId) {
-      setTimelineSegments([]);
-      return;
-    }
-
-    const isTv = type === 'tv';
-    const requestKey = `${resolvedTmdbId}:${type || 'movie'}:${isTv ? resolvedSeasonNum : 'm'}:${isTv ? resolvedEpisodeNum : 'm'}:${videoDurationMs || 'none'}`;
-    if (lastTimestampsKeyRef.current === requestKey) {
-      return;
-    }
-    lastTimestampsKeyRef.current = requestKey;
-
     let active = true;
 
-    getIntroTimestamps({
-      tmdbId: resolvedTmdbId,
-      type: type || 'movie',
-      ...(isTv ? { season: resolvedSeasonNum, episode: resolvedEpisodeNum } : {}),
-      ...(videoDurationMs ? { durationMs: videoDurationMs } : {}),
-    })
-      .then((res) => {
-        if (active && res?.success && Array.isArray(res.segments)) {
-          setTimelineSegments(res.segments);
-        }
-      })
-      .catch(() => {});
+    if (initialTimelineSegments && initialTimelineSegments.length > 0) {
+      setTimelineSegments(initialTimelineSegments);
+    } else if (!resolvedTmdbId) {
+      setTimelineSegments([]);
+    } else {
+      const isTv = type === 'tv';
+      const requestKey = `${resolvedTmdbId}:${type || 'movie'}:${isTv ? resolvedSeasonNum : 'm'}:${isTv ? resolvedEpisodeNum : 'm'}:${videoDurationMs || 'none'}`;
+      if (lastTimestampsKeyRef.current !== requestKey) {
+        lastTimestampsKeyRef.current = requestKey;
+
+        getIntroTimestamps({
+          tmdbId: resolvedTmdbId,
+          type: type || 'movie',
+          ...(isTv ? { season: resolvedSeasonNum, episode: resolvedEpisodeNum } : {}),
+          ...(videoDurationMs ? { durationMs: videoDurationMs } : {}),
+        })
+          .then((res) => {
+            if (active && res?.success && Array.isArray(res.segments)) {
+              setTimelineSegments(res.segments);
+            }
+          })
+          .catch(() => {});
+      }
+    }
 
     return () => {
       active = false;
     };
-  }, [resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum, videoDurationMs]);
+  }, [resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum, videoDurationMs, initialTimelineSegments]);
 
   // All native sources mapped to the Vidstack src array
   const nativeSrc = useMemo(() => toVidstackSrcs(directSources), [directSources]);
   const nativeReady = nativeSrc.length > 0;
 
-  // Once native stream is mapped and ready, dismiss loading
+  // Once native stream is mapped and ready, dismiss loading and ensure native mode is active
   useEffect(() => {
     if (nativeReady) {
       setIsLoading(false);
+      setPlaybackMode('native');
+      setPlaybackError(null);
     }
   }, [nativeReady]);
   const activeNativeSrc = nativeSrc[0]?.src;
@@ -322,13 +322,16 @@ export default function Player({
 
   // Auto-clear embed loading indicator after 1500ms max so player is never stuck behind a loader
   useEffect(() => {
+    let timer = null;
     if (resolvedMode === 'embed') {
       setIsLoading(false);
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         setEmbedLoading(false);
       }, 1500);
-      return () => clearTimeout(timer);
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [resolvedMode, activeEmbedUrl]);
 
   // Keep loader consistent with async background scraping state
@@ -344,18 +347,16 @@ export default function Player({
     }
   }, [sourcesLoading, nativeReady, sourcesError, resolvedMode]);
 
-  // Safety timer: Never allow spinning loader to persist past 12s
+  // Safety timer: Never allow spinning loader to persist indefinitely
   useEffect(() => {
     if (!isLoading) return undefined;
     const safetyTimer = setTimeout(() => {
-      if (allowEmbedMode && embedAvailable && !nativeReady) {
-        setPlaybackMode('embed');
-        storeMode('embed');
-        setAutoSwitchNotice('Native stream is taking longer than usual. Switched to Embed Player.');
+      if (!sourcesLoading && !nativeReady) {
+        setAutoSwitchNotice('Native stream is taking longer than usual.');
         setTimeout(() => setAutoSwitchNotice(null), 5000);
       }
       setIsLoading(false);
-    }, 12000);
+    }, 20000);
     return () => clearTimeout(safetyTimer);
   }, [
     isLoading,
@@ -394,12 +395,11 @@ export default function Player({
 
   // Storyboard / Thumbnail VTT track if provided by extractor
   const thumbnailsUrl = useMemo(() => {
-    let raw = null;
-    if (directSources?.thumbnailTrack?.url) raw = directSources.thumbnailTrack.url;
+    let raw = directSources?.thumbnailTrack?.url || null;
     if (!raw && Array.isArray(directSources)) {
-      for (const s of directSources) {
-        if (s?.thumbnailTrack?.url) { raw = s.thumbnailTrack.url; break; }
-        if (s?.thumbnails) { raw = s.thumbnails; break; }
+      const match = directSources.find((s) => Boolean(s?.thumbnailTrack?.url || s?.thumbnails));
+      if (match) {
+        raw = match.thumbnailTrack?.url || match.thumbnails;
       }
     }
     if (!raw) return null;
@@ -409,7 +409,6 @@ export default function Player({
   const handleModeChange = useCallback((newMode) => {
     if (newMode && newMode !== playbackMode) {
       setPlaybackMode(newMode);
-      storeMode(newMode);
       setPlaybackError(null);
       setAutoSwitchNotice(null);
       if (newMode === 'native') {
@@ -474,6 +473,7 @@ export default function Player({
             }}
           >
             <MediaPlayer
+              key={`native-player-${activeNativeSrc}-${playbackAttempt}`}
               src={nativeSrc}
               crossOrigin="anonymous"
               autoPlay
@@ -510,8 +510,8 @@ export default function Player({
                 console.warn('Native player playback error:', detail);
                 setIsLoading(false);
 
-                // Auto-retry once on transient playback failure before falling back
-                if (autoRetryCountRef.current < 1) {
+                // Auto-retry on transient playback failure
+                if (autoRetryCountRef.current < 2) {
                   autoRetryCountRef.current += 1;
                   setIsAutoRetrying(true);
                   setAutoSwitchNotice('Stream interrupted. Retrying native playback...');
@@ -519,23 +519,16 @@ export default function Player({
                     setIsAutoRetrying(false);
                     setAutoSwitchNotice(null);
                     setPlaybackAttempt((prev) => prev + 1);
-                  }, 1200);
+                  }, 1500);
                   return;
                 }
 
                 setIsAutoRetrying(false);
 
-                // Auto fallback to embed immediately when native stream fails (CORS, 502, dead stream)
-                if (allowEmbedMode && embedAvailable) {
-                  setAutoSwitchNotice('Native stream unavailable. Switched to Embed Player.');
-                  setTimeout(() => setAutoSwitchNotice(null), 4500);
-                  setPlaybackMode('embed');
-                  setPlaybackError(null);
-                  return;
-                }
-
+                // Do not auto-switch to embed when native stream was found.
+                // Keep the player on native and display error UI with options to switch or retry.
                 setPlaybackError(
-                  'The direct stream failed across available providers. Try another server.'
+                  'The native stream encountered an error. You can retry, choose another extractor, or switch to Embed Player.'
                 );
               }}
             >
@@ -944,3 +937,5 @@ export default function Player({
     </Box>
   );
 }
+
+
