@@ -36,10 +36,12 @@
     "@mui/x-data-grid": "^7.7.0",
     "@mui/x-date-pickers": "^7.7.0",
     "@next/third-parties": "^16.1.6",
+    "@p-stream/providers": "github:steveyout/providers#production",
     "@vidstack/react": "1.15.6",
     "autosuggest-highlight": "^3.3.4",
     "axios": "^1.7.2",
     "dayjs": "^1.11.11",
+    "disable-devtool": "^0.3.9",
     "embla-carousel": "^8.1.5",
     "embla-carousel-auto-height": "^8.1.5",
     "embla-carousel-auto-scroll": "^8.1.5",
@@ -72,8 +74,7 @@
     "swr": "^2.2.5",
     "turndown": "^7.2.0",
     "yet-another-react-lightbox": "^3.20.0",
-    "zod": "^3.23.8",
-    "@p-stream/providers": "github:steveyout/providers#production"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
