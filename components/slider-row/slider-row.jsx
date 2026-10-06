@@ -17,21 +17,39 @@ export function SliderRow({ children, sx, itemWidth = { xs: 145, sm: 175, md: 19
   const [canScrollRight, setCanScrollRight] = useState(true);
 
   const checkScroll = useCallback(() => {
+    // On mobile devices, arrows are hidden, skip calculating and re-rendering
+    if (typeof window !== 'undefined' && window.innerWidth < 900) return;
+
     const el = scrollRef.current;
     if (!el) return;
     const { scrollLeft, scrollWidth, clientWidth } = el;
-    setCanScrollLeft(scrollLeft > 10);
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+    const hasLeft = scrollLeft > 14;
+    const hasRight = scrollLeft < scrollWidth - clientWidth - 14;
+
+    setCanScrollLeft((prev) => (prev !== hasLeft ? hasLeft : prev));
+    setCanScrollRight((prev) => (prev !== hasRight ? hasRight : prev));
   }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return undefined;
     checkScroll();
-    el.addEventListener('scroll', checkScroll, { passive: true });
+
+    let ticking = false;
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          checkScroll();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', checkScroll, { passive: true });
     return () => {
-      el.removeEventListener('scroll', checkScroll);
+      el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', checkScroll);
     };
   }, [children, checkScroll]);
@@ -91,10 +109,12 @@ export function SliderRow({ children, sx, itemWidth = { xs: 145, sm: 175, md: 19
           pt: 0.5,
           overflowX: 'auto',
           overflowY: 'hidden',
-          scrollSnapType: 'x mandatory',
+          scrollSnapType: { xs: 'x proximity', md: 'x mandatory' },
+          scrollPadding: { xs: '0 16px', md: '0 24px' },
           scrollbarWidth: 'none',
           WebkitOverflowScrolling: 'touch',
           overscrollBehaviorX: 'contain',
+          touchAction: 'pan-x pan-y',
           '&::-webkit-scrollbar': { display: 'none' },
           '& > *': {
             flexShrink: 0,
@@ -141,3 +161,5 @@ export function SliderRow({ children, sx, itemWidth = { xs: 145, sm: 175, md: 19
     </Box>
   );
 }
+
+export default SliderRow;

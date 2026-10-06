@@ -137,11 +137,11 @@ function HeroBannerItem({ item, isActive }) {
     : '/fallback-backdrop.jpg';
 
   const handleWatch = () => {
-    router.push(paths.watch.details(type, item.id, title));
+    router.push(paths.watch.details(type, item.id, title), { scroll: true });
   };
 
   const handlePlayDirect = () => {
-    router.push(paths.watch.play(type, item.id, title));
+    router.push(paths.watch.play(type, item.id, title), { scroll: true });
   };
 
   return (

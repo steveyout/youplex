@@ -54,6 +54,9 @@
 html {
   height: 100%;
   -webkit-overflow-scrolling: touch;
+}
+
+html[data-scroll-behavior="smooth"] {
   scroll-behavior: smooth;
 }
 body,
@@ -63,6 +66,9 @@ body,
   flex: 1 1 auto;
   min-height: 100%;
   flex-direction: column;
+}
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 img {
   max-width: 100%;
@@ -243,8 +249,20 @@ input[type='number']::-webkit-inner-spin-button {
 .youplex-aurora {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
   will-change: transform;
+}
+
+@media (min-width: 900px) {
+  .youplex-aurora {
+    filter: blur(90px);
+  }
+}
+
+@media (max-width: 899px) {
+  .youplex-aurora {
+    filter: none !important;
+    animation: none !important;
+  }
 }
 
 /* Respect users who prefer reduced motion */
@@ -316,3 +334,4 @@ input[type='number']::-webkit-inner-spin-button {
     line-height: 1.45;
   }
 }
+

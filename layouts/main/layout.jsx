@@ -10,6 +10,7 @@ import { Footer } from './footer';
 import { NavMobile } from './nav/mobile';
 import { NavDesktop } from './nav/desktop';
 import { BottomNav } from '../components/bottom-nav';
+import { BackToTop } from '@/components/animate/back-to-top';
 import { BackgroundGradient } from './background-gradient';
 import { HeaderBase } from '../core/header-base';
 import { LayoutSection } from '../core/layout-section';
@@ -20,9 +21,7 @@ import { navData as mainNavData } from '../config-nav-main';
 export function MainLayout({ sx, data, children }) {
   const theme = useTheme();
 
-
   const mobileNavOpen = useBoolean();
-
 
   const layoutQuery = 'md';
 
@@ -33,6 +32,8 @@ export function MainLayout({ sx, data, children }) {
       <NavMobile data={navData} open={mobileNavOpen.value} onClose={mobileNavOpen.onFalse} />
 
       <BottomNav />
+
+      <BackToTop />
 
       <BackgroundGradient />
 
@@ -49,7 +50,7 @@ export function MainLayout({ sx, data, children }) {
               searchbar: true,
               localization: true,
               notifications: true,
-              signIn :false,
+              signIn: false,
             }}
             slots={{
               topArea: (

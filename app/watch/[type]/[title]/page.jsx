@@ -75,8 +75,8 @@ export default function WatchPage() {
   const { type, title } = useParams();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
-  const season = searchParams.get('season');
-  const episode = searchParams.get('episode');
+  const season = searchParams.get('season') || searchParams.get('sn');
+  const episode = searchParams.get('episode') || searchParams.get('ep');
 
   const isDirectlyBlocked = useMemo(
     () => isContentDmcaBlocked({ id, title, type, pathname: `/watch/${type}/${title}` }),
@@ -89,6 +89,33 @@ export default function WatchPage() {
   const [similarTitles, setSimilarTitles] = useState([]);
   const [isLoading, setIsLoading] = useState(!isDirectlyBlocked);
   const [error, setError] = useState(null);
+
+  // Immediately scroll to top when user navigates or route params change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } catch {
+        window.scrollTo(0, 0);
+      }
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    }
+  }, [type, title, id]);
+
+  // Ensure view stays at top once async title details finish loading
+  useEffect(() => {
+    if (!isLoading && typeof window !== 'undefined') {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } catch {
+        window.scrollTo(0, 0);
+      }
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    }
+  }, [isLoading]);
+
 
   useEffect(() => {
     let active = true;
@@ -413,6 +440,21 @@ function WatchContent({
       toast.success('Link copied to clipboard!');
     }
   }, []);
+
+  // Ensure details page always starts from top when mounted
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } catch {
+        window.scrollTo(0, 0);
+      }
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    }
+  }, [id, title]);
+
+
 
   const safeSlug = title || cleanSlugTitle(displayTitle).toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'show';
 

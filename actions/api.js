@@ -61,8 +61,9 @@ export async function getTrending(type = 'all', timeWindow = 'day') {
  * Fetch Movie / Show by ID (for Watch page)
  * @param {string} type - 'movie' or 'tv'
  * @param {string|number} id - TMDB ID
+ * @param {Object} [opts] - Optional season, episode parameters
  */
-export async function getMovieOrShow(type, id) {
+export async function getMovieOrShow(type, id, opts = {}) {
   if (!id) return null;
   if (isContentDmcaBlocked({ id, type })) {
     return null;
@@ -81,12 +82,15 @@ export async function getMovieOrShow(type, id) {
     const data = res.data;
     if (!data) return null;
 
+    const season = opts.season || 1;
+    const episode = opts.episode || 1;
+
     const servers = providers
       .filter((provider) => provider.enabled)
       .map((provider) => ({
         id: provider.id,
         name: provider.name,
-        url: getEmbedUrl(provider.id, type, id),
+        url: getEmbedUrl(provider.id, type, id, season, episode),
       }));
 
     return {
@@ -108,7 +112,7 @@ export async function getMovieOrShow(type, id) {
       numberOfSeasons: data.number_of_seasons || null,
       numberOfEpisodes: data.number_of_episodes || null,
       seasons: data.seasons || [],
-      videoUrl: getEmbedUrl(DEFAULT_PROVIDER_ID, type, id),
+      videoUrl: getEmbedUrl(DEFAULT_PROVIDER_ID, type, id, season, episode),
       servers,
     };
   } catch (error) {
@@ -123,7 +127,7 @@ export async function getMovieOrShow(type, id) {
  * Fetch Play Sources (HLS/Dash streams) with real-time SSE progress streaming support
  * @param {string} type - 'movie' or 'tv'
  * @param {string|number} id - TMDB ID
- * @param {Object} opts - Additional options (season, episode, provider)
+ * @param {Object} opts - Additional options (season, episode, provider, title, year, seasonId, episodeId, imdbId)
  * @param {Function} [onProgress] - Optional real-time progress callback: (event) => void
  */
 export async function getPlaySources(type, id, opts = {}, onProgress = null) {
@@ -144,6 +148,11 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
     ...(opts.season ? { season: String(opts.season) } : {}),
     ...(opts.episode ? { episode: String(opts.episode) } : {}),
     ...(opts.provider ? { provider: opts.provider } : {}),
+    ...(opts.title ? { title: String(opts.title) } : {}),
+    ...(opts.year || opts.releaseYear ? { year: String(opts.year || opts.releaseYear) } : {}),
+    ...(opts.seasonId ? { seasonId: String(opts.seasonId) } : {}),
+    ...(opts.episodeId ? { episodeId: String(opts.episodeId) } : {}),
+    ...(opts.imdbId ? { imdbId: String(opts.imdbId) } : {}),
   });
 
   // If onProgress callback is provided, request SSE stream for real-time provider events

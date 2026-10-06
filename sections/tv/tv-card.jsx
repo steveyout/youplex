@@ -54,7 +54,7 @@ export function TvCard({ post, rowIndex, colIndex }) {
     const handleKey = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        router.push(linkTo);
+        router.push(linkTo, { scroll: true });
       }
     };
 
@@ -82,7 +82,7 @@ export function TvCard({ post, rowIndex, colIndex }) {
           boxShadow: '0 0 0 3px #00e676, 0 8px 40px rgba(0,230,118,0.35)',
         }),
       }}
-      onClick={() => router.push(linkTo)}
+      onClick={() => router.push(linkTo, { scroll: true })}
     >
       <Box
         component="img"

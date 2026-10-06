@@ -203,6 +203,7 @@ export default function PlayPage() {
         const resolvedSeasonNum = Number(season || firstSeason?.season_number || 1);
         const resolvedEpisodeNum = Number(episode || 1);
         const releaseYear = (data?.release_date || data?.first_air_date)?.slice(0, 4);
+        const currentSeasonObj = data?.seasons?.find((item) => item.season_number === resolvedSeasonNum);
 
         const initialPlaybackOptions = {
           title: data.title || data.name,
@@ -212,6 +213,7 @@ export default function PlayPage() {
             ? {
                 season: resolvedSeasonNum,
                 episode: resolvedEpisodeNum,
+                seasonId: currentSeasonObj?.id,
               }
             : {}),
         };
@@ -1104,8 +1106,8 @@ export default function PlayPage() {
               type={type}
               id={id || movieOrShow?.id}
               tmdbId={id || movieOrShow?.id}
-              season={season}
-              episode={episode}
+              season={resolvedSeason}
+              episode={resolvedEpisode}
               backdrop={backdropUrl}
               onBack={backToWatch}
               src={movieOrShow.videoUrl}

@@ -131,12 +131,14 @@ function storeMode(mode) {
   // Intentionally no-op: every movie/show starts from native player first
 }
 
+const EMPTY_ARRAY = Object.freeze([]);
+
 export default function Player({
   src,
-  servers = [],
-  directSources = [],
-  subtitles = [],
-  extractorProviders = [],
+  servers = EMPTY_ARRAY,
+  directSources = EMPTY_ARRAY,
+  subtitles = EMPTY_ARRAY,
+  extractorProviders = EMPTY_ARRAY,
   activeExtractorId = null,
   sourcesLoading = false,
   loading = false,
@@ -153,11 +155,11 @@ export default function Player({
   id,
   tmdbId,
   onBack,
-  timelineSegments: initialTimelineSegments = [],
+  timelineSegments: initialTimelineSegments = EMPTY_ARRAY,
   hasNextEpisode = false,
   onNextEpisode = null,
   chapters = null,
-  cast = [],
+  cast = EMPTY_ARRAY,
 }) {
   const [isLoading, setIsLoading] = useState(true);
   const [embedLoading, setEmbedLoading] = useState(false);
@@ -240,7 +242,7 @@ export default function Player({
     if (initialTimelineSegments && initialTimelineSegments.length > 0) {
       setTimelineSegments(initialTimelineSegments);
     } else if (!resolvedTmdbId) {
-      setTimelineSegments([]);
+      setTimelineSegments((prev) => (prev.length === 0 ? prev : EMPTY_ARRAY));
     } else {
       const isTv = type === 'tv';
       const requestKey = `${resolvedTmdbId}:${type || 'movie'}:${isTv ? resolvedSeasonNum : 'm'}:${isTv ? resolvedEpisodeNum : 'm'}:${videoDurationMs || 'none'}`;
@@ -346,6 +348,29 @@ export default function Player({
       }
     }
   }, [sourcesLoading, nativeReady, sourcesError, resolvedMode]);
+
+  // When native scraping finishes without any playable streams, auto-switch to Embed Player
+  useEffect(() => {
+    if (
+      resolvedMode === 'native' &&
+      !sourcesLoading &&
+      !nativeReady &&
+      !loading &&
+      (sourcesError || (Array.isArray(directSources?.sources) && directSources.sources.length === 0))
+    ) {
+      if (allowEmbedMode && embedAvailable) {
+        const timer = setTimeout(() => {
+          setPlaybackMode('embed');
+          setIsLoading(false);
+          setEmbedLoading(true);
+          setAutoSwitchNotice('Native stream unavailable. Switched to Embed Player.');
+          setTimeout(() => setAutoSwitchNotice(null), 4000);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    }
+    return undefined;
+  }, [resolvedMode, sourcesLoading, nativeReady, loading, sourcesError, directSources, allowEmbedMode, embedAvailable]);
 
   // Safety timer: Never allow spinning loader to persist indefinitely
   useEffect(() => {
@@ -937,5 +962,3 @@ export default function Player({
     </Box>
   );
 }
-
-

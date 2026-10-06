@@ -40,15 +40,18 @@ export async function GET(request) {
     const playlistUrl = new URL(playlist, iframe || streamPage).href;
     // DLHD's CDN validates the player origin rather than accepting the CDN
     // origin as a browser referer.
-    const origin = 'https://hamis.romponalis.st';
+    const origin = iframe ? new URL(iframe).origin : 'https://hamis.romponalis.st';
+    const referer = iframe || `${origin}/`;
+    const proxyUrl = `/api/hls?url=${encodeURIComponent(playlistUrl)}&origin=${encodeURIComponent(origin)}&referer=${encodeURIComponent(referer)}`;
+
     return Response.json({
       success: true,
-      streamUrl: playlistUrl,
+      streamUrl: proxyUrl,
       channel,
       source: {
-        url: playlistUrl,
+        url: proxyUrl,
         type: 'hls',
-        referer: origin + '/',
+        referer,
         origin,
       },
     });

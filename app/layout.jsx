@@ -136,8 +136,7 @@ const antiInspectScript = `
     if (typeof console !== 'undefined') {
       var noop = function() {};
       ['log', 'debug', 'info', 'warn', 'error', 'table', 'dir'].forEach(function(m) {
-        try { console[m] = noop; } catch(e) {}
-      });
+        try { console[m] = noop; } catch(e) {}\n      });
     }
 
     // Early docked DevTools window threshold check
@@ -159,7 +158,7 @@ export default async function RootLayout({ children }) {
   const settings = CONFIG.isStaticExport ? defaultSettings : await detectSettings();
 
   return (
-    <html lang={lang ?? 'en'} suppressHydrationWarning>
+    <html lang={lang ?? 'en'} suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
         <script dangerouslySetInnerHTML={{ __html: extensionErrorSuppressor }} />
         <script dangerouslySetInnerHTML={{ __html: antiInspectScript }} />

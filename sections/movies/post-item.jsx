@@ -58,7 +58,10 @@ export function RatingPill({ rating, size = 'small', sx }) {
         color: '#FFFFFF',
         bgcolor: bg,
         border: '1px solid rgba(255, 255, 255, 0.32)',
-        boxShadow: `0 2px 10px ${glow}, 0 1px 4px rgba(0, 0, 0, 0.6)`,
+        boxShadow: {
+          xs: '0 1px 4px rgba(0, 0, 0, 0.6)',
+          md: `0 2px 10px ${glow}, 0 1px 4px rgba(0, 0, 0, 0.6)`,
+        },
         ...sx,
       }}
     >
@@ -89,6 +92,7 @@ export function PostItem({ post, index = 0 }) {
     <Link
       component={RouterLink}
       href={linkTo}
+      scroll={true}
       sx={{
         display: 'block',
         height: '100%',
@@ -96,6 +100,7 @@ export function PostItem({ post, index = 0 }) {
         textDecoration: 'none',
         color: 'inherit',
         outline: 'none',
+        WebkitTapHighlightColor: 'transparent',
         '&:focus-visible': {
           borderRadius: 2.5,
           boxShadow: `0 0 0 2px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.8)}`,
@@ -114,20 +119,32 @@ export function PostItem({ post, index = 0 }) {
           border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.08)}`,
           transform: 'translateZ(0)',
           backfaceVisibility: 'hidden',
+          contain: 'paint layout',
           contentVisibility: 'auto',
+          containIntrinsicSize: '150px 225px',
           transition: theme.transitions.create(['transform', 'box-shadow', 'border-color'], {
-            duration: 0.28,
+            duration: 0.25,
             easing: theme.transitions.easing.easeOut,
           }),
-          '&:hover': {
-            transform: 'translateY(-6px)',
-            borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.35),
-            boxShadow: `0 18px 36px -12px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.32)}, 0 0 0 1px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.16)}`,
+          // Only trigger heavy hover transforms on real pointer/desktop devices:
+          '@media (hover: hover) and (pointer: fine)': {
+            '&:hover': {
+              transform: 'translateY(-6px)',
+              borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.35),
+              boxShadow: `0 18px 36px -12px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.32)}, 0 0 0 1px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.16)}`,
+            },
+            '&:hover .youplex-poster-img': { transform: 'scale(1.05)' },
+            '&:hover .youplex-poster-overlay': { opacity: 1 },
+            '&:hover .youplex-card-fab': { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
+            '&:hover .youplex-card-shine': { opacity: 1, left: '120%' },
           },
-          '&:hover .youplex-poster-img': { transform: 'scale(1.05)' },
-          '&:hover .youplex-poster-overlay': { opacity: 1 },
-          '&:hover .youplex-card-fab': { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
-          '&:hover .youplex-card-shine': { opacity: 1, left: '120%' },
+          // Instant, smooth tap feedback on mobile without jank:
+          '@media (hover: none)': {
+            '&:active': {
+              transform: 'scale(0.97)',
+              transition: 'transform 0.1s ease',
+            },
+          },
         }}
       >
         <Box sx={{ position: 'relative', overflow: 'hidden', width: 1, aspectRatio: '2/3', bgcolor: 'grey.900' }}>
@@ -171,7 +188,7 @@ export function PostItem({ post, index = 0 }) {
             sx={{
               width: 1,
               height: 1,
-              transition: 'transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)',
+              transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
               willChange: 'transform',
             }}
           >
@@ -183,10 +200,11 @@ export function PostItem({ post, index = 0 }) {
             />
           </Box>
 
-          {/* Hover gradient overlay */}
+          {/* Hover gradient overlay (desktop only) */}
           <Box
             className="youplex-poster-overlay"
             sx={{
+              display: { xs: 'none', md: 'block' },
               top: 0,
               left: 0,
               width: 1,
@@ -199,10 +217,11 @@ export function PostItem({ post, index = 0 }) {
             }}
           />
 
-          {/* Glass shine sweep on hover */}
+          {/* Glass shine sweep on hover (desktop only) */}
           <Box
             className="youplex-card-shine"
             sx={{
+              display: { xs: 'none', md: 'block' },
               top: 0,
               bottom: 0,
               left: '-60%',
@@ -217,17 +236,17 @@ export function PostItem({ post, index = 0 }) {
             }}
           />
 
-          {/* Hover play button */}
+          {/* Hover play button (desktop only) */}
           <Box
             className="youplex-card-fab"
             sx={{
+              display: { xs: 'none', md: 'flex' },
               top: '50%',
               left: '50%',
               zIndex: 8,
               width: 48,
               height: 48,
               opacity: 0,
-              display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               position: 'absolute',
@@ -303,6 +322,7 @@ export function PostItemLatest({ post, index = 0 }) {
     <Link
       component={RouterLink}
       href={linkTo}
+      scroll={true}
       sx={{
         display: 'block',
         height: '100%',
@@ -310,6 +330,7 @@ export function PostItemLatest({ post, index = 0 }) {
         textDecoration: 'none',
         color: 'inherit',
         outline: 'none',
+        WebkitTapHighlightColor: 'transparent',
         '&:focus-visible': {
           borderRadius: 2.5,
           boxShadow: `0 0 0 2px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.8)}`,
@@ -328,19 +349,29 @@ export function PostItemLatest({ post, index = 0 }) {
           border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.1)}`,
           transform: 'translateZ(0)',
           backfaceVisibility: 'hidden',
+          contain: 'paint layout',
           contentVisibility: 'auto',
+          containIntrinsicSize: '280px 300px',
           transition: theme.transitions.create(['transform', 'box-shadow', 'border-color'], {
-            duration: 0.28,
+            duration: 0.25,
             easing: theme.transitions.easing.easeOut,
           }),
-          '&:hover': {
-            transform: 'translateY(-6px)',
-            borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.35),
-            boxShadow: `0 20px 40px -12px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.4)}`,
+          '@media (hover: hover) and (pointer: fine)': {
+            '&:hover': {
+              transform: 'translateY(-6px)',
+              borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.35),
+              boxShadow: `0 20px 40px -12px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.4)}`,
+            },
+            '&:hover .youplex-poster-img': { transform: 'scale(1.05)' },
+            '&:hover .youplex-card-fab': { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
+            '&:hover .youplex-card-shine': { opacity: 1, left: '120%' },
           },
-          '&:hover .youplex-poster-img': { transform: 'scale(1.05)' },
-          '&:hover .youplex-card-fab': { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
-          '&:hover .youplex-card-shine': { opacity: 1, left: '120%' },
+          '@media (hover: none)': {
+            '&:active': {
+              transform: 'scale(0.98)',
+              transition: 'transform 0.1s ease',
+            },
+          },
         }}
       >
         <Stack direction="row" spacing={1} sx={{ top: 16, right: 16, zIndex: 9, position: 'absolute' }}>
@@ -369,7 +400,7 @@ export function PostItemLatest({ post, index = 0 }) {
           className="youplex-poster-img"
           sx={{
             height: 1,
-            transition: 'transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)',
+            transition: 'transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)',
             willChange: 'transform',
           }}
         >
@@ -380,17 +411,17 @@ export function PostItemLatest({ post, index = 0 }) {
           />
         </Box>
 
-        {/* Hover play button */}
+        {/* Hover play button (desktop only) */}
         <Box
           className="youplex-card-fab"
           sx={{
+            display: { xs: 'none', md: 'flex' },
             top: '50%',
             left: '50%',
             zIndex: 8,
             width: 56,
             height: 56,
             opacity: 0,
-            display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             position: 'absolute',
@@ -405,10 +436,11 @@ export function PostItemLatest({ post, index = 0 }) {
           <Iconify icon="solar:play-bold" width={26} sx={{ ml: 0.4 }} />
         </Box>
 
-        {/* Glass shine sweep */}
+        {/* Glass shine sweep (desktop only) */}
         <Box
           className="youplex-card-shine"
           sx={{
+            display: { xs: 'none', md: 'block' },
             top: 0,
             bottom: 0,
             left: '-60%',
@@ -450,7 +482,7 @@ export function PostItemLatest({ post, index = 0 }) {
               {type === 'tv' ? 'Series' : 'Movie'}
             </Box>
 
-            {displayDate && <span>• {fDate(displayDate, 'MMMM D, YYYY')}</span>}
+            {displayDate && <span>&bull; {fDate(displayDate, 'MMMM D, YYYY')}</span>}
           </Stack>
 
           <Typography
@@ -476,88 +508,6 @@ export function PostItemLatest({ post, index = 0 }) {
           </Stack>
         </Box>
       </Card>
-    </Link>
-  );
-}
-
-// ----------------------------------------------------------------------
-
-export function PostItemCarousel({ post }) {
-  const theme = useTheme();
-
-  const { id, title, name, release_date, first_air_date, backdrop_path, vote_average, media_type } = post;
-
-  const displayTitle = title || name || 'Untitled';
-  const displayDate = release_date || first_air_date;
-  const type = media_type || (release_date ? 'movie' : 'tv');
-
-  const linkTo = paths.watch.details(type, id, displayTitle);
-
-  const backdropUrl = backdrop_path
-    ? `https://image.tmdb.org/t/p/w780${backdrop_path}`
-    : '/assets/placeholder-backdrop.jpg';
-
-  return (
-    <Link
-      component={RouterLink}
-      href={linkTo}
-      sx={{
-        display: 'block',
-        height: '100%',
-        cursor: 'pointer',
-        textDecoration: 'none',
-        color: 'inherit',
-      }}
-    >
-      <Box
-        sx={{
-          borderRadius: 2.5,
-          overflow: 'hidden',
-          position: 'relative',
-          bgcolor: 'grey.900',
-          aspectRatio: '16/9',
-          border: `1px solid ${varAlpha(theme.vars.palette.divider, 0.1)}`,
-          transition: theme.transitions.create(['transform', 'box-shadow', 'border-color'], {
-            duration: 0.28,
-            easing: theme.transitions.easing.easeOut,
-          }),
-          '&:hover': {
-            transform: 'translateY(-4px)',
-            borderColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.4),
-            boxShadow: `0 16px 32px -10px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.35)}`,
-          },
-        }}
-      >
-        <Image alt={displayTitle} src={backdropUrl} sx={{ width: 1, height: 1 }} />
-
-        <Box
-          sx={{
-            p: 2.5,
-            inset: 0,
-            zIndex: 2,
-            position: 'absolute',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-end',
-            background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)',
-          }}
-        >
-          <Typography variant="subtitle1" sx={{ color: 'common.white', fontWeight: 700 }}>
-            {displayTitle}
-          </Typography>
-
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mt: 0.5 }}>
-            {vote_average > 0 && (
-              <RatingPill rating={vote_average} size="small" />
-            )}
-            {displayDate && (
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {fDate(displayDate, 'YYYY')}
-              </Typography>
-            )}
-          </Stack>
-        </Box>
-      </Box>
     </Link>
   );
 }
