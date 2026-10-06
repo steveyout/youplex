@@ -2,12 +2,13 @@
 
 import axios, { endpoints } from '@/utils/axios';
 import { providers, getEmbedUrl, DEFAULT_PROVIDER_ID } from '@/config/providers';
+import { isContentDmcaBlocked } from '@/lib/dmca';
 
 // ----------------------------------------------------------------------
 
 /**
  * Fetch Movies / Shows (by category or custom endpoint)
- * @param {string} endpoint - The TMDB endpoint path
+ * @param {string} endpointOrCategory - The TMDB endpoint path
  * @param {number} page - Default 1
  */
 export async function getMovies(endpointOrCategory = 'popular', page = 1) {
@@ -63,6 +64,9 @@ export async function getTrending(type = 'all', timeWindow = 'day') {
  */
 export async function getMovieOrShow(type, id) {
   if (!id) return null;
+  if (isContentDmcaBlocked({ id, type })) {
+    return null;
+  }
 
   try {
     const isTv = type === 'tv';
@@ -124,6 +128,15 @@ export async function getMovieOrShow(type, id) {
  */
 export async function getPlaySources(type, id, opts = {}, onProgress = null) {
   if (!id) return { sources: [], subtitles: [] };
+
+  if (isContentDmcaBlocked({ id, type, title: opts?.title })) {
+    return {
+      success: false,
+      sources: [],
+      subtitles: [],
+      error: 'Gone - Content removed pursuant to DMCA',
+    };
+  }
 
   const params = new URLSearchParams({
     type,
@@ -264,6 +277,10 @@ export async function getSubtitles(arg1, arg2 = {}, arg3 = {}) {
     return [];
   }
 
+  if (isContentDmcaBlocked({ id: tmdbId, type })) {
+    return [];
+  }
+
   try {
     const params = new URLSearchParams({
       tmdb_id: String(tmdbId),
@@ -310,6 +327,9 @@ export async function searchMedia(query, page = 1) {
  */
 export async function getMediaDetails(type, id) {
   if (!id) return null;
+  if (isContentDmcaBlocked({ id, type })) {
+    return null;
+  }
 
   const endpoint = endpoints.tmdb.details ? endpoints.tmdb.details(type, id) : `/${type}/${id}`;
 
@@ -519,6 +539,9 @@ function setToIntroDbCache(key, data) {
  */
 export async function getIntroTimestamps({ tmdbId, imdbId, tvdbId, type = 'movie', season, episode, durationMs } = {}) {
   if (!tmdbId && !imdbId && !tvdbId) return { success: false, segments: [] };
+  if (isContentDmcaBlocked({ id: tmdbId, type })) {
+    return { success: false, segments: [], message: 'Gone - Content removed pursuant to DMCA' };
+  }
 
   const isTv = type === 'tv' || type === 'show' || Boolean(season);
   const cacheKey = [

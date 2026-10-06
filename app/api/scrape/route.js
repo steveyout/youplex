@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { scrapeMedia, getProviderFriendlyName } from '@/lib/providers';
+import { isContentDmcaBlocked } from '@/lib/dmca';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,6 +118,22 @@ export async function GET(request) {
       { error: 'Missing or invalid "id" query param (TMDB id)' },
       { status: 400 }
     );
+  }
+
+  // Enforce DMCA blocked items immediately
+  if (
+    isContentDmcaBlocked({
+      id,
+      title: passedTitle,
+      type,
+    })
+  ) {
+    return new NextResponse('Gone - Content removed pursuant to DMCA', {
+      status: 410,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
   }
 
   if (type !== 'movie' && type !== 'tv') {

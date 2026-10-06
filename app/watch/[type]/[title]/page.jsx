@@ -29,6 +29,8 @@ import { toast } from '@/components/snackbar';
 import { Iconify } from '@/components/iconify';
 import { RouterLink } from '@/routes/components';
 import { PostItem } from '@/sections/movies/post-item';
+import { isContentDmcaBlocked } from '@/lib/dmca';
+import { DmcaNotice } from '@/components/dmca/dmca-notice';
 import {
   getMovieOrShow,
   getRecommendations,
@@ -76,14 +78,28 @@ export default function WatchPage() {
   const season = searchParams.get('season');
   const episode = searchParams.get('episode');
 
+  const isDirectlyBlocked = useMemo(
+    () => isContentDmcaBlocked({ id, title, type, pathname: `/watch/${type}/${title}` }),
+    [id, title, type]
+  );
+  const [isBlocked, setIsBlocked] = useState(isDirectlyBlocked);
+
   const [movieOrShow, setMovieOrShow] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [similarTitles, setSimilarTitles] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!isDirectlyBlocked);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let active = true;
+
+    if (isDirectlyBlocked) {
+      setIsBlocked(true);
+      setIsLoading(false);
+      return () => {
+        active = false;
+      };
+    }
 
     setIsLoading(true);
     setError(null);
@@ -103,6 +119,14 @@ export default function WatchPage() {
         } catch (searchErr) {
           console.warn('Auto search recovery failed:', searchErr);
         }
+      }
+
+      if (isContentDmcaBlocked({ id: resolvedId, title, type, pathname: `/watch/${type}/${title}` })) {
+        if (active) {
+          setIsBlocked(true);
+          setIsLoading(false);
+        }
+        return;
       }
 
       if (!resolvedId) {
@@ -162,6 +186,10 @@ export default function WatchPage() {
       active = false;
     };
   }, [type, id, season, episode, title]);
+
+  if (isDirectlyBlocked || isBlocked) {
+    return <DmcaNotice title={title} type={type} />;
+  }
 
   if (isLoading) return <WatchSkeleton />;
 

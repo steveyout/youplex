@@ -22,6 +22,8 @@ import Typography from '@mui/material/Typography';
 import Skeleton from '@mui/material/Skeleton';
 import CardActionArea from '@mui/material/CardActionArea';
 
+import { isContentDmcaBlocked } from '@/lib/dmca';
+import { DmcaNotice } from '@/components/dmca/dmca-notice';
 import { Player } from '@/components/player';
 import { Iconify } from '@/components/iconify';
 import { CLIENT_SCRAPER_CONFIG } from '@/lib/scrapers/provider-config';
@@ -48,10 +50,16 @@ export default function PlayPage() {
   const season = searchParams.get('season');
   const episode = searchParams.get('episode');
 
+  const isDirectlyBlocked = useMemo(
+    () => isContentDmcaBlocked({ id, title, type, pathname: `/watch/${type}/${title}/play` }),
+    [id, title, type]
+  );
+  const [isBlocked, setIsBlocked] = useState(isDirectlyBlocked);
+
   const [movieOrShow, setMovieOrShow] = useState(null);
   const [directSources, setDirectSources] = useState({ sources: [], subtitles: [] });
-  const [isLoading, setIsLoading] = useState(true);
-  const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!isDirectlyBlocked);
+  const [sourcesLoading, setSourcesLoading] = useState(!isDirectlyBlocked);
   const [sourcesError, setSourcesError] = useState(null);
   const [openSubtitles, setOpenSubtitles] = useState([]);
   const [error, setError] = useState(null);
@@ -129,6 +137,15 @@ export default function PlayPage() {
   useEffect(() => {
     let active = true;
 
+    if (isDirectlyBlocked) {
+      setIsBlocked(true);
+      setIsLoading(false);
+      setSourcesLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
     setIsLoading(true);
     setSourcesLoading(true);
     setSourcesError(null);
@@ -156,6 +173,15 @@ export default function PlayPage() {
         } catch (searchErr) {
           console.warn('Auto search recovery failed:', searchErr);
         }
+      }
+
+      if (isContentDmcaBlocked({ id: resolvedId, title, type, pathname: `/watch/${type}/${title}/play` })) {
+        if (active) {
+          setIsBlocked(true);
+          setIsLoading(false);
+          setSourcesLoading(false);
+        }
+        return null;
       }
 
       if (!resolvedId) {
@@ -403,6 +429,14 @@ export default function PlayPage() {
     const nextEpNum = currentEpNum + 1;
     navigateToEpisode(selectedSeason, nextEpNum);
   }, [type, selectedSeason, selectedEpisode, navigateToEpisode]);
+
+  if (isDirectlyBlocked || isBlocked) {
+    return (
+      <Box sx={{ minHeight: '100vh', bgcolor: '#050709', display: 'flex', flexDirection: 'column' }}>
+        <DmcaNotice title={title} type={type} />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#050709', display: 'flex', flexDirection: 'column' }}>
