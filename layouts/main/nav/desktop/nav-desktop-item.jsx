@@ -15,7 +15,7 @@ import CardActionArea from '@mui/material/CardActionArea';
 // ----------------------------------------------------------------------
 
 export const NavItem = forwardRef(
-  ({ title, path, open, active, hasChild, externalLink, subItem, ...other }, ref) => {
+  ({ title, path, open, active, hasChild, externalLink, subItem, icon, ...other }, ref) => {
     const navItem = useNavItem({ path, hasChild, externalLink });
 
     return (
@@ -29,9 +29,34 @@ export const NavItem = forwardRef(
         {...navItem.baseProps}
         {...other}
       >
-        {title}
+        {icon && subItem && (
+          <Box
+            component="span"
+            sx={{
+              mr: 1.25,
+              display: 'inline-flex',
+              alignItems: 'center',
+              color: active ? 'primary.main' : 'text.secondary',
+              '& svg': { width: 18, height: 18 },
+            }}
+          >
+            {icon}
+          </Box>
+        )}
+
+        <Box component="span" sx={{ flexGrow: 1, textAlign: 'left', whiteSpace: 'nowrap' }}>
+          {title}
+        </Box>
 
         {hasChild && <Iconify width={16} icon="eva:arrow-ios-downward-fill" sx={{ ml: 0.75 }} />}
+
+        {externalLink && subItem && (
+          <Iconify
+            width={14}
+            icon="eva:external-link-fill"
+            sx={{ ml: 1, opacity: 0.6, color: 'text.secondary' }}
+          />
+        )}
       </StyledNavItem>
     );
   }
@@ -92,7 +117,7 @@ const StyledNavItem = styled(ButtonBase, {
         boxShadow: `0 0 12px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.6)}`,
       },
       '&:hover': {
-        opacity: 0.64,
+        opacity: 0.85,
         '&::before': baseStyles.dot,
         '&::after': { opacity: 1, transform: 'scaleX(1)' },
       },
@@ -102,7 +127,7 @@ const StyledNavItem = styled(ButtonBase, {
         '&::before': baseStyles.dot,
         '&::after': { opacity: 1, transform: 'scaleX(1)' },
       }),
-      ...(open && { opacity: 0.64, '&::before': baseStyles.dot }),
+      ...(open && { opacity: 0.85, '&::before': baseStyles.dot }),
     }),
 
     /**
@@ -111,16 +136,20 @@ const StyledNavItem = styled(ButtonBase, {
     ...(subItem && {
       ...baseStyles.item,
       justifyContent: 'flex-start',
+      width: '100%',
+      px: 1.25,
+      py: 1,
+      borderRadius: Number(theme.shape.borderRadius) || 8,
       color: theme.vars.palette.text.secondary,
       fontSize: theme.typography.pxToRem(13),
       '&:hover': {
         color: theme.vars.palette.text.primary,
-        '&::before': baseStyles.dot,
+        backgroundColor: varAlpha(theme.vars.palette.text.primaryChannel, 0.08),
       },
       ...(active && {
-        color: theme.vars.palette.text.primary,
+        color: theme.vars.palette.primary.main,
+        backgroundColor: varAlpha(theme.vars.palette.primary.mainChannel, 0.12),
         fontWeight: theme.typography.fontWeightSemiBold,
-        '&::before': baseStyles.dot,
       }),
     }),
   };

@@ -49,9 +49,10 @@ export function buildChapters({
   const segments = [];
   if (Array.isArray(timelineSegments) && timelineSegments.length > 0) {
     for (const seg of timelineSegments) {
-      if (!seg || typeof seg.start !== 'number' || typeof seg.end !== 'number') continue;
-      const sStart = Math.max(0, Math.min(maxSec, seg.start));
-      const sEnd = Math.max(sStart, Math.min(maxSec, seg.end));
+      if (!seg || typeof seg.start !== 'number') continue;
+      const sStart = Math.max(0, Math.min(maxSec, Number(seg.start) || 0));
+      const rawEnd = seg.end != null ? Number(seg.end) : maxSec;
+      const sEnd = Math.max(sStart, Math.min(maxSec, rawEnd));
       if (sEnd <= sStart) continue;
 
       const isIntro = seg.type === 'intro';
@@ -82,7 +83,7 @@ export function buildChapters({
         end: sEnd,
         type: seg.type,
         badge,
-        isRealChapter: false,
+        isRealChapter: true,
         isSegment: true,
       });
     }

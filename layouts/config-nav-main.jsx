@@ -4,7 +4,11 @@ import { Iconify } from '@/components/iconify';
 // ----------------------------------------------------------------------
 
 export const navData = [
-  { title: 'Home', path: '/', icon: <Iconify width={22} icon="proicons:home" /> },
+  {
+    title: 'Home',
+    path: '/',
+    icon: <Iconify width={22} icon="proicons:home" />,
+  },
   {
     title: 'Search',
     path: paths.search,
@@ -26,14 +30,47 @@ export const navData = [
     icon: <Iconify width={22} icon="solar:tv-bold-duotone" />,
   },
   {
-    title: 'Torrents',
-    path: paths.torrents,
-    icon: <Iconify width={22} icon="arcticons:torrents-csv-android" />,
+    title: 'Library',
+    path: paths.bookmarks,
+    icon: <Iconify width={22} icon="solar:bookmark-square-minimalistic-bold-duotone" />,
+    children: [
+      {
+        subheader: '',
+        items: [
+          {
+            title: 'Bookmarks',
+            path: paths.bookmarks,
+            icon: <Iconify width={20} icon="solar:bookmark-bold-duotone" />,
+          },
+          {
+            title: 'Watch History',
+            path: paths.history,
+            icon: <Iconify width={20} icon="solar:history-bold-duotone" />,
+          },
+        ],
+      },
+    ],
   },
-
   {
-    title: 'Discord',
-    icon: <Iconify width={22} icon="ic:round-discord" />,
+    title: 'Community',
     path: paths.discord,
+    icon: <Iconify width={22} icon="solar:users-group-two-rounded-bold-duotone" />,
+    children: [
+      {
+        subheader: '',
+        items: [
+          {
+            title: 'Torrents',
+            path: paths.torrents,
+            icon: <Iconify width={20} icon="arcticons:torrents-csv-android" />,
+          },
+          {
+            title: 'Discord',
+            path: paths.discord,
+            icon: <Iconify width={20} icon="ic:round-discord" />,
+          },
+        ],
+      },
+    ],
   },
 ];

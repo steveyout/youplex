@@ -6,6 +6,7 @@ import { varAlpha } from '@/theme/styles';
 import { searchMedia } from '@/actions/api';
 import { Iconify } from '@/components/iconify';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useWatchHistory } from '@/hooks/use-watch-history';
 import { useMemo, useState, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
@@ -56,6 +57,18 @@ const TV_TABS = [
 
 export function PostListHomeView({ categories = {}, pageType = 'all' }) {
   const theme = useTheme();
+  const { history } = useWatchHistory();
+
+  const continueWatchingItems = useMemo(() => {
+    if (!history || history.length === 0) return [];
+    return history
+      .filter((item) => !item.isCompleted && (item.currentTime || 0) > 10 && (item.progress || 0) < 0.93)
+      .slice(0, 12)
+      .map((item) => ({
+        ...item,
+        isResume: true,
+      }));
+  }, [history]);
   const [activeTab, setActiveTab] = useState('all');
   const [sortBy, setSortBy] = useState('latest');
   const [searchQuery, setSearchQuery] = useState('');
@@ -281,6 +294,15 @@ export function PostListHomeView({ categories = {}, pageType = 'all' }) {
 
         {/* Dynamic Sections */}
         <Stack spacing={8}>
+          {activeTab === 'all' && continueWatchingItems.length > 0 && (
+            <BoxSection
+              sectionKey="continueWatching"
+              title="Continue Watching"
+              icon="solar:history-bold"
+              posts={continueWatchingItems}
+              index={0}
+            />
+          )}
           {Object.keys(filteredCategories).map((key, sectionIdx) => {
             let items = filteredCategories[key];
             if (!items || items.length === 0) return null;

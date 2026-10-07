@@ -123,15 +123,165 @@ function toVidstackSrcs(sources) {
     });
 }
 
-function getStoredMode() {
-  return 'native';
-}
-
-function storeMode(mode) {
-  // Intentionally no-op: every movie/show starts from native player first
-}
-
 const EMPTY_ARRAY = Object.freeze([]);
+
+
+const SUBTITLE_LANGUAGE_MAP = {
+  en: 'English', eng: 'English',
+  es: 'Spanish', spa: 'Spanish',
+  fr: 'French', fre: 'French', fra: 'French',
+  de: 'German', ger: 'German', deu: 'German',
+  it: 'Italian', ita: 'Italian',
+  pt: 'Portuguese', por: 'Portuguese',
+  ru: 'Russian', rus: 'Russian',
+  ja: 'Japanese', jpn: 'Japanese',
+  ko: 'Korean', kor: 'Korean',
+  zh: 'Chinese', chi: 'Chinese', zho: 'Chinese',
+  ar: 'Arabic', ara: 'Arabic',
+  hi: 'Hindi', hin: 'Hindi',
+  id: 'Indonesian', ind: 'Indonesian',
+  tr: 'Turkish', tur: 'Turkish',
+  nl: 'Dutch', dut: 'Dutch', nld: 'Dutch',
+  pl: 'Polish', pol: 'Polish',
+  sv: 'Swedish', swe: 'Swedish',
+  da: 'Danish', dan: 'Danish',
+  fi: 'Finnish', fin: 'Finnish',
+  no: 'Norwegian', nor: 'Norwegian',
+  cs: 'Czech', ces: 'Czech', cze: 'Czech',
+  el: 'Greek', ell: 'Greek', gre: 'Greek',
+  he: 'Hebrew', heb: 'Hebrew',
+  hu: 'Hungarian', hun: 'Hungarian',
+  ro: 'Romanian', ron: 'Romanian', rum: 'Romanian',
+  th: 'Thai', tha: 'Thai',
+  vi: 'Vietnamese', vie: 'Vietnamese',
+  uk: 'Ukrainian', ukr: 'Ukrainian',
+  ms: 'Malay', msa: 'Malay', may: 'Malay',
+  fil: 'Filipino', tl: 'Tagalog',
+};
+
+function normalizeSubtitles(subtitles) {
+  if (!Array.isArray(subtitles)) return [];
+
+  const seenUrls = new Set();
+  const rawList = [];
+
+  for (const track of subtitles) {
+    if (!track?.url || seenUrls.has(track.url)) continue;
+    seenUrls.add(track.url);
+
+    let langCode = (track.language || track.lang || '').toLowerCase().trim();
+    let langName = SUBTITLE_LANGUAGE_MAP[langCode];
+    if (!langName) {
+      const raw = `${track.label || ''}`.toLowerCase();
+      for (const [code, name] of Object.entries(SUBTITLE_LANGUAGE_MAP)) {
+        if (raw.includes(name.toLowerCase())) {
+          langCode = code;
+          langName = name;
+          break;
+        }
+      }
+      if (!langName) langName = track.label || 'English';
+    }
+
+    const rawSearch = `${track.label || ''} ${track.url || ''}`.toLowerCase();
+    const isCC = Boolean(
+      track.isCC ||
+      track.hearingImpaired ||
+      /sdh|hearing[_\s]impaired|\[cc\]|\(cc\)/i.test(track.label || '') ||
+      /sdh|hearing/i.test(track.url || '')
+    );
+    const isForced = Boolean(
+      track.isForced ||
+      /forced|forzar|foreign/i.test(track.label || '') ||
+      /forced/i.test(track.url || '')
+    );
+    const isOpenSubs = Boolean(
+      track.source === 'opensubtitles' ||
+      /opensubtitles/i.test(track.label || '') ||
+      /dl\.opensubtitles\.org/i.test(track.url || '')
+    );
+
+    const relMatch = (track.label || '').match(/(?:BluRay|BDRip|BRRip|WEB-DL|WEBRip|HDTV|HDRip|DVDRip|YIFY|PSA|RARBG)/i);
+    const release = relMatch ? relMatch[0] : '';
+
+    let category = 'stream_std';
+    let baseLabel = '';
+
+    if (isOpenSubs) {
+      if (isForced) {
+        category = 'os_forced';
+        baseLabel = `${langName} [Forced] (OpenSubtitles)`;
+      } else if (isCC) {
+        category = 'os_sdh';
+        baseLabel = `${langName} [SDH] (OpenSubtitles)`;
+      } else if (release) {
+        category = 'os_std';
+        baseLabel = `${langName} [${release}] (OpenSubtitles)`;
+      } else {
+        category = 'os_std';
+        baseLabel = `${langName} (OpenSubtitles)`;
+      }
+    } else {
+      if (isForced) {
+        category = 'stream_forced';
+        baseLabel = `${langName} [Forced]`;
+      } else if (isCC) {
+        category = 'stream_sdh';
+        baseLabel = `${langName} [SDH]`;
+      } else {
+        category = 'stream_std';
+        baseLabel = `${langName} [Stream]`;
+      }
+    }
+
+    rawList.push({
+      ...track,
+      langCode,
+      langName,
+      category,
+      baseLabel,
+      isEnglish: langName === 'English',
+    });
+  }
+
+  // Cap counts per category to prevent 10+ ambiguous English options
+  const categoryCounts = {};
+  const filtered = [];
+
+  for (const item of rawList) {
+    const key = `${item.langName}_${item.category}`;
+    const count = categoryCounts[key] || 0;
+    // Keep max 2 stream_std for English, 1 for others; max 1 each for SDH, Forced, OpenSubtitles
+    const maxAllowed = item.category === 'stream_std' && item.isEnglish ? 2 : 1;
+    if (count < maxAllowed) {
+      categoryCounts[key] = count + 1;
+      let label = item.baseLabel;
+      if (count > 0 && item.category === 'stream_std') {
+        label = `${item.langName} [Stream ${count + 1}]`;
+      }
+      filtered.push({ ...item, displayLabel: label });
+    }
+  }
+
+  // Sort: English first (Stream -> SDH -> Forced -> OpenSubtitles), then others alphabetically
+  const catOrder = {
+    stream_std: 1,
+    stream_sdh: 2,
+    stream_forced: 3,
+    os_std: 4,
+    os_sdh: 5,
+    os_forced: 6,
+  };
+
+  filtered.sort((a, b) => {
+    if (a.isEnglish && !b.isEnglish) return -1;
+    if (!a.isEnglish && b.isEnglish) return 1;
+    if (a.langName !== b.langName) return a.langName.localeCompare(b.langName);
+    return (catOrder[a.category] || 99) - (catOrder[b.category] || 99);
+  });
+
+  return filtered;
+}
 
 export default function Player({
   src,
@@ -151,6 +301,8 @@ export default function Player({
   season,
   episode,
   backdrop,
+  sceneImages = EMPTY_ARRAY,
+  poster,
   type,
   id,
   tmdbId,
@@ -160,11 +312,16 @@ export default function Player({
   onNextEpisode = null,
   chapters = null,
   cast = EMPTY_ARRAY,
+  seasons = EMPTY_ARRAY,
+  seasonEpisodes = EMPTY_ARRAY,
+  seasonEpisodesLoading = false,
+  onSelectEpisode = null,
 }) {
   const [isLoading, setIsLoading] = useState(true);
   const [embedLoading, setEmbedLoading] = useState(false);
   const [playbackMode, setPlaybackMode] = useState('native');
   const [selectedEmbedId, setSelectedEmbedId] = useState(null);
+  const normalizedSubtitles = useMemo(() => normalizeSubtitles(subtitles), [subtitles]);
   const [selectedExtractorId, setSelectedExtractorId] = useState(null);
   const [failedExtractorId, setFailedExtractorId] = useState(null);
   const [playbackError, setPlaybackError] = useState(null);
@@ -269,6 +426,19 @@ export default function Player({
     };
   }, [resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum, videoDurationMs, initialTimelineSegments]);
 
+  // Auto-fill segments with null end time (e.g. End Credits) once video duration is known
+  useEffect(() => {
+    if (videoDurationMs && Number(videoDurationMs) > 60000) {
+      const durSec = Math.round(Number(videoDurationMs) / 1000);
+      setTimelineSegments((prev) => {
+        if (!Array.isArray(prev) || prev.length === 0) return prev;
+        const needsUpdate = prev.some((s) => s.end == null);
+        if (!needsUpdate) return prev;
+        return prev.map((s) => (s.end == null ? { ...s, end: durSec } : s));
+      });
+    }
+  }, [videoDurationMs]);
+
   // All native sources mapped to the Vidstack src array
   const nativeSrc = useMemo(() => toVidstackSrcs(directSources), [directSources]);
   const nativeReady = nativeSrc.length > 0;
@@ -289,14 +459,14 @@ export default function Player({
     if (resolvedMode === 'native') {
       return extractorProviders.map((ep) => ({
         id: ep.id,
-        name: (ep.label || extractorAlias(ep.id)).replace(/\s*\([^)]*\)/g, '').trim(),
+        name: (ep.label || extractorAlias(ep.id)).replace(/\\s*\\([^)]*\\)/g, '').trim(),
         kind: 'extractor',
       }));
     }
     const baseProviders = servers && servers.length > 0 ? servers : defaultProviders.filter((p) => p.enabled);
     return baseProviders.map((s) => ({
       id: s.id,
-      name: (s.name || '').replace(/\s*\([^)]*\)/g, '').trim(),
+      name: (s.name || '').replace(/\\s*\\([^)]*\\)/g, '').trim(),
       kind: 'embed',
       url: resolvedTmdbId
         ? getEmbedUrl(s.id, type, resolvedTmdbId, resolvedSeasonNum, resolvedEpisodeNum)
@@ -525,6 +695,16 @@ export default function Player({
               onPlay={() => {
                 setIsLoading(false);
               }}
+              onEnd={() => {
+                if (hasNextEpisode && typeof onNextEpisode === 'function') {
+                  onNextEpisode();
+                }
+              }}
+              onEnded={() => {
+                if (hasNextEpisode && typeof onNextEpisode === 'function') {
+                  onNextEpisode();
+                }
+              }}
               onDurationChange={(detail) => {
                 const dur = typeof detail === 'number' ? detail : detail?.detail;
                 if (typeof dur === 'number' && Number.isFinite(dur) && dur > 60) {
@@ -558,31 +738,17 @@ export default function Player({
               }}
             >
               <MediaProvider>
-                {subtitles
-                  .filter((t) => t?.url)
-                  .filter((track, index, tracks) => tracks.findIndex((item) => item.url === track.url) === index)
-                  .map((track, index, list) => {
-                    const sameNameCount = list.filter((t) => (t.label || t.language) === (track.label || track.language)).length;
-                    let displayLabel = track.label || track.language || `Track ${index + 1}`;
-                    if (sameNameCount > 1) {
-                      const sameNameIdx = list.filter((t, i) => i <= index && (t.label || t.language) === (track.label || track.language)).length;
-                      if (sameNameIdx > 1) {
-                        displayLabel = `${displayLabel} (${sameNameIdx})`;
-                      }
-                    }
-                    return (
-                      <Track
-                        key={`${track.url}-${index}`}
-                        src={toProxyUrl({ url: track.url, isSubtitle: true })}
-                        type="vtt"
-                        kind="subtitles"
-                        label={displayLabel}
-                        lang={track.language || 'en'}
-                        default={index === 0}
-                      />
-                    );
-                  })}
-              </MediaProvider>
+                {normalizedSubtitles.map((track, index) => (
+                  <Track
+                    key={`${track.url}-${index}`}
+                    src={toProxyUrl({ url: track.url, isSubtitle: true })}
+                    type="vtt"
+                    kind="subtitles"
+                    label={track.displayLabel}
+                    lang={track.langCode || 'en'}
+                    default={index === 0}
+                  />
+                ))}</MediaProvider>
               <Captions className="youplex-vds-captions vds-captions" />
               <NativeControls
                 title={title}
@@ -606,9 +772,17 @@ export default function Player({
                 hasNextEpisode={hasNextEpisode}
                 onNextEpisode={onNextEpisode}
                 backdrop={backdrop}
+                sceneImages={sceneImages}
+                poster={poster}
                 type={type}
+                id={id || tmdbId}
+                tmdbId={tmdbId || id}
                 chapters={chapters}
                 cast={cast}
+                seasons={seasons}
+                seasonEpisodes={seasonEpisodes}
+                seasonEpisodesLoading={seasonEpisodesLoading}
+                onSelectEpisode={onSelectEpisode}
               />
             </MediaPlayer>
           </Box>
@@ -667,7 +841,7 @@ export default function Player({
                     maxWidth: { xs: 140, sm: 260 },
                   }}
                 >
-                  {title} {season ? `\u2022 S${season} E${episode}` : ''}
+                  {title} {season ? `• S${season} E${episode}` : ''}
                 </Typography>
               )}
             </Stack>
@@ -844,13 +1018,14 @@ export default function Player({
         sx={{
           position: 'relative',
           width: 1,
-          aspectRatio: { xs: '16/10', sm: '16/9' },
-          minHeight: { xs: 240, sm: 320, md: 'unset' },
+          aspectRatio: { xs: '16/9', sm: '16/9' },
+          minHeight: { xs: 260, sm: 360, md: 480 },
+          height: { xs: 'clamp(260px, 42vh, 480px)', sm: 'auto' },
           overflow: 'hidden',
           bgcolor: '#050709',
-          borderRadius: { xs: 2, sm: 3 },
-          border: `1px solid ${alpha('#ffffff', 0.12)}`,
-          boxShadow: `0 24px 60px -12px ${alpha('#000000', 0.9)}`,
+          borderRadius: { xs: 0, sm: 3 },
+          border: { xs: 'none', sm: `1px solid ${alpha('#ffffff', 0.12)}` },
+          boxShadow: { xs: 'none', sm: `0 24px 60px -12px ${alpha('#000000', 0.9)}` },
           '--media-brand': BRAND_COLOR,
           '--media-font-family': '"Public Sans", sans-serif',
           '& media-player': {

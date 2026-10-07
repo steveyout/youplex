@@ -4,6 +4,10 @@ import { Iconify } from '@/components/iconify';
 import { usePlayerControls } from '@/hooks/use-player-controls';
 import { useMovieChapters } from './use-movie-chapters';
 import { useVideoPreview } from './use-video-preview';
+import { CharacterDrawer } from './character-drawer';
+import { useCharacterOcr } from './use-character-ocr';
+import { saveWatchProgress, getWatchProgress } from '@/lib/watch-history';
+import { isBookmarked, toggleBookmark, BOOKMARKS_EVENT } from '@/lib/bookmarks';
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   formatTime,
@@ -35,10 +39,6 @@ import CircularProgress from '@mui/material/CircularProgress';
 
 // ----------------------------------------------------------------------
 
-
-/**
- * Custom Tooltip that disables touch listeners to eliminate double-tap requirements on mobile.
- */
 const SEGMENT_PALETTE = {
   intro: {
     color: '#FFB800',
@@ -111,6 +111,17 @@ function PlayerTooltip({ children, title, ...props }) {
   );
 }
 
+function getFullscreenContainer() {
+  if (typeof document === 'undefined') return undefined;
+  return (
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement ||
+    document.body
+  );
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -134,6 +145,7 @@ const controlButtonSx = {
   flexShrink: 0,
   p: { xs: 0.75, sm: 1 },
   borderRadius: 1.5,
+  touchAction: 'manipulation',
   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   bgcolor: 'transparent',
   position: 'relative',
@@ -189,13 +201,23 @@ export default function NativeControls({
   hasNextEpisode = false,
   onNextEpisode = null,
   backdrop = null,
+  sceneImages = [],
+  poster = null,
   type = 'movie',
+  id = null,
+  tmdbId = null,
   chapters: explicitChapters = null,
   cast = [],
+  seasons = [],
+  seasonEpisodes = [],
+  seasonEpisodesLoading = false,
+  onSelectEpisode = null,
 }) {
   const theme = useTheme();
   const primaryColor = theme?.palette?.primary?.main || '#FF3030';
   const primaryLight = theme?.palette?.primary?.light || '#FF6060';
+
+  const mediaId = id || tmdbId;
 
   const remote = useMediaRemote();
   const store = useMediaStore();
@@ -205,12 +227,9 @@ export default function NativeControls({
   const canAirPlay = useMediaState('canAirPlay');
   const isGoogleCastConnected = useMediaState('isGoogleCastConnected');
   const isAirPlayConnected = useMediaState('isAirPlayConnected');
-  const remotePlaybackType = useMediaState('remotePlaybackType');
-  const remotePlaybackState = useMediaState('remotePlaybackState');
-  const remotePlaybackInfo = useMediaState('remotePlaybackInfo');
   const selectServer = onSelectServer || handleSelectServer;
 
-  // Keyboard shortcut 'r' / 'R' for Who's this? (Cast & Characters)
+  // Keyboard shortcuts: 'r' / 'R' for Cast, 'e' / 'E' for Episodes
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (
@@ -222,13 +241,19 @@ export default function NativeControls({
       if (e.key === 'r' || e.key === 'R') {
         if (cast.length > 0) {
           e.preventDefault();
-          setCastOpen((prev) => !prev);
+          setDrawerTab('cast');
+          setDrawerOpen((prev) => !prev);
         }
+      }
+      if ((e.key === 'e' || e.key === 'E') && type === 'tv' && seasons.length > 0) {
+        e.preventDefault();
+        setDrawerTab('episodes');
+        setDrawerOpen((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cast.length]);
+  }, [cast.length, type, seasons.length]);
 
   const captions = useCaptionOptions({ off: 'Off' });
   const qualities = useVideoQualityOptions({ auto: 'Auto' });
@@ -239,8 +264,19 @@ export default function NativeControls({
   const [setAnchor, setSetAnchor] = useState(null);
   const [srvAnchor, setSrvAnchor] = useState(null);
 
-  const [castOpen, setCastOpen] = useState(false);
-  const isMenuOpen = Boolean(capAnchor || setAnchor || srvAnchor || castOpen);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState('cast');
+  const castOpen = drawerOpen;
+  const setCastOpen = (val) => {
+    if (typeof val === 'function') {
+      setDrawerOpen((prev) => val(prev));
+    } else {
+      setDrawerOpen(val);
+    }
+  };
+  const [mobileMoreAnchor, setMobileMoreAnchor] = useState(null);
+  const ocrState = useCharacterOcr({ cast });
+  const isMenuOpen = Boolean(capAnchor || setAnchor || srvAnchor || drawerOpen || mobileMoreAnchor);
   const { visible: uiVisible, show: showUI } = usePlayerControls(store.paused, isMenuOpen);
 
   // Seekbar interactive state
@@ -250,7 +286,28 @@ export default function NativeControls({
   const [isVolHovered, setIsVolHovered] = useState(false);
 
   // Transient double-tap / seek feedback animations
-  const [seekFeedback, setSeekFeedback] = useState(null); // { type: 'rewind' | 'forward' | 'play' | 'pause', id: number }
+  const [seekFeedback, setSeekFeedback] = useState(null);
+
+  // Auto-resume and watch history
+  const [resumedNotice, setResumedNotice] = useState(null);
+
+  // Auto-play next episode on finish
+  const hasTriggeredNextRef = useRef(false);
+  useEffect(() => {
+    hasTriggeredNextRef.current = false;
+  }, [mediaId, season, episode]);
+
+  useEffect(() => {
+    if (store.ended && hasNextEpisode && onNextEpisode && !hasTriggeredNextRef.current) {
+      hasTriggeredNextRef.current = true;
+      onNextEpisode();
+    }
+  }, [store.ended, hasNextEpisode, onNextEpisode]);
+  const hasAttemptedResumeRef = useRef(false);
+  const lastSavedTimeRef = useRef(0);
+
+  // Bookmarks
+  const [bookmarked, setBookmarked] = useState(false);
 
   const progressBarRef = useRef(null);
   const lastClickRef = useRef({ time: 0, x: 0 });
@@ -268,6 +325,16 @@ export default function NativeControls({
     : volume < 0.4
     ? 'solar:volume-small-bold'
     : 'solar:volume-bold';
+
+  const currentThumbnailBackdrop = useMemo(() => {
+    if (!hoverSeek || !canSeek || maxSeek <= 0) return backdrop || poster;
+    if (Array.isArray(sceneImages) && sceneImages.length > 0) {
+      const pct = Math.max(0, Math.min(1, hoverSeek.time / maxSeek));
+      const idx = Math.min(sceneImages.length - 1, Math.floor(pct * sceneImages.length));
+      return sceneImages[idx];
+    }
+    return backdrop || poster;
+  }, [hoverSeek, canSeek, maxSeek, sceneImages, backdrop, poster]);
 
   // Compute movie chapters & active chapter info
   const { chapters, getChapterAtTime } = useMovieChapters({
@@ -298,6 +365,122 @@ export default function NativeControls({
 
   const hasActiveCaption = captions.some((c) => c.selected && c.value !== 'off');
 
+  // Sync bookmark state
+  useEffect(() => {
+    if (!mediaId) return;
+    setBookmarked(isBookmarked(mediaId, type));
+
+    const handleBookmarkChange = () => {
+      setBookmarked(isBookmarked(mediaId, type));
+    };
+    window.addEventListener(BOOKMARKS_EVENT, handleBookmarkChange);
+    return () => window.removeEventListener(BOOKMARKS_EVENT, handleBookmarkChange);
+  }, [mediaId, type]);
+
+  const triggerFeedback = useCallback((typeFeedback) => {
+    setSeekFeedback({ type: typeFeedback, id: Date.now() });
+  }, []);
+
+  const handleToggleBookmark = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      if (!mediaId) return;
+      const nextState = toggleBookmark({
+        id: mediaId,
+        tmdbId,
+        type: type || 'movie',
+        title,
+        poster,
+        backdrop,
+      });
+      setBookmarked(nextState);
+      triggerFeedback(nextState ? 'bookmark-added' : 'bookmark-removed');
+    },
+    [mediaId, tmdbId, type, title, poster, backdrop, triggerFeedback]
+  );
+
+  // Reset resume ref when media changes
+  useEffect(() => {
+    hasAttemptedResumeRef.current = false;
+    lastSavedTimeRef.current = 0;
+    setResumedNotice(null);
+  }, [mediaId, type, season, episode]);
+
+  // Auto-resume watch progress
+  useEffect(() => {
+    if (!canSeek || !mediaId || hasAttemptedResumeRef.current) return;
+    if (maxSeek < 30) return;
+
+    hasAttemptedResumeRef.current = true;
+    const saved = getWatchProgress(mediaId, type, season, episode);
+    if (saved && saved.currentTime > 10 && saved.currentTime < maxSeek - 20) {
+      remote.seek(saved.currentTime);
+      setResumedNotice({
+        time: saved.currentTime,
+        label: durationText(saved.currentTime),
+      });
+      const timer = setTimeout(() => {
+        setResumedNotice(null);
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [canSeek, mediaId, type, season, episode, maxSeek, remote]);
+
+  // Persist progress function
+  const persistProgress = useCallback(
+    (timeToSave) => {
+      if (!mediaId || !maxSeek || maxSeek <= 0) return;
+      const t = typeof timeToSave === 'number' ? timeToSave : currentTime;
+      if (t < 3) return;
+
+      saveWatchProgress({
+        id: mediaId,
+        tmdbId,
+        type: type || 'movie',
+        title,
+        poster,
+        backdrop,
+        season,
+        episode,
+        currentTime: t,
+        duration: maxSeek,
+      });
+      lastSavedTimeRef.current = t;
+    },
+    [mediaId, tmdbId, type, title, poster, backdrop, season, episode, currentTime, maxSeek]
+  );
+
+  // Save on interval while playing
+  useEffect(() => {
+    if (!canSeek || store.paused) return;
+
+    const interval = setInterval(() => {
+      if (Math.abs(currentTime - lastSavedTimeRef.current) >= 3) {
+        persistProgress(currentTime);
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [canSeek, store.paused, currentTime, persistProgress]);
+
+  // Save on pause
+  useEffect(() => {
+    if (store.paused && currentTime > 5 && canSeek) {
+      persistProgress(currentTime);
+    }
+  }, [store.paused, currentTime, canSeek, persistProgress]);
+
+  // Save on window beforeunload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentTime > 5 && canSeek) {
+        persistProgress(currentTime);
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [currentTime, canSeek, persistProgress]);
+
   // Robust mute toggle that handles volume 0 and never requires double clicking
   const handleToggleMute = useCallback(
     (e) => {
@@ -320,7 +503,6 @@ export default function NativeControls({
     [isMuted, volume, remote]
   );
 
-
   // Active segment detection for Intro / Recap / Credits skip prompts
   const activeSegment = useMemo(() => {
     if (!timelineSegments || timelineSegments.length === 0 || !canSeek) return null;
@@ -333,17 +515,11 @@ export default function NativeControls({
     );
   }, [timelineSegments, currentTime, canSeek, maxSeek]);
 
-
-  // Trigger brief center feedback badge
-  const triggerFeedback = useCallback((type) => {
-    setSeekFeedback({ type, id: Date.now() });
-  }, []);
-
   useEffect(() => {
     if (!seekFeedback) return undefined;
     const timer = setTimeout(() => {
       setSeekFeedback(null);
-    }, 650);
+    }, 700);
     return () => clearTimeout(timer);
   }, [seekFeedback]);
 
@@ -351,6 +527,7 @@ export default function NativeControls({
   const seekCommit = (_, value) => {
     setDragVal(null);
     remote.seek(value);
+    persistProgress(value);
   };
 
   // Timeline mouse hover calculation for preview tooltip
@@ -378,7 +555,7 @@ export default function NativeControls({
     const now = Date.now();
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
-    const {width} = rect;
+    const { width } = rect;
     const isDouble = now - lastClickRef.current.time < 300;
 
     lastClickRef.current = { time: now, x: clickX };
@@ -397,10 +574,9 @@ export default function NativeControls({
         triggerFeedback(store.paused ? 'play' : 'pause');
       }
     } else {
-      // Single click toggles play/pause on a slight delay to allow double-click
       setTimeout(() => {
         if (Date.now() - lastClickRef.current.time >= 280) {
-          remote.togglePaused();
+          showUI();
         }
       }, 290);
     }
@@ -409,7 +585,6 @@ export default function NativeControls({
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ignore when user is focused inside input/textarea/editable
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
         return;
       }
@@ -450,6 +625,10 @@ export default function NativeControls({
         case 'f':
           e.preventDefault();
           if (store.canFullscreen) remote.toggleFullscreen();
+          break;
+        case 'b':
+          e.preventDefault();
+          handleToggleBookmark();
           break;
         case 's':
           if (activeSegment) {
@@ -494,6 +673,7 @@ export default function NativeControls({
     activeSegment,
     hasNextEpisode,
     onNextEpisode,
+    handleToggleBookmark,
   ]);
 
   // Format time display
@@ -522,6 +702,7 @@ export default function NativeControls({
           inset: 0,
           zIndex: 1,
           cursor: 'pointer',
+          pointerEvents: drawerOpen ? 'none' : 'auto',
         }}
       />
 
@@ -534,7 +715,7 @@ export default function NativeControls({
           right: 0,
           height: 120,
           pointerEvents: 'none',
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0) 100%)',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0) 100%)',
           opacity: uiVisible ? 1 : 0,
           transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           zIndex: 2,
@@ -548,9 +729,9 @@ export default function NativeControls({
           bottom: 0,
           left: 0,
           right: 0,
-          height: 150,
+          height: 160,
           pointerEvents: 'none',
-          background: 'linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0) 100%)',
+          background: 'linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.65) 60%, rgba(0,0,0,0) 100%)',
           opacity: uiVisible ? 1 : 0,
           transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           zIndex: 2,
@@ -562,13 +743,13 @@ export default function NativeControls({
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        spacing={2}
+        spacing={1.5}
         sx={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
-          p: { xs: 1.5, sm: 2 },
+          p: { xs: 1.25, sm: 2 },
           zIndex: 3,
           opacity: uiVisible ? 1 : 0,
           transform: uiVisible ? 'translateY(0)' : 'translateY(-10px)',
@@ -577,7 +758,7 @@ export default function NativeControls({
         }}
       >
         {/* Left: Optional Back + Title Metadata */}
-        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0, flexGrow: 1, maxWidth: { xs: '65%', sm: '75%' } }}>
           {onBack && (
             <PlayerTooltip title="Back" arrow placement="bottom">
               <IconButton
@@ -603,7 +784,7 @@ export default function NativeControls({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: 0.75,
-                    fontSize: 11,
+                    fontSize: { xs: 10, sm: 11 },
                     lineHeight: 1.1,
                   }}
                 >
@@ -616,7 +797,7 @@ export default function NativeControls({
                 sx={{
                   color: 'common.white',
                   fontWeight: 600,
-                  fontSize: { xs: 14, sm: 16 },
+                  fontSize: { xs: 13, sm: 16 },
                   textShadow: '0 2px 8px rgba(0,0,0,0.8)',
                 }}
               >
@@ -626,16 +807,72 @@ export default function NativeControls({
           )}
         </Stack>
 
-        {/* Right: Mode Switcher & Source Selector */}
-        <Stack direction="row" alignItems="center" spacing={1.25}>
-          {/* Mode Pill (Native / Embed) */}
+        {/* Right: Bookmark, Mode Switcher & Source Selector */}
+        <Stack direction="row" alignItems="center" spacing={{ xs: 0.75, sm: 1.25 }}>
+          {/* Mobile Who's this? / Cast Button */}
+          {cast.length > 0 && (
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setDrawerTab('cast');
+                setDrawerOpen((prev) => !prev);
+              }}
+              sx={{
+                ...controlButtonSx,
+                ...glassPanelSx,
+                display: { xs: 'inline-flex', sm: 'none' },
+                color: drawerOpen && drawerTab === 'cast' ? 'primary.light' : 'common.white',
+                p: { xs: 0.75, sm: 1 },
+              }}
+              aria-label="Cast and Actors"
+            >
+              <Iconify icon="solar:users-group-rounded-bold" width={20} />
+            </IconButton>
+          )}
+
+          {/* Mobile Settings Button */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              setSetAnchor(e.currentTarget);
+            }}
+            sx={{
+              ...controlButtonSx,
+              ...glassPanelSx,
+              display: { xs: 'inline-flex', sm: 'none' },
+              p: { xs: 0.75, sm: 1 },
+            }}
+            aria-label="Settings"
+          >
+            <Iconify icon="solar:settings-minimalistic-bold" width={20} />
+          </IconButton>
+          {/* Bookmark Button (Desktop only) */}
+          {mediaId && (
+            <Box sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+              <PlayerTooltip title={bookmarked ? 'Remove from Bookmarks (b)' : 'Save to Bookmarks (b)'} placement="bottom" arrow>
+                <IconButton
+                  onClick={handleToggleBookmark}
+                  sx={{
+                    ...controlButtonSx,
+                    ...glassPanelSx,
+                    color: bookmarked ? 'primary.light' : 'common.white',
+                    p: { xs: 0.75, sm: 1 },
+                  }}
+                >
+                  <Iconify icon={bookmarked ? 'solar:bookmark-bold' : 'solar:bookmark-linear'} width={20} />
+                </IconButton>
+              </PlayerTooltip>
+            </Box>
+          )}
+
+          {/* Mode Pill (Native / Embed) - Desktop only */}
           {onModeChange && allowModeChange && (
             <Box
               sx={{
+                display: { xs: 'none', sm: 'flex' },
                 ...glassPanelSx,
                 p: 0.5,
                 borderRadius: 3,
-                display: 'flex',
                 alignItems: 'center',
                 gap: 0.5,
               }}
@@ -644,7 +881,7 @@ export default function NativeControls({
                 onClick={() => onModeChange('native')}
                 sx={{
                   cursor: 'pointer',
-                  px: { xs: 1.2, sm: 1.5 },
+                  px: { xs: 1, sm: 1.5 },
                   py: 0.4,
                   borderRadius: 2.5,
                   fontSize: { xs: 11, sm: 12 },
@@ -673,7 +910,7 @@ export default function NativeControls({
                 onClick={() => onModeChange('embed')}
                 sx={{
                   cursor: 'pointer',
-                  px: { xs: 1.2, sm: 1.5 },
+                  px: { xs: 1, sm: 1.5 },
                   py: 0.4,
                   borderRadius: 2.5,
                   fontSize: { xs: 11, sm: 12 },
@@ -700,7 +937,7 @@ export default function NativeControls({
             </Box>
           )}
 
-          {/* Server / Extractor Dropdown Button */}
+          {/* Server / Extractor Dropdown Button (Desktop only) */}
           {serverList.length > 0 && selectServer && (
             <>
               <PlayerTooltip title="Switch stream provider / server" arrow placement="bottom">
@@ -709,12 +946,12 @@ export default function NativeControls({
                   sx={{
                     ...glassPanelSx,
                     cursor: 'pointer',
-                    px: { xs: 1.25, sm: 1.75 },
+                    px: { xs: 1.1, sm: 1.75 },
                     py: 0.6,
                     borderRadius: 3,
-                    display: 'flex',
+                    display: { xs: 'none', sm: 'flex' },
                     alignItems: 'center',
-                    gap: 1,
+                    gap: { xs: 0.5, sm: 1 },
                     color: 'common.white',
                     transition: 'all 0.2s ease',
                     '&:hover': {
@@ -724,7 +961,7 @@ export default function NativeControls({
                   }}
                 >
                   {sourcesLoading ? (
-                    <CircularProgress size={15} sx={{ color: 'primary.light' }} />
+                    <CircularProgress size={14} sx={{ color: 'primary.light' }} />
                   ) : (
                     <Box
                       sx={{
@@ -741,7 +978,7 @@ export default function NativeControls({
                     sx={{
                       fontWeight: 600,
                       fontSize: { xs: 11, sm: 12 },
-                      maxWidth: { xs: 65, sm: 120 },
+                      maxWidth: { xs: 55, sm: 120 },
                     }}
                     noWrap
                   >
@@ -752,6 +989,7 @@ export default function NativeControls({
               </PlayerTooltip>
 
               <Menu
+                container={getFullscreenContainer}
                 anchorEl={srvAnchor}
                 open={Boolean(srvAnchor)}
                 onClose={() => setSrvAnchor(null)}
@@ -876,7 +1114,7 @@ export default function NativeControls({
       </Stack>
 
       {/* ===================== CENTER FEEDBACK & PLAY PROMPT ===================== */}
-      {/* Transient Seek / Play Feedback */}
+      {/* Transient Seek / Play / Bookmark Feedback */}
       {seekFeedback && (
         <Stack
           alignItems="center"
@@ -896,7 +1134,7 @@ export default function NativeControls({
             sx={{
               ...glassPanelSx,
               p: { xs: 1.5, sm: 2.5 },
-              borderRadius: '50%',
+              borderRadius: seekFeedback.type.startsWith('bookmark') ? 2 : '50%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -915,8 +1153,72 @@ export default function NativeControls({
             {seekFeedback.type === 'pause' && (
               <Iconify icon="solar:pause-bold" sx={{ width: { xs: 34, sm: 48 }, height: { xs: 34, sm: 48 } }} />
             )}
+            {seekFeedback.type === 'bookmark-added' && (
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1 }}>
+                <Iconify icon="solar:bookmark-bold" width={26} sx={{ color: 'primary.main' }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: { xs: 12, sm: 14 } }}>
+                  Saved to Bookmarks
+                </Typography>
+              </Stack>
+            )}
+            {seekFeedback.type === 'bookmark-removed' && (
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1 }}>
+                <Iconify icon="solar:bookmark-linear" width={26} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: { xs: 12, sm: 14 } }}>
+                  Removed from Bookmarks
+                </Typography>
+              </Stack>
+            )}
           </Box>
         </Stack>
+      )}
+
+      {/* Resumed from timestamp banner */}
+      {resumedNotice && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: { xs: 80, sm: 104 },
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 25,
+            ...glassPanelSx,
+            bgcolor: alpha('#0d1117', 0.94),
+            border: `1px solid ${alpha('#FF3030', 0.45)}`,
+            borderRadius: 2,
+            px: { xs: 1.5, sm: 2 },
+            py: 0.8,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.25,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+            animation: 'youplex-fade-up 0.25s ease both',
+          }}
+        >
+          <Iconify icon="solar:history-bold" width={18} sx={{ color: 'primary.light' }} />
+          <Typography variant="body2" sx={{ color: 'common.white', fontSize: { xs: 12, sm: 13 }, fontWeight: 600 }}>
+            Resumed from {resumedNotice.label}
+          </Typography>
+          <Button
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              remote.seek(0);
+              persistProgress(0);
+              setResumedNotice(null);
+            }}
+            sx={{
+              color: 'primary.light',
+              fontSize: { xs: 11, sm: 12 },
+              fontWeight: 700,
+              p: 0.5,
+              minWidth: 0,
+              '&:hover': { bgcolor: alpha('#ffffff', 0.1) },
+            }}
+          >
+            Start Over
+          </Button>
+        </Box>
       )}
 
       {/* Center Buffering Spinner / Big Play Button */}
@@ -996,6 +1298,97 @@ export default function NativeControls({
         )
       )}
 
+      {/* Center Mobile Play / Pause & 10s Seek Controls (Matching Screenshot Layout) */}
+      {!store.waiting && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: uiVisible ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.92)',
+            zIndex: 4,
+            display: { xs: 'flex', sm: 'none' },
+            alignItems: 'center',
+            gap: 2.75,
+            pointerEvents: uiVisible ? 'auto' : 'none',
+            opacity: uiVisible ? 1 : 0,
+            transition: 'opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          {/* Rewind 10s Circular Button */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              remote.seek(Math.max(0, currentTime - 10));
+              triggerFeedback('rewind');
+            }}
+            sx={{
+              color: 'common.white',
+              bgcolor: alpha('#000000', 0.55),
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${alpha('#ffffff', 0.2)}`,
+              width: 52,
+              height: 52,
+              touchAction: 'manipulation',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+              transition: 'all 0.15s ease',
+              '&:active': { bgcolor: alpha('#000000', 0.8), transform: 'scale(0.92)' },
+            }}
+            aria-label="Rewind 10 seconds"
+          >
+            <Iconify icon="ic:round-replay-10" width={30} />
+          </IconButton>
+
+          {/* Large Center Play / Pause Button */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              remote.togglePaused();
+              triggerFeedback(store.paused ? 'play' : 'pause');
+            }}
+            sx={{
+              color: 'common.white',
+              bgcolor: alpha('#000000', 0.65),
+              backdropFilter: 'blur(16px)',
+              border: `2px solid ${alpha('#ffffff', 0.3)}`,
+              boxShadow: `0 8px 32px rgba(0,0,0,0.7), 0 0 24px ${alpha(primaryColor, 0.45)}`,
+              width: 68,
+              height: 68,
+              touchAction: 'manipulation',
+              transition: 'all 0.15s ease',
+              '&:active': { transform: 'scale(0.92)' },
+            }}
+            aria-label={store.playing ? 'Pause' : 'Play'}
+          >
+            <Iconify icon={store.playing ? 'solar:pause-bold' : 'solar:play-bold'} width={40} />
+          </IconButton>
+
+          {/* Forward 10s Circular Button */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              remote.seek(Math.min(maxSeek, currentTime + 10));
+              triggerFeedback('forward');
+            }}
+            sx={{
+              color: 'common.white',
+              bgcolor: alpha('#000000', 0.55),
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${alpha('#ffffff', 0.2)}`,
+              width: 52,
+              height: 52,
+              touchAction: 'manipulation',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+              transition: 'all 0.15s ease',
+              '&:active': { bgcolor: alpha('#000000', 0.8), transform: 'scale(0.92)' },
+            }}
+            aria-label="Forward 10 seconds"
+          >
+            <Iconify icon="ic:round-forward-10" width={30} />
+          </IconButton>
+        </Box>
+      )}
+
       {/* ===================== BOTTOM CONTROLS HUD ===================== */}
       <Stack
         spacing={1}
@@ -1014,23 +1407,46 @@ export default function NativeControls({
           pointerEvents: uiVisible ? 'auto' : 'none',
         }}
       >
-        {/* ================= SEEKBAR ================= */}
-        <Box
-          ref={progressBarRef}
-          onMouseMove={handleSeekMouseMove}
-          onMouseLeave={handleSeekMouseLeave}
-          sx={{
-            position: 'relative',
-            width: 1,
-            height: 24,
+        {/* ================= SEEKBAR ROW ================= */}
+        <Box sx={{ width: 1, display: 'flex', alignItems: 'center', gap: { xs: 1.25, sm: 0 } }}>
+          {/* Mobile Current Time (Left) */}
+          <Typography
+            variant="caption"
+            sx={{
+              display: { xs: 'block', sm: 'none' },
+              color: 'common.white',
+              fontVariantNumeric: 'tabular-nums',
+              fontWeight: 600,
+              fontSize: 12,
+              minWidth: 36,
+              textAlign: 'left',
+              userSelect: 'none',
+            }}
+          >
+            {durationText(active)}
+          </Typography>
+
+          <Box
+            ref={progressBarRef}
+            onMouseMove={handleSeekMouseMove}
+            onMouseLeave={handleSeekMouseLeave}
+            sx={{
+              position: 'relative',
+              flexGrow: 1,
+              width: { sm: 1 },
+              height: { xs: 34, sm: 24 },
             display: 'flex',
             alignItems: 'center',
             cursor: canSeek ? 'pointer' : 'default',
+            touchAction: 'none',
             '&:hover .seek-track': {
               height: 6,
             },
             '&:hover .seek-segment': {
-              height: 8,
+              height: 7,
+            },
+            '&:hover .seek-segment-played': {
+              height: 7,
             },
             '&:hover .seek-thumb': {
               transform: 'translate(-50%, -50%) scale(1.25)',
@@ -1095,7 +1511,7 @@ export default function NativeControls({
                   </Thumbnail.Root>
                 )}
 
-                {/* 2. Live Canvas Video Frame Preview (Always displays on played & scrubbed frames, zero CORS error) */}
+                {/* 2. Live Canvas Video Frame Preview */}
                 {!thumbnailsUrl && (
                   <canvas
                     ref={previewCanvasRef}
@@ -1108,24 +1524,27 @@ export default function NativeControls({
                       height: '100%',
                       objectFit: 'cover',
                       zIndex: 2,
+                      opacity: hasFrame ? 1 : 0,
+                      transition: 'opacity 0.15s ease',
                     }}
                   />
                 )}
 
-                {/* 3. Dark cinematic placeholder while initial chunk decodes */}
-                {!hasFrame && !thumbnailsUrl && (
+                {/* 3. Scene Still / Backdrop fallback when canvas has not painted yet */}
+                {!thumbnailsUrl && (
                   <Box
                     sx={{
                       position: 'absolute',
                       inset: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: 'radial-gradient(circle at center, #141b26 0%, #06090e 100%)',
+                      zIndex: 1,
+                      backgroundImage: currentThumbnailBackdrop
+                        ? `url(${currentThumbnailBackdrop})`
+                        : 'none',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      filter: 'brightness(0.72) saturate(1.15)',
                     }}
-                  >
-                    <Iconify icon="solar:clapperboard-play-bold" width={28} sx={{ color: alpha('#ffffff', 0.25) }} />
-                  </Box>
+                  />
                 )}
 
                 {/* Subtle vignette gradient */}
@@ -1324,7 +1743,9 @@ export default function NativeControls({
               position: 'absolute',
               left: 0,
               right: 0,
-              height: 4,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              height: { xs: 5, sm: 4 },
               borderRadius: 2,
               overflow: 'hidden',
               bgcolor: alpha('#ffffff', 0.2),
@@ -1353,9 +1774,9 @@ export default function NativeControls({
               top: '50%',
               transform: 'translateY(-50%)',
               width: `${playedPct}%`,
-              height: 4,
+              height: { xs: 5, sm: 4 },
               borderRadius: 2,
-              background: `linear-gradient(90deg, ${primaryColor} 0%, ${primaryLight} 100%)`,
+              background: `linear-gradient(90deg, ${primaryColor} 0%, ${primaryLight} 100%)` ,
               transition: 'height 0.15s ease',
               boxShadow: `0 0 8px ${alpha(primaryColor, 0.4)}`,
               zIndex: 2,
@@ -1364,7 +1785,7 @@ export default function NativeControls({
             }}
           />
 
-          {/* Colored Segments on Timeline (Intro: Amber, Recap: Cyan, Credits: Purple, Preview: Green) */}
+          {/* Colored Segments on Timeline with Distinct Gradients and Crisp Boundary Notches */}
           {canSeek &&
             timelineSegments.map((seg, idx) => {
               const startSec = clamp(Number(seg.start) || 0, 0, maxSeek);
@@ -1377,74 +1798,89 @@ export default function NativeControls({
                 color: seg.color || '#FFB800',
                 borderColor: seg.borderColor || '#FDE047',
                 label: seg.label || 'Segment',
+                gradient: seg.gradient || 'linear-gradient(90deg, #FF9800 0%, #FBBF24 100%)',
               };
 
-              return (
-                <Box
-                  key={seg.id || `${seg.type}-${idx}-${startSec}`}
-                  className="seek-segment"
-                  sx={{
-                    position: 'absolute',
-                    left: `${leftPct}%`,
-                    width: `${widthPct}%`,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    height: 5,
-                    borderRadius: 1,
-                    background:
-                      palette.gradient ||
-                      `linear-gradient(90deg, ${palette.color} 0%, ${palette.borderColor || palette.color} 100%)`,
-                    boxShadow: `0 0 10px ${alpha(palette.color, 0.85)}`,
-                    border: `1px solid ${alpha(palette.borderColor || palette.color, 0.8)}`,
-                    zIndex: 3,
-                    pointerEvents: 'none',
-                    transition: 'height 0.15s ease',
-                  }}
-                />
-              );
-            })}
-
-          {/* Segment Tick Markers (Start & End points for clear boundaries) */}
-          {canSeek &&
-            timelineSegments.map((seg, idx) => {
-              const startSec = clamp(Number(seg.start) || 0, 0, maxSeek);
-              const endSec = clamp(seg.end != null ? Number(seg.end) : maxSeek, startSec, maxSeek);
-              const palette = SEGMENT_PALETTE[seg.type] || {
-                color: seg.color || '#FFB800',
-              };
+              const isSegPlayed = active > startSec;
+              const playedInSegWidthPct = isSegPlayed
+                ? Math.max(0, ((Math.min(active, endSec) - startSec) / maxSeek) * 100)
+                : 0;
 
               return (
-                <Box
-                  key={`tick-${seg.id || idx}`}
-                  sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4 }}
-                >
-                  {/* Start Tick Notch */}
+                <Box key={seg.id || `${seg.type}-${idx}-${startSec}`}>
+                  {/* Unplayed Segment Track with Distinct Gradient */}
                   <Box
+                    className="seek-segment"
                     sx={{
                       position: 'absolute',
-                      left: `${(startSec / maxSeek) * 100}%`,
+                      left: `${leftPct}%`,
+                      width: `${widthPct}%`,
                       top: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      width: 2,
-                      height: 10,
+                      transform: 'translateY(-50%)',
+                      height: { xs: 5, sm: 4 },
                       borderRadius: 1,
-                      bgcolor: '#ffffff',
-                      boxShadow: `0 0 4px ${palette.color}`,
+                      background: palette.gradient,
+                      boxShadow: `0 0 8px ${alpha(palette.color, 0.5)}`,
+                      border: `1px solid ${alpha(palette.borderColor || palette.color, 0.6)}`,
+                      opacity: 0.65,
+                      zIndex: 3,
+                      pointerEvents: 'none',
+                      transition: 'height 0.15s ease',
                     }}
                   />
-                  {/* End Tick Notch */}
-                  {seg.end != null && (
+
+                  {/* Played Portion of Segment with Vibrant Glowing Gradient */}
+                  {isSegPlayed && (
+                    <Box
+                      className="seek-segment-played"
+                      sx={{
+                        position: 'absolute',
+                        left: `${leftPct}%`,
+                        width: `${playedInSegWidthPct}%`,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: { xs: 5, sm: 4 },
+                        borderRadius: 1,
+                        background: palette.gradient,
+                        boxShadow: `0 0 12px ${palette.color}, 0 0 4px ${alpha('#ffffff', 0.8)}`,
+                        border: `1px solid ${alpha(palette.borderColor || palette.color, 0.9)}`,
+                        zIndex: 4,
+                        pointerEvents: 'none',
+                        transition: 'height 0.15s ease',
+                      }}
+                    />
+                  )}
+
+                  {/* Physical 2.5px Dark Divider Notches at Segment Start & End */}
+                  {startSec > 0 && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        left: `${leftPct}%`,
+                        top: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: 2.5,
+                        height: { xs: 8, sm: 7 },
+                        bgcolor: '#0a0d14',
+                        boxShadow: '0 0 2px #000000',
+                        zIndex: 5,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  )}
+                  {endSec < maxSeek && (
                     <Box
                       sx={{
                         position: 'absolute',
                         left: `${(endSec / maxSeek) * 100}%`,
                         top: '50%',
                         transform: 'translate(-50%, -50%)',
-                        width: 2,
-                        height: 10,
-                        borderRadius: 1,
-                        bgcolor: palette.color,
-                        boxShadow: `0 0 4px ${palette.color}`,
+                        width: 2.5,
+                        height: { xs: 8, sm: 7 },
+                        bgcolor: '#0a0d14',
+                        boxShadow: '0 0 2px #000000',
+                        zIndex: 5,
+                        pointerEvents: 'none',
                       }}
                     />
                   )}
@@ -1452,10 +1888,10 @@ export default function NativeControls({
               );
             })}
 
-          {/* Chapter Dividers on Timeline (Only for real chapter markers) */}
+          {/* Chapter & IntroDB Segment Dividers on Timeline */}
           {canSeek &&
             chapters
-              .filter((ch) => ch.isRealChapter && ch.start > 0)
+              .filter((ch) => ch.start > 0)
               .map((ch, idx) => {
                 const leftPct = (ch.start / maxSeek) * 100;
                 return (
@@ -1466,8 +1902,8 @@ export default function NativeControls({
                       left: `${leftPct}%`,
                       top: '50%',
                       transform: 'translate(-50%, -50%)',
-                      width: 2,
-                      height: 8,
+                      width: 2.5,
+                      height: 9,
                       bgcolor: '#050709',
                       borderRadius: 0.5,
                       zIndex: 4,
@@ -1485,13 +1921,17 @@ export default function NativeControls({
               left: `${playedPct}%`,
               top: '50%',
               transform: 'translate(-50%, -50%) scale(1)',
-              width: 14,
-              height: 14,
+              width: { xs: 16, sm: 14 },
+              height: { xs: 16, sm: 14 },
               borderRadius: '50%',
-              bgcolor: 'common.white',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+              bgcolor: activeSegment
+                ? (SEGMENT_PALETTE[activeSegment.type]?.color || 'common.white')
+                : 'common.white',
+              boxShadow: activeSegment
+                ? `0 0 12px ${SEGMENT_PALETTE[activeSegment.type]?.color || '#ffffff'}, 0 2px 8px rgba(0,0,0,0.8)`
+                : '0 2px 8px rgba(0,0,0,0.6)',
               pointerEvents: 'none',
-              zIndex: 5,
+              zIndex: 6,
               transition: 'transform 0.15s ease, box-shadow 0.15s ease',
             }}
           />
@@ -1512,28 +1952,172 @@ export default function NativeControls({
               left: 0,
               right: 0,
               width: 1,
+              height: { xs: 34, sm: 24 },
               opacity: 0,
               cursor: 'pointer',
               p: 0,
-              zIndex: 6,
+              zIndex: 7,
               '& .MuiSlider-thumb': {
-                width: 24,
-                height: 24,
+                width: 28,
+                height: 28,
               },
             }}
           />
+          </Box>
+
+          {/* Mobile Total / Remaining Time (Right) */}
+          <Typography
+            variant="caption"
+            onClick={() => setShowRemainingTime((prev) => !prev)}
+            sx={{
+              display: { xs: 'block', sm: 'none' },
+              color: alpha('#ffffff', 0.75),
+              fontVariantNumeric: 'tabular-nums',
+              fontWeight: 600,
+              fontSize: 12,
+              minWidth: 36,
+              textAlign: 'right',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+          >
+            {showRemainingTime ? `-${durationText(Math.max(0, maxSeek - active))}` : durationText(duration)}
+          </Typography>
         </Box>
 
-        {/* ================= CONTROLS ROW ================= */}
-        <Stack direction="row" alignItems="center" spacing={{ xs: 0.25, sm: 0.75 }}>
-          {/* Play / Pause */}
+        {/* ================= MOBILE BOTTOM ACTION BAR (Matching Screenshot Layout) ================= */}
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-around"
+          sx={{
+            width: 1,
+            pt: 0.5,
+            display: { xs: 'flex', sm: 'none' },
+          }}
+        >
+          {/* Subtitles & Audio */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              setCapAnchor(e.currentTarget);
+            }}
+            sx={{
+              ...controlButtonSx,
+              position: 'relative',
+              color: hasActiveCaption ? 'primary.light' : 'common.white',
+              p: 1,
+            }}
+            aria-label="Subtitles and Audio"
+          >
+            <Iconify icon="ph:subtitles-bold" width={24} />
+            {hasActiveCaption && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 7,
+                  right: 7,
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: 'primary.main',
+                }}
+              />
+            )}
+          </IconButton>
+
+          {/* Server / Stream Provider Selector */}
+          {serverList.length > 0 && selectServer && (
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setSrvAnchor(e.currentTarget);
+              }}
+              sx={{
+                ...controlButtonSx,
+                position: 'relative',
+                color: 'common.white',
+                p: 1,
+              }}
+              aria-label="Server Selection"
+            >
+              <Iconify icon="solar:server-2-bold" width={23} />
+            </IconButton>
+          )}
+
+          {/* TV Episodes & Seasons Drawer */}
+          {type === 'tv' && seasons.length > 0 && (
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setDrawerTab('episodes');
+                setDrawerOpen(true);
+              }}
+              sx={{
+                ...controlButtonSx,
+                position: 'relative',
+                color: drawerOpen && drawerTab === 'episodes' ? 'primary.main' : 'common.white',
+                p: 1,
+              }}
+              aria-label="Episodes and Seasons"
+            >
+              <Iconify icon="solar:clapperboard-play-bold" width={23} />
+            </IconButton>
+          )}
+
+          {/* Player Settings / Speed Menu */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              setSetAnchor(e.currentTarget);
+            }}
+            sx={{
+              ...controlButtonSx,
+              color: 'common.white',
+              p: 1,
+            }}
+            aria-label="Player Settings"
+          >
+            <Iconify icon="solar:tuning-bold" width={23} />
+          </IconButton>
+
+          {/* Fullscreen Toggle */}
+          {store.canFullscreen && (
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                remote.toggleFullscreen();
+              }}
+              sx={{
+                ...controlButtonSx,
+                color: 'common.white',
+                p: 1,
+              }}
+              aria-label="Fullscreen"
+            >
+              <Iconify
+                icon={store.fullscreen ? 'ic:round-fullscreen-exit' : 'ic:round-fullscreen'}
+                width={25}
+              />
+            </IconButton>
+          )}
+        </Stack>
+
+        {/* ================= DESKTOP CONTROLS ROW ================= */}
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={{ xs: 0.25, sm: 0.75 }}
+          sx={{ display: { xs: 'none', sm: 'flex' } }}
+        >
+          {/* Play / Pause (Desktop) */}
           <PlayerTooltip title={store.playing ? 'Pause (k)' : 'Play (k)'} placement="top" arrow>
-            <IconButton onClick={(e) => { e.stopPropagation(); remote.togglePaused(); }} sx={controlButtonSx}>
+            <IconButton onClick={(e) => { e.stopPropagation(); remote.togglePaused(); }} sx={{ ...controlButtonSx, display: { xs: 'none', sm: 'inline-flex' } }}>
               <Iconify icon={store.playing ? 'solar:pause-bold' : 'solar:play-bold'} width={26} />
             </IconButton>
           </PlayerTooltip>
 
-          {/* 10s Rewind */}
+          {/* 10s Rewind (Desktop) */}
           <PlayerTooltip title="Rewind 10s (j)" placement="top" arrow>
             <IconButton
               onClick={() => {
@@ -1546,7 +2130,7 @@ export default function NativeControls({
             </IconButton>
           </PlayerTooltip>
 
-          {/* 10s Forward */}
+          {/* 10s Forward (Desktop) */}
           <PlayerTooltip title="Forward 10s (l)" placement="top" arrow>
             <IconButton
               onClick={() => {
@@ -1559,14 +2143,14 @@ export default function NativeControls({
             </IconButton>
           </PlayerTooltip>
 
-          {/* Volume Control with Expandable Slider */}
+          {/* Volume Control with Expandable Slider (Desktop only) */}
           <Stack
             direction="row"
             alignItems="center"
             spacing={0.5}
             onMouseEnter={() => setIsVolHovered(true)}
             onMouseLeave={() => setIsVolHovered(false)}
-            sx={{ ml: 0.5 }}
+            sx={{ ml: { xs: 0, sm: 0.5 }, display: { xs: 'none', sm: 'flex' } }}
           >
             <PlayerTooltip title={isMuted ? 'Unmute (m)' : 'Mute (m)'} placement="top" arrow>
               <IconButton onClick={handleToggleMute} sx={controlButtonSx}>
@@ -1576,7 +2160,7 @@ export default function NativeControls({
 
             <Box
               sx={{
-                width: isVolHovered ? { xs: 60, sm: 84 } : { xs: 0, sm: 0 },
+                width: isVolHovered ? 84 : 0,
                 overflow: 'hidden',
                 transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 display: 'flex',
@@ -1618,10 +2202,10 @@ export default function NativeControls({
               sx={{
                 color: 'common.white',
                 fontVariantNumeric: 'tabular-nums',
-                ml: 1,
+                ml: { xs: 0.25, sm: 1 },
                 whiteSpace: 'nowrap',
                 fontWeight: 600,
-                fontSize: { xs: 12, sm: 13 },
+                fontSize: { xs: 11.5, sm: 13 },
                 cursor: 'pointer',
                 p: 0.5,
                 borderRadius: 1,
@@ -1637,7 +2221,73 @@ export default function NativeControls({
             </Typography>
           </PlayerTooltip>
 
-          {/* Active Chapter / Segment Label (Only for real chapters/segments) */}
+          {/* IntroDB Segment Pills (Direct Jump Buttons) */}
+          {timelineSegments && timelineSegments.length > 0 && (
+            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ display: { xs: 'none', md: 'flex' } }}>
+              {timelineSegments.map((seg, idx) => {
+                const startSec = clamp(Number(seg.start) || 0, 0, maxSeek);
+                const palette = SEGMENT_PALETTE[seg.type] || {
+                  color: seg.color || '#FFB800',
+                  label: seg.label || 'Segment',
+                };
+                return (
+                  <PlayerTooltip
+                    key={`seg-pill-${seg.id || idx}`}
+                    title={`Jump to ${palette.label} (${durationText(startSec)})`}
+                    placement="top"
+                    arrow
+                  >
+                    <Box
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 0.6,
+                        px: 0.85,
+                        py: 0.25,
+                        borderRadius: 1,
+                        bgcolor: alpha(palette.color, 0.16),
+                        border: `1px solid ${alpha(palette.color, 0.45)}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        '&:hover': {
+                          bgcolor: alpha(palette.color, 0.3),
+                          borderColor: palette.color,
+                          transform: 'scale(1.04)',
+                        },
+                      }}
+                      onClick={() => {
+                        remote.seek(startSec);
+                        triggerFeedback('forward');
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          bgcolor: palette.color,
+                          boxShadow: `0 0 6px ${palette.color}`,
+                        }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: palette.color,
+                          fontWeight: 700,
+                          fontSize: 11,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {palette.label}
+                      </Typography>
+                    </Box>
+                  </PlayerTooltip>
+                );
+              })}
+            </Stack>
+          )}
+
+          {/* Active Chapter / Segment Label */}
           {currentActiveChapter && (currentActiveChapter.isRealChapter || currentActiveChapter.isSegment) && (
             <Box
               sx={{
@@ -1684,16 +2334,40 @@ export default function NativeControls({
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* Who's this? / Cast Button */}
+          {/* Episodes Selector Button (TV Shows - Desktop direct) */}
+          {type === 'tv' && seasons.length > 0 && (
+            <PlayerTooltip title="Episodes & Seasons (e)" placement="top" arrow>
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDrawerTab('episodes');
+                  setDrawerOpen(true);
+                }}
+                sx={{
+                  ...controlButtonSx,
+                  display: { xs: 'none', sm: 'inline-flex' },
+                  position: 'relative',
+                  color: drawerOpen && drawerTab === 'episodes' ? 'primary.main' : 'common.white',
+                  bgcolor: drawerOpen && drawerTab === 'episodes' ? alpha(primaryColor, 0.16) : 'transparent',
+                }}
+              >
+                <Iconify icon="solar:clapperboard-play-bold" width={22} />
+              </IconButton>
+            </PlayerTooltip>
+          )}
+
+          {/* Who's this? / Cast in scene (Desktop direct, Mobile in overflow menu) */}
           {cast.length > 0 && (
             <PlayerTooltip title="Who's this? / Actors (r)" placement="top" arrow>
               <IconButton
                 onClick={(e) => {
                   e.stopPropagation();
-                  setCastOpen((prev) => !prev);
+                  setDrawerTab('cast');
+                  setDrawerOpen((prev) => !prev);
                 }}
                 sx={{
                   ...controlButtonSx,
+                  display: { xs: 'none', sm: 'inline-flex' },
                   position: 'relative',
                   color: castOpen ? 'primary.main' : 'common.white',
                   bgcolor: castOpen ? alpha(primaryColor, 0.16) : 'transparent',
@@ -1704,7 +2378,7 @@ export default function NativeControls({
             </PlayerTooltip>
           )}
 
-          {/* Server Switcher Button (Next to Subtitles) */}
+          {/* Server Switcher Button (Desktop direct, Mobile in overflow menu) */}
           {serverList.length > 0 && selectServer && (
             <PlayerTooltip title={`Servers (${currentServerLabel})`} placement="top" arrow>
               <IconButton
@@ -1714,6 +2388,7 @@ export default function NativeControls({
                 }}
                 sx={{
                   ...controlButtonSx,
+                  display: { xs: 'none', sm: 'inline-flex' },
                   position: 'relative',
                   color: 'common.white',
                 }}
@@ -1723,7 +2398,7 @@ export default function NativeControls({
             </PlayerTooltip>
           )}
 
-          {/* Captions / Subtitles Menu */}
+          {/* Captions / Subtitles Menu (Both Desktop & Mobile) */}
           <PlayerTooltip title="Subtitles & Audio (c)" placement="top" arrow>
             <IconButton
               onClick={(e) => setCapAnchor(e.currentTarget)}
@@ -1750,9 +2425,18 @@ export default function NativeControls({
             </IconButton>
           </PlayerTooltip>
 
-          {/* Quality & Speed Settings Menu */}
+          {/* Quality & Speed Settings Menu (Desktop direct, Mobile in overflow menu) */}
           <PlayerTooltip title="Settings" placement="top" arrow>
-            <IconButton onClick={(e) => { e.stopPropagation(); setSetAnchor(e.currentTarget); }} sx={controlButtonSx}>
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setSetAnchor(e.currentTarget);
+              }}
+              sx={{
+                ...controlButtonSx,
+                display: { xs: 'none', sm: 'inline-flex' },
+              }}
+            >
               <Iconify icon="solar:settings-minimalistic-bold" width={23} />
             </IconButton>
           </PlayerTooltip>
@@ -1769,53 +2453,59 @@ export default function NativeControls({
             </PlayerTooltip>
           )}
 
-          {/* Apple AirPlay */}
+          {/* Apple AirPlay (Desktop direct, Mobile in overflow menu) */}
           {canAirPlay && (
-            <PlayerTooltip
-              title={isAirPlayConnected ? 'AirPlay Connected (Tap to Disconnect)' : 'Apple AirPlay'}
-              placement="top"
-              arrow
-            >
-              <AirPlayButton asChild>
-                <IconButton
-                  sx={{
-                    ...controlButtonSx,
-                    color: isAirPlayConnected ? 'primary.light' : 'common.white',
-                    bgcolor: isAirPlayConnected ? alpha(primaryColor, 0.16) : 'transparent',
-                  }}
-                >
-                  <Iconify
-                    icon={isAirPlayConnected ? 'material-symbols:airplay' : 'material-symbols:airplay-rounded'}
-                    width={22}
-                  />
-                </IconButton>
-              </AirPlayButton>
-            </PlayerTooltip>
+            <Box sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+              <PlayerTooltip
+                title={isAirPlayConnected ? 'AirPlay Connected (Tap to Disconnect)' : 'Apple AirPlay'}
+                placement="top"
+                arrow
+              >
+                <AirPlayButton asChild>
+                  <IconButton
+                    sx={{
+                      ...controlButtonSx,
+                      color: isAirPlayConnected ? 'primary.light' : 'common.white',
+                      bgcolor: isAirPlayConnected ? alpha(primaryColor, 0.16) : 'transparent',
+                    }}
+                  >
+                    <Iconify
+                      icon={isAirPlayConnected ? 'material-symbols:airplay' : 'material-symbols:airplay-rounded'}
+                      width={22}
+                    />
+                  </IconButton>
+                </AirPlayButton>
+              </PlayerTooltip>
+            </Box>
           )}
 
-          {/* Google Cast / Chromecast */}
+          {/* Google Cast / Chromecast (Desktop direct, Mobile in overflow menu) */}
           {(canGoogleCast || (!canAirPlay && typeof window !== 'undefined' && !!window.chrome)) && (
-            <PlayerTooltip
-              title={isGoogleCastConnected ? 'Chromecast Connected (Tap to Disconnect)' : 'Cast to TV (Chromecast)'}
-              placement="top"
-              arrow
-            >
-              <GoogleCastButton asChild>
-                <IconButton
-                  sx={{
-                    ...controlButtonSx,
-                    color: isGoogleCastConnected ? 'primary.light' : 'common.white',
-                    bgcolor: isGoogleCastConnected ? alpha(primaryColor, 0.16) : 'transparent',
-                  }}
-                >
-                  <Iconify
-                    icon={isGoogleCastConnected ? 'solar:screencast-bold' : 'solar:screencast-2-bold'}
-                    width={22}
-                  />
-                </IconButton>
-              </GoogleCastButton>
-            </PlayerTooltip>
+            <Box sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+              <PlayerTooltip
+                title={isGoogleCastConnected ? 'Chromecast Connected (Tap to Disconnect)' : 'Cast to TV (Chromecast)'}
+                placement="top"
+                arrow
+              >
+                <GoogleCastButton asChild>
+                  <IconButton
+                    sx={{
+                      ...controlButtonSx,
+                      color: isGoogleCastConnected ? 'primary.light' : 'common.white',
+                      bgcolor: isGoogleCastConnected ? alpha(primaryColor, 0.16) : 'transparent',
+                    }}
+                  >
+                    <Iconify
+                      icon={isGoogleCastConnected ? 'solar:screencast-bold' : 'solar:screencast-2-bold'}
+                      width={22}
+                    />
+                  </IconButton>
+                </GoogleCastButton>
+              </PlayerTooltip>
+            </Box>
           )}
+
+
 
           {/* Fullscreen */}
           {store.canFullscreen && (
@@ -1835,83 +2525,11 @@ export default function NativeControls({
         </Stack>
       </Stack>
 
-      
-      {/* Center Mobile Play / Pause & 10s Seek Controls */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '44%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 4,
-          display: { xs: 'flex', sm: 'none' },
-          alignItems: 'center',
-          gap: 2.25,
-          pointerEvents: uiVisible ? 'auto' : 'none',
-          opacity: uiVisible ? 1 : 0,
-          transition: 'opacity 0.25s ease',
-        }}
-      >
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            remote.seek(Math.max(0, currentTime - 10));
-            triggerFeedback('rewind');
-          }}
-          sx={{
-            color: 'common.white',
-            bgcolor: alpha('#000000', 0.45),
-            backdropFilter: 'blur(8px)',
-            p: 1.25,
-            touchAction: 'manipulation',
-            '&:active': { bgcolor: alpha('#000000', 0.75), transform: 'scale(0.92)' },
-          }}
-        >
-          <Iconify icon="ic:round-replay-10" width={26} />
-        </IconButton>
-
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            remote.togglePaused();
-            triggerFeedback(store.paused ? 'play' : 'pause');
-          }}
-          sx={{
-            color: 'common.white',
-            bgcolor: 'primary.main',
-            boxShadow: `0 4px 20px ${alpha(primaryColor, 0.5)}`,
-            p: 1.5,
-            touchAction: 'manipulation',
-            '&:active': { transform: 'scale(0.92)' },
-          }}
-        >
-          <Iconify icon={store.playing ? 'solar:pause-bold' : 'solar:play-bold'} width={32} />
-        </IconButton>
-
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            remote.seek(Math.min(maxSeek, currentTime + 10));
-            triggerFeedback('forward');
-          }}
-          sx={{
-            color: 'common.white',
-            bgcolor: alpha('#000000', 0.45),
-            backdropFilter: 'blur(8px)',
-            p: 1.25,
-            touchAction: 'manipulation',
-            '&:active': { bgcolor: alpha('#000000', 0.75), transform: 'scale(0.92)' },
-          }}
-        >
-          <Iconify icon="ic:round-forward-10" width={26} />
-        </IconButton>
-      </Box>
-
-
-      {/* ===================== FLOATING "WHO'S THIS?" BUTTON (NETFLIX / CINECAT STYLE) ===================== */}
+      {/* ===================== FLOATING "WHO'S THIS?" BUTTON (ICON ONLY WITH TOOLTIP) ===================== */}
       {cast.length > 0 && uiVisible && (
         <Box
           sx={{
+            display: { xs: 'none', sm: 'block' },
             position: 'absolute',
             bottom: activeSegment ? { xs: 120, sm: 144 } : { xs: 74, sm: 96 },
             right: { xs: 12, sm: 24 },
@@ -1920,72 +2538,50 @@ export default function NativeControls({
             animation: 'youplex-fade-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both',
           }}
         >
-          <Button
-            variant="contained"
-            onClick={(e) => {
-              e.stopPropagation();
-              setCastOpen(true);
-            }}
-            startIcon={
-              <Box
-                component="span"
-                sx={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 18,
-                  height: 18,
-                  borderRadius: 0.5,
-                  bgcolor: alpha('#ffffff', 0.22),
-                  color: 'common.white',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  mr: 0.25,
-                }}
-              >
-                R
-              </Box>
-            }
-            sx={{
-              ...glassPanelSx,
-              bgcolor: alpha('#0d1117', 0.88),
-              color: 'common.white',
-              border: `1px solid ${alpha('#ffffff', 0.3)}`,
-              boxShadow: `0 6px 24px rgba(0, 0, 0, 0.6), 0 0 12px ${alpha('#000000', 0.4)}`,
-              backdropFilter: 'blur(16px)',
-              py: { xs: 0.7, sm: 0.85 },
-              px: { xs: 1.5, sm: 2 },
-              borderRadius: 1.25,
-              fontSize: { xs: 12, sm: 13 },
-              fontWeight: 600,
-              letterSpacing: 0.2,
-              textTransform: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              '&:hover': {
-                bgcolor: alpha('#161c24', 0.98),
-                borderColor: alpha('#ffffff', 0.6),
-                transform: 'translateY(-1px)',
-                boxShadow: `0 8px 28px rgba(0, 0, 0, 0.75), 0 0 16px ${alpha('#ffffff', 0.2)}`,
-              },
-              '&:active': {
-                transform: 'translateY(0) scale(0.98)',
-              },
-            }}
-          >
-            Who&apos;s this?
-          </Button>
+          <PlayerTooltip title="Who's this? / Actors in scene (r)" placement="left" arrow>
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setDrawerTab('cast');
+                setDrawerOpen(true);
+              }}
+              aria-label="Who's this actor?"
+              sx={{
+                ...glassPanelSx,
+                width: { xs: 40, sm: 46 },
+                height: { xs: 40, sm: 46 },
+                bgcolor: alpha('#0d1117', 0.9),
+                color: 'common.white',
+                border: `1px solid ${alpha('#ffffff', 0.28)}`,
+                boxShadow: `0 8px 30px rgba(0, 0, 0, 0.65), 0 0 16px ${alpha(primaryColor, 0.25)}`,
+                backdropFilter: 'blur(20px)',
+                cursor: 'pointer',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  bgcolor: alpha('#161c24', 0.98),
+                  borderColor: 'primary.light',
+                  color: 'primary.light',
+                  transform: 'scale(1.1) translateY(-2px)',
+                  boxShadow: `0 12px 32px rgba(0, 0, 0, 0.8), 0 0 20px ${alpha(primaryColor, 0.5)}`,
+                },
+                '&:active': {
+                  transform: 'scale(0.96)',
+                },
+              }}
+            >
+              <Iconify icon="solar:user-speak-rounded-bold" width={{ xs: 20, sm: 24 }} />
+            </IconButton>
+          </PlayerTooltip>
         </Box>
       )}
 
-      {/* ===================== FLOATING SKIP BUTTON (THEMED UI STYLE) ===================== */}
+      {/* ===================== FLOATING SKIP BUTTON ===================== */}
       {activeSegment && (
         <Box
           sx={{
             position: 'absolute',
-            bottom: { xs: 74, sm: 96 },
-            right: { xs: 12, sm: 24 },
+            bottom: { xs: 84, sm: 96 },
+            right: { xs: 16, sm: 24 },
             zIndex: 25,
             pointerEvents: 'auto',
             animation: 'youplex-fade-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both',
@@ -2028,7 +2624,7 @@ export default function NativeControls({
                   backdropFilter: 'blur(16px)',
                   py: { xs: 0.75, sm: 0.9 },
                   px: { xs: 1.75, sm: 2.25 },
-                  borderRadius: 1.25, // somewhat rounded (10px / 8px) matching UI buttons, NOT pill!
+                  borderRadius: 1.25,
                   fontSize: { xs: 12.5, sm: 13.5 },
                   fontWeight: 600,
                   letterSpacing: 0.2,
@@ -2080,8 +2676,219 @@ export default function NativeControls({
         </Box>
       )}
 
+      {/* ===================== WHO'S THIS? / CAST & EPISODES DRAWER ===================== */}
+      <CharacterDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        cast={cast}
+        ocrState={ocrState}
+        type={type}
+        seasons={seasons}
+        seasonEpisodes={seasonEpisodes}
+        seasonEpisodesLoading={seasonEpisodesLoading}
+        currentSeason={season}
+        currentEpisode={episode}
+        onSelectEpisode={onSelectEpisode}
+        activeTab={drawerTab}
+        onTabChange={setDrawerTab}
+        tmdbId={tmdbId || mediaId}
+        backdrop={backdrop}
+        sceneImages={sceneImages}
+      />
+
+      {/* ===================== MOBILE OVERFLOW MENU (xs ONLY) ===================== */}
+      <Menu
+        container={getFullscreenContainer}
+        anchorEl={mobileMoreAnchor}
+        open={Boolean(mobileMoreAnchor)}
+        onClose={() => setMobileMoreAnchor(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        slotProps={{
+          paper: {
+            sx: {
+              ...menuPaperSx,
+              width: 250,
+              py: 1,
+              borderRadius: 2,
+            },
+          },
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{
+            px: 2,
+            py: 0.5,
+            display: 'block',
+            color: 'text.disabled',
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
+            fontSize: 10.5,
+          }}
+        >
+          Player Controls
+        </Typography>
+
+        {/* Episodes Selector for Mobile */}
+        {type === 'tv' && seasons.length > 0 && (
+          <MenuItem
+            onClick={() => {
+              setMobileMoreAnchor(null);
+              setDrawerTab('episodes');
+              setDrawerOpen(true);
+            }}
+            sx={{ py: 1.25, px: 2, gap: 1.5 }}
+          >
+            <Iconify icon="solar:clapperboard-play-bold" width={20} sx={{ color: 'primary.light' }} />
+            <Typography variant="body2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+              Episodes & Seasons
+            </Typography>
+            <Box
+              sx={{
+                px: 1,
+                py: 0.2,
+                borderRadius: 1,
+                bgcolor: alpha(primaryColor, 0.16),
+                color: 'primary.light',
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              S{season} E{episode}
+            </Box>
+          </MenuItem>
+        )}
+
+        {/* Who's this? */}
+        {cast.length > 0 && (
+          <MenuItem
+            onClick={() => {
+              setMobileMoreAnchor(null);
+              setDrawerTab('cast');
+              setDrawerOpen(true);
+            }}
+            sx={{ py: 1.25, px: 2, gap: 1.5 }}
+          >
+            <Iconify icon="solar:user-speak-rounded-bold" width={20} sx={{ color: 'primary.light' }} />
+            <Typography variant="body2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+              Who&apos;s this?
+            </Typography>
+            <Box
+              sx={{
+                px: 1,
+                py: 0.2,
+                borderRadius: 1,
+                bgcolor: alpha(primaryColor, 0.16),
+                color: 'primary.light',
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {cast.length}
+            </Box>
+          </MenuItem>
+        )}
+
+        {/* Server Switcher */}
+        {serverList.length > 0 && selectServer && (
+          <MenuItem
+            onClick={(e) => {
+              const anchor = mobileMoreAnchor;
+              setMobileMoreAnchor(null);
+              setSrvAnchor(anchor);
+            }}
+            sx={{ py: 1.25, px: 2, gap: 1.5 }}
+          >
+            <Iconify icon="solar:server-2-bold" width={20} sx={{ color: 'text.secondary' }} />
+            <Typography variant="body2" sx={{ fontWeight: 500, flexGrow: 1 }}>
+              Server Source
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'primary.light', fontWeight: 700 }}>
+              {currentServerLabel}
+            </Typography>
+          </MenuItem>
+        )}
+
+        {/* Settings (Speed & Quality) */}
+        <MenuItem
+          onClick={() => {
+            const anchor = mobileMoreAnchor;
+            setMobileMoreAnchor(null);
+            setSetAnchor(anchor);
+          }}
+          sx={{ py: 1.25, px: 2, gap: 1.5 }}
+        >
+          <Iconify icon="solar:settings-minimalistic-bold" width={20} sx={{ color: 'text.secondary' }} />
+          <Typography variant="body2" sx={{ fontWeight: 500, flexGrow: 1 }}>
+            Playback Settings
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+            {rates.find((r) => r.selected)?.label || 'Normal'}
+          </Typography>
+        </MenuItem>
+
+        {/* PiP */}
+        {store.canPictureInPicture && (
+          <MenuItem
+            onClick={() => {
+              setMobileMoreAnchor(null);
+              remote.togglePictureInPicture();
+            }}
+            sx={{ py: 1.25, px: 2, gap: 1.5 }}
+          >
+            <Iconify icon="ic:round-picture-in-picture" width={20} sx={{ color: 'text.secondary' }} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              Picture in Picture
+            </Typography>
+          </MenuItem>
+        )}
+
+        {/* AirPlay */}
+        {canAirPlay && (
+          <MenuItem
+            component="div"
+            onClick={() => setMobileMoreAnchor(null)}
+            sx={{ py: 1.25, px: 2, gap: 1.5 }}
+          >
+            <Iconify icon="material-symbols:airplay-rounded" width={20} sx={{ color: isAirPlayConnected ? 'primary.light' : 'text.secondary' }} />
+            <Box sx={{ flexGrow: 1 }}>
+              <AirPlayButton asChild>
+                <Box component="button" sx={{ all: 'unset', width: '100%', cursor: 'pointer', textAlign: 'left' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {isAirPlayConnected ? 'Disconnect AirPlay' : 'Apple AirPlay'}
+                  </Typography>
+                </Box>
+              </AirPlayButton>
+            </Box>
+          </MenuItem>
+        )}
+
+        {/* Chromecast */}
+        {(canGoogleCast || (!canAirPlay && typeof window !== 'undefined' && !!window.chrome)) && (
+          <MenuItem
+            component="div"
+            onClick={() => setMobileMoreAnchor(null)}
+            sx={{ py: 1.25, px: 2, gap: 1.5 }}
+          >
+            <Iconify icon="solar:screencast-bold" width={20} sx={{ color: isGoogleCastConnected ? 'primary.light' : 'text.secondary' }} />
+            <Box sx={{ flexGrow: 1 }}>
+              <GoogleCastButton asChild>
+                <Box component="button" sx={{ all: 'unset', width: '100%', cursor: 'pointer', textAlign: 'left' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {isGoogleCastConnected ? 'Disconnect Chromecast' : 'Cast to TV'}
+                  </Typography>
+                </Box>
+              </GoogleCastButton>
+            </Box>
+          </MenuItem>
+        )}
+      </Menu>
+
       {/* ===================== CAPTIONS MENU ===================== */}
       <Menu
+        container={getFullscreenContainer}
         anchorEl={capAnchor}
         open={Boolean(capAnchor)}
         onClose={() => setCapAnchor(null)}
@@ -2101,54 +2908,195 @@ export default function NativeControls({
         <Divider sx={{ my: 0.75, borderColor: alpha('#ffffff', 0.12) }} />
 
         {captions.map((option, optIdx) => {
-          let labelText = option.label;
-          if (option.value !== 'off') {
-            const sameTracks = captions.filter((c) => c.label === option.label && c.value !== 'off');
-            if (sameTracks.length > 1) {
-              const occurIdx = captions.filter(
-                (c, i) => i <= optIdx && c.label === option.label && c.value !== 'off'
-              ).length;
-              labelText = option.label + ' (' + occurIdx + ')';
-            }
+          if (option.value === 'off') {
+            return (
+              <MenuItem
+                key="caption-off"
+                selected={option.selected}
+                onClick={() => {
+                  option.select();
+                  setCapAnchor(null);
+                }}
+                sx={{
+                  borderRadius: 1.5,
+                  px: 1.5,
+                  py: 0.8,
+                  my: 0.25,
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  '&.Mui-selected': {
+                    bgcolor: alpha(primaryColor, 0.18),
+                    '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
+                  },
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: option.selected ? 600 : 400 }}>
+                  Off
+                </Typography>
+                {option.selected && (
+                  <Iconify
+                    icon="solar:check-circle-bold"
+                    width={18}
+                    sx={{ color: 'primary.light', flexShrink: 0 }}
+                  />
+                )}
+              </MenuItem>
+            );
           }
+
+          let labelText = option.label || option.track?.label || 'Subtitles';
+          const sameTracks = captions.filter(
+            (c) => (c.label || c.track?.label) === labelText && c.value !== 'off'
+          );
+          if (sameTracks.length > 1) {
+            const occurIdx = captions.filter(
+              (c, i) => i <= optIdx && (c.label || c.track?.label) === labelText && c.value !== 'off'
+            ).length;
+            labelText = `${labelText} (${occurIdx})`;
+          }
+
+          // Parse descriptors and badges
+          const isSDH = /\[SDH\]|\[CC\]|\(SDH\)|\(CC\)/i.test(labelText);
+          const isForced = /\[Forced\]|\(Forced\)/i.test(labelText);
+          const isOpenSubs = /OpenSubtitles/i.test(labelText);
+          const isStream = /\[Stream(?: \d+)?\]/i.test(labelText);
+          const releaseMatch = labelText.match(/\[(BluRay|BDRip|BRRip|WEB-DL|WEBRip|HDTV|HDRip|DVDRip|YIFY|PSA|RARBG)\]/i);
+          const releaseTag = releaseMatch ? releaseMatch[1] : '';
+
+          let cleanTitle = labelText
+            .replace(/\[(?:SDH|CC|Forced|Stream(?: \d+)?)\]/gi, '')
+            .replace(/\(OpenSubtitles\)/gi, '')
+            .replace(/\[(?:BluRay|BDRip|BRRip|WEB-DL|WEBRip|HDTV|HDRip|DVDRip|YIFY|PSA|RARBG)\]/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (!cleanTitle) cleanTitle = labelText;
+
           return (
-          <MenuItem
-            key={option.value + '-' + optIdx}
-            selected={option.selected}
-            onClick={() => {
-              option.select();
-              setCapAnchor(null);
-            }}
-            sx={{
-              borderRadius: 1.5,
-              px: 1.5,
-              py: 0.8,
-              my: 0.25,
-              justifyContent: 'space-between',
-              gap: 2,
-              '&.Mui-selected': {
-                bgcolor: alpha(primaryColor, 0.18),
-                '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
-              },
-            }}
-          >
-            <Typography variant="subtitle2" sx={{ fontWeight: option.selected ? 600 : 400 }}>
-              {labelText}
-            </Typography>
-            {option.selected && (
-              <Iconify
-                icon="solar:check-circle-bold"
-                width={18}
-                sx={{ color: 'primary.light', flexShrink: 0 }}
-              />
-            )}
-          </MenuItem>
+            <MenuItem
+              key={option.value + '-' + optIdx}
+              selected={option.selected}
+              onClick={() => {
+                option.select();
+                setCapAnchor(null);
+              }}
+              sx={{
+                borderRadius: 1.5,
+                px: 1.5,
+                py: 0.8,
+                my: 0.25,
+                justifyContent: 'space-between',
+                gap: 1.5,
+                '&.Mui-selected': {
+                  bgcolor: alpha(primaryColor, 0.18),
+                  '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
+                },
+              }}
+            >
+              <Stack direction="row" alignItems="center" spacing={0.85} sx={{ minWidth: 0, flexWrap: 'wrap', gap: 0.6 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: option.selected ? 600 : 400 }}>
+                  {cleanTitle}
+                </Typography>
+                {isStream && (
+                  <Box
+                    sx={{
+                      px: 0.6,
+                      py: 0.15,
+                      borderRadius: 0.75,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      bgcolor: 'rgba(0, 167, 111, 0.16)',
+                      color: '#00a76f',
+                      border: '1px solid rgba(0, 167, 111, 0.35)',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    Stream
+                  </Box>
+                )}
+                {isSDH && (
+                  <Box
+                    sx={{
+                      px: 0.6,
+                      py: 0.15,
+                      borderRadius: 0.75,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      bgcolor: 'rgba(255, 171, 0, 0.16)',
+                      color: '#ffc107',
+                      border: '1px solid rgba(255, 171, 0, 0.35)',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    SDH / CC
+                  </Box>
+                )}
+                {isForced && (
+                  <Box
+                    sx={{
+                      px: 0.6,
+                      py: 0.15,
+                      borderRadius: 0.75,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      bgcolor: 'rgba(255, 86, 48, 0.16)',
+                      color: '#ff7043',
+                      border: '1px solid rgba(255, 86, 48, 0.35)',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    Forced
+                  </Box>
+                )}
+                {releaseTag && (
+                  <Box
+                    sx={{
+                      px: 0.6,
+                      py: 0.15,
+                      borderRadius: 0.75,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      bgcolor: 'rgba(255, 255, 255, 0.08)',
+                      color: 'text.secondary',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {releaseTag}
+                  </Box>
+                )}
+                {isOpenSubs && (
+                  <Box
+                    sx={{
+                      px: 0.6,
+                      py: 0.15,
+                      borderRadius: 0.75,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      bgcolor: 'rgba(142, 51, 255, 0.16)',
+                      color: '#b388ff',
+                      border: '1px solid rgba(142, 51, 255, 0.35)',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    OpenSubtitles
+                  </Box>
+                )}
+              </Stack>
+              {option.selected && (
+                <Iconify
+                  icon="solar:check-circle-bold"
+                  width={18}
+                  sx={{ color: 'primary.light', flexShrink: 0 }}
+                />
+              )}
+            </MenuItem>
           );
         })}
       </Menu>
 
       {/* ===================== SETTINGS MENU ===================== */}
       <Menu
+        container={getFullscreenContainer}
         anchorEl={setAnchor}
         open={Boolean(setAnchor)}
         onClose={() => setSetAnchor(null)}

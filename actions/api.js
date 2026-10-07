@@ -75,7 +75,7 @@ export async function getMovieOrShow(type, id, opts = {}) {
 
     const res = await axios.get(mainEndpoint, {
       params: {
-        append_to_response: 'credits,videos,recommendations,similar',
+        append_to_response: 'credits,videos,recommendations,similar,images',
       },
     });
 
@@ -381,6 +381,26 @@ export async function getSeasonDetails(tvId, seasonNumber) {
  * @param {string} type - 'movie' or 'tv'
  * @param {string|number} id - TMDB ID
  */
+
+// ----------------------------------------------------------------------
+
+/**
+ * Fetch scene stills for a specific TV episode
+ * @param {string|number} tvId - TMDB TV Show ID
+ * @param {number} seasonNumber - Season number (1-based)
+ * @param {number} episodeNumber - Episode number (1-based)
+ */
+export async function getEpisodeImages(tvId, seasonNumber, episodeNumber) {
+  if (!tvId || seasonNumber == null || episodeNumber == null) return [];
+
+  try {
+    const res = await axios.get('/tv/' + tvId + '/season/' + seasonNumber + '/episode/' + episodeNumber + '/images');
+    return (res.data?.stills || []).map((s) => s.file_path).filter(Boolean);
+  } catch (error) {
+    return [];
+  }
+}
+
 export async function getRecommendations(type, id) {
   if (!id) return [];
 
@@ -420,27 +440,31 @@ const INTRO_DB_SUBMIT_URL = 'https://api.theintrodb.org/v3/submit';
 const INTRO_DB_SEGMENT_METADATA = {
   intro: {
     label: 'Intro',
-    color: '#E5A00D', // Amber / Gold
+    color: '#FFB800', // Amber / Gold
     borderColor: '#FDE047',
     icon: 'solar:play-bold',
+    gradient: 'linear-gradient(90deg, #FF9800 0%, #FBBF24 100%)',
   },
   recap: {
     label: 'Recap',
-    color: '#00B8D9', // Cyan / Teal
+    color: '#00D8F6', // Cyan / Teal
     borderColor: '#67E8F9',
     icon: 'solar:history-bold',
+    gradient: 'linear-gradient(90deg, #0099B8 0%, #00D8F6 100%)',
   },
   credits: {
     label: 'Credits',
     color: '#8E33FF', // Royal Purple
     borderColor: '#C084FC',
     icon: 'solar:clapperboard-play-bold',
+    gradient: 'linear-gradient(90deg, #7C3AED 0%, #A855F7 100%)',
   },
   preview: {
     label: 'Preview',
     color: '#22C55E', // Emerald Green
     borderColor: '#86EFAC',
     icon: 'solar:eye-bold',
+    gradient: 'linear-gradient(90deg, #059669 0%, #22C55E 100%)',
   },
 };
 
@@ -473,6 +497,7 @@ function normalizeIntroDbSegments(data, durationSec = null) {
           label: meta.label,
           color: meta.color,
           borderColor: meta.borderColor,
+          gradient: meta.gradient,
           icon: meta.icon,
           start: startSec,
           end: endSec,
@@ -556,9 +581,8 @@ export async function getIntroTimestamps({ tmdbId, imdbId, tvdbId, type = 'movie
   const cacheKey = [
     tmdbId || imdbId || tvdbId,
     isTv ? 'tv' : 'movie',
-    season || '1',
-    episode || '1',
-    durationMs ? Math.round(Number(durationMs)) : 'none',
+    isTv ? (season || '1') : 'm',
+    isTv ? (episode || '1') : 'm',
   ].join(':');
 
   const cached = getFromIntroDbCache(cacheKey);

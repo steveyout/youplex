@@ -17,8 +17,11 @@ import CardContent from '@mui/material/CardContent';
 // ----------------------------------------------------------------------
 
 // Helper to construct TMDB image URLs
-const getPosterUrl = (path) =>
-  path ? `${process.env.NEXT_PUBLIC_TMDB_IMAGE_BASE_URL}${path}` : '/assets/placeholder.jpg';
+const getPosterUrl = (path) => {
+  if (!path) return '/assets/placeholder.jpg';
+  if (path.startsWith('http')) return path;
+  return `${process.env.NEXT_PUBLIC_TMDB_IMAGE_BASE_URL || 'https://image.tmdb.org/t/p/w500'}${path}`;
+};
 
 // Helper to safely extract release year
 function getSafeYear(dateStr) {
@@ -78,15 +81,23 @@ export function RatingPill({ rating, size = 'small', sx }) {
 export function PostItem({ post, index = 0 }) {
   const theme = useTheme();
 
-  const { id, title, name, release_date, first_air_date, poster_path, vote_average, media_type } = post;
+  const { id, title, name, release_date, first_air_date, poster_path, poster, vote_average, media_type } = post;
 
   // TV shows use 'name', movies use 'title'
   const displayTitle = title || name || 'Untitled';
   const displayDate = release_date || first_air_date;
   const releaseYear = getSafeYear(displayDate);
-  const type = media_type || (release_date ? 'movie' : 'tv');
+  const type = media_type || post.type || (release_date ? 'movie' : 'tv');
 
-  const linkTo = paths.watch.details(type, id, displayTitle);
+  const progressRatio = typeof post.progress === 'number'
+    ? post.progress
+    : (post.currentTime && post.duration)
+    ? post.currentTime / post.duration
+    : null;
+
+  const linkTo = post.isResume
+    ? paths.watch.play(type, id, displayTitle, post.season || 1, post.episode || 1)
+    : paths.watch.details(type, id, displayTitle);
 
   return (
     <Link
@@ -183,6 +194,29 @@ export function PostItem({ post, index = 0 }) {
             </Box>
           )}
 
+          {/* Episode Tag */}
+          {post.season != null && post.episode != null && (
+            <Box
+              sx={{
+                bottom: progressRatio ? 12 : 8,
+                left: 8,
+                zIndex: 9,
+                position: 'absolute',
+                px: 0.75,
+                py: 0.25,
+                borderRadius: 0.75,
+                bgcolor: 'rgba(5, 7, 10, 0.92)',
+                border: '1px solid rgba(255, 48, 48, 0.45)',
+                color: 'primary.light',
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                letterSpacing: 0.4,
+              }}
+            >
+              S{post.season} E{post.episode}
+            </Box>
+          )}
+
           <Box
             className="youplex-poster-img"
             sx={{
@@ -194,11 +228,35 @@ export function PostItem({ post, index = 0 }) {
           >
             <Image
               alt={displayTitle}
-              src={getPosterUrl(poster_path)}
+              src={getPosterUrl(poster_path || poster)}
               ratio="2/3"
               sx={{ width: 1, height: 1 }}
             />
           </Box>
+
+          {/* Watch Progress Bar Overlay */}
+          {progressRatio != null && progressRatio > 0 && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 4,
+                bgcolor: 'rgba(0, 0, 0, 0.65)',
+                zIndex: 10,
+              }}
+            >
+              <Box
+                sx={{
+                  width: `${Math.min(100, Math.round(progressRatio * 100))}%`,
+                  height: '100%',
+                  bgcolor: 'primary.main',
+                  boxShadow: `0 0 8px ${theme.palette.primary.main}`,
+                }}
+              />
+            </Box>
+          )}
 
           {/* Hover gradient overlay (desktop only) */}
           <Box

@@ -51,20 +51,11 @@ const NAV_ITEMS = [
     activeIcon: 'solar:radio-bold',
   },
   {
-    key: 'torrents',
-    title: 'Torrents',
-    path: paths.torrents,
-    icon: 'solar:download-square-bold-duotone',
-    activeIcon: 'solar:download-square-bold',
-    external: true,
-  },
-  {
-    key: 'discord',
-    title: 'Discord',
-    path: paths.discord,
-    icon: 'ic:baseline-discord',
-    activeIcon: 'ic:baseline-discord',
-    external: true,
+    key: 'library',
+    title: 'Library',
+    path: paths.bookmarks,
+    icon: 'solar:bookmark-square-minimalistic-bold-duotone',
+    activeIcon: 'solar:bookmark-square-minimalistic-bold',
   },
 ];
 
@@ -110,7 +101,7 @@ export function BottomNav({ sx }) {
           alignItems: 'center',
           justifyContent: 'space-around',
           width: '100%',
-          maxWidth: 560,
+          maxWidth: 620,
           mx: 'auto',
         }}
       >
@@ -158,7 +149,7 @@ export function BottomNav({ sx }) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     width: { xs: 46, sm: 56 },
-                    height: 32,
+                    height: 30,
                     borderRadius: 999,
                     mb: 0.35,
                   }}
@@ -183,13 +174,13 @@ export function BottomNav({ sx }) {
                   )}
 
                   <Iconify
-                    icon={active ? (item.activeIcon || item.icon) : item.icon}
-                    width={22}
+                    icon={active ? item.activeIcon || item.icon : item.icon}
+                    width={20}
                     sx={{
                       zIndex: 1,
                       color: active ? 'primary.main' : 'text.secondary',
                       transform: active ? 'scale(1.08)' : 'scale(1)',
-                      transition: 'transform 0.25s cubic-bezier(0.2, 0, 0, 1), color 0.2s ease',
+                      transition: 'transform 0.25s cubic-bezier(0.2, 0, 1), color 0.2s ease',
                       filter: active
                         ? `drop-shadow(0 2px 6px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.45)})`
                         : 'none',
@@ -232,19 +223,36 @@ function isItemActive(pathname, item) {
   }
 
   if (item.key === 'search') {
-    return pathname === '/search' || pathname.startsWith('/search');
+    return pathname === '/search' || pathname?.startsWith('/search');
   }
 
   if (item.key === 'movies') {
-    return pathname === paths.movies || pathname.startsWith('/movies') || pathname.startsWith('/watch/movie');
+    return (
+      pathname === paths.movies ||
+      pathname?.startsWith('/movies') ||
+      pathname?.startsWith('/watch/movie')
+    );
   }
 
   if (item.key === 'tv') {
-    return pathname === paths.tv || pathname.startsWith('/tv') || pathname.startsWith('/watch/tv');
+    return (
+      pathname === paths.tv ||
+      pathname?.startsWith('/tv') ||
+      pathname?.startsWith('/watch/tv')
+    );
   }
 
   if (item.key === 'live-tv') {
-    return pathname === paths.liveTv || pathname.startsWith('/live-tv');
+    return pathname === paths.liveTv || pathname?.startsWith('/live-tv');
+  }
+
+  if (item.key === 'library') {
+    return (
+      pathname === paths.bookmarks ||
+      pathname?.startsWith('/bookmarks') ||
+      pathname === paths.history ||
+      pathname?.startsWith('/history')
+    );
   }
 
   return pathname === item.path;

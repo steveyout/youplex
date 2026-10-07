@@ -11,7 +11,7 @@ export function NavDesktop({ data, sx }) {
     <Stack component="nav" sx={{ height: 1, ...sx }}>
       <NavUl
         sx={{
-          gap: 5,
+          gap: { md: 2.25, lg: 3.25, xl: 4 },
           height: 1,
           flexDirection: 'row',
           alignItems: 'center',

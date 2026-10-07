@@ -2,8 +2,6 @@ import { paramCase } from '@/utils/change-case';
 
 // ----------------------------------------------------------------------
 
-// ----------------------------------------------------------------------
-
 export const paths = {
   comingSoon: '/coming-soon',
   maintenance: '/maintenance',
@@ -13,13 +11,15 @@ export const paths = {
   page403: '/error/403',
   page404: '/error/404',
   page500: '/error/500',
-  movies:'/movies',
-  tv:'/tv',
-  liveTv:'/live-tv',
-  search:'/search',
-  torrents:'https://torrents.youplex.site/',
-  discord:'https://discord.gg/5eWu9Vz6tQ',
-  telegram:'https://t.me/youplexannouncments',
+  movies: '/movies',
+  tv: '/tv',
+  liveTv: '/live-tv',
+  search: '/search',
+  bookmarks: '/bookmarks',
+  history: '/history',
+  torrents: 'https://torrents.youplex.site/',
+  discord: 'https://discord.gg/5eWu9Vz6tQ',
+  telegram: 'https://t.me/youplexannouncments',
   dashboard: {
     root: '/movies',
     post: {
@@ -44,5 +44,4 @@ export const paths = {
       return type === 'tv' ? `${base}&sn=${sn}&ep=${ep}` : base;
     },
   },
-
 };

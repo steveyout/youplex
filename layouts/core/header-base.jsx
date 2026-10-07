@@ -11,6 +11,7 @@ import { Searchbar } from '../components/searchbar';
 import { MenuButton } from '../components/menu-button';
 import { SignInButton } from '../components/sign-in-button';
 import { SettingsButton } from '../components/settings-button';
+import { LibraryPopover } from '../components/library-popover';
 import { LanguagePopover } from '../components/language-popover';
 import { NotificationsDrawer } from '../components/notifications-drawer';
 
@@ -59,6 +60,7 @@ export function HeaderBase({
     menuButton = true,
     localization = true,
     notifications = true,
+    library = false,
   } = {},
 
   ...other
@@ -95,8 +97,6 @@ export function HeaderBase({
             {/* -- Divider -- */}
             <StyledDivider data-slot="divider" />
 
-
-
             {slots?.leftAreaEnd}
           </>
         ),
@@ -109,7 +109,7 @@ export function HeaderBase({
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: { xs: 1, sm: 1.5 },
+                gap: { xs: 0.75, sm: 1.25 },
               }}
             >
               {/* -- Help link -- */}
@@ -119,7 +119,7 @@ export function HeaderBase({
                   href={paths.faqs}
                   component={RouterLink}
                   color="inherit"
-                  sx={{ typography: 'subtitle2' }}
+                  sx={{ typography: 'subtitle2', display: { xs: 'none', sm: 'inline-flex' } }}
                 >
                   Need help?
                 </Link>
@@ -127,6 +127,9 @@ export function HeaderBase({
 
               {/* -- Searchbar -- */}
               {searchbar && <Searchbar data-slot="searchbar" data={data?.nav} />}
+
+              {/* -- Library popover (Grouped Bookmarks & History) -- */}
+              {library && <LibraryPopover data-slot="library" />}
 
               {/* -- Language popover -- */}
               {localization && <LanguagePopover data-slot="localization" data={data?.langs} />}
@@ -136,14 +139,11 @@ export function HeaderBase({
                 <NotificationsDrawer data-slot="notifications" data={data?.notifications} />
               )}
 
-
               {/* -- Settings button -- */}
               {settings && <SettingsButton data-slot="settings" />}
 
-
               {/* -- Sign in button -- */}
               {signIn && <SignInButton />}
-
             </Box>
 
             {slots?.rightAreaEnd}

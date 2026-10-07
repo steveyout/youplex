@@ -31,6 +31,9 @@ import { RouterLink } from '@/routes/components';
 import { PostItem } from '@/sections/movies/post-item';
 import { isContentDmcaBlocked } from '@/lib/dmca';
 import { DmcaNotice } from '@/components/dmca/dmca-notice';
+import { getWatchProgress } from '@/lib/watch-history';
+import { isBookmarked, toggleBookmark, BOOKMARKS_EVENT } from '@/lib/bookmarks';
+import { formatTime } from '@vidstack/react';
 import {
   getMovieOrShow,
   getRecommendations,
@@ -414,6 +417,60 @@ function WatchContent({
       active = false;
     };
   }, [isTv, id, activeSeasonNum]);
+
+  const [bookmarked, setBookmarked] = useState(false);
+  const [watchProgress, setWatchProgress] = useState(null);
+
+  useEffect(() => {
+    if (!id) return;
+    setBookmarked(isBookmarked(id, type));
+
+    const handleBookmarkChange = () => {
+      setBookmarked(isBookmarked(id, type));
+    };
+    window.addEventListener(BOOKMARKS_EVENT, handleBookmarkChange);
+    return () => window.removeEventListener(BOOKMARKS_EVENT, handleBookmarkChange);
+  }, [id, type]);
+
+  useEffect(() => {
+    if (!id) return;
+    const progress = getWatchProgress(id, type);
+    if (progress && progress.currentTime > 10 && !progress.isCompleted) {
+      setWatchProgress(progress);
+    } else {
+      setWatchProgress(null);
+    }
+  }, [id, type]);
+
+  const handleToggleBookmark = useCallback(() => {
+    if (!movieOrShow || !id) return;
+    const next = toggleBookmark({
+      id,
+      tmdbId: id,
+      type: type || 'movie',
+      title: displayTitle,
+      poster,
+      backdrop,
+      vote_average: rating,
+      release_date: releaseDate,
+      first_air_date: releaseDate,
+      overview: movieOrShow.overview,
+    });
+    setBookmarked(next);
+    if (next) {
+      toast.success('Saved to Watchlist!');
+    } else {
+      toast.info('Removed from Watchlist');
+    }
+  }, [movieOrShow, id, type, displayTitle, poster, backdrop, rating, releaseDate]);
+
+  const resumePath = useMemo(() => {
+    if (!watchProgress) return playPath;
+    if (isTv && watchProgress.season && watchProgress.episode) {
+      return paths.watch.play(type, id, displayTitle, watchProgress.season, watchProgress.episode);
+    }
+    return playPath;
+  }, [watchProgress, playPath, isTv, type, id, displayTitle]);
 
   // Recommendations tab
   const [recTab, setRecTab] = useState('recommended');
@@ -877,7 +934,7 @@ function WatchContent({
                       <Iconify icon="solar:play-bold" width={20} />
                     )
                   }
-                  onClick={() => handleWatchClick(playPath)}
+                  onClick={() => handleWatchClick(resumePath)}
                   sx={{
                     borderRadius: 2,
                     px: { xs: 3, sm: 4 },
@@ -903,7 +960,73 @@ function WatchContent({
                     },
                   }}
                 >
-                  {isNavigating ? 'Loading Stream...' : 'Watch Now'}
+                  {isNavigating
+                    ? 'Loading Stream...'
+                    : watchProgress
+                    ? isTv && watchProgress.season && watchProgress.episode
+                      ? `Resume S${watchProgress.season} E${watchProgress.episode} (${formatTime(watchProgress.currentTime)})`
+                      : `Resume (${formatTime(watchProgress.currentTime)})`
+                    : 'Watch Now'}
+                </Button>
+
+                {watchProgress && (
+                  <Button
+                    size="large"
+                    variant="outlined"
+                    disabled={isNavigating}
+                    onClick={() => handleWatchClick(playPath)}
+                    sx={{
+                      borderRadius: 2,
+                      px: 2.5,
+                      py: 1.35,
+                      color: 'common.white',
+                      bgcolor: 'rgba(255, 255, 255, 0.08)',
+                      borderColor: 'rgba(255, 255, 255, 0.25)',
+                      fontWeight: 700,
+                      textTransform: 'none',
+                      '&:hover': {
+                        bgcolor: 'rgba(255, 255, 255, 0.16)',
+                        borderColor: 'rgba(255, 255, 255, 0.45)',
+                      },
+                    }}
+                  >
+                    Start Over
+                  </Button>
+                )}
+
+                {/* Watchlist / Bookmark Button */}
+                <Button
+                  size="large"
+                  variant={bookmarked ? 'contained' : 'outlined'}
+                  startIcon={
+                    <Iconify
+                      icon={bookmarked ? 'solar:bookmark-bold' : 'solar:bookmark-linear'}
+                      width={20}
+                      sx={{ color: bookmarked ? 'primary.contrastText' : 'common.white' }}
+                    />
+                  }
+                  onClick={handleToggleBookmark}
+                  sx={{
+                    borderRadius: 2,
+                    px: 3,
+                    py: 1.35,
+                    color: bookmarked ? 'primary.contrastText' : 'common.white',
+                    bgcolor: bookmarked ? 'primary.main' : 'rgba(255, 255, 255, 0.08)',
+                    borderColor: bookmarked ? 'primary.main' : 'rgba(255, 255, 255, 0.25)',
+                    boxShadow: 'none',
+                    backdropFilter: 'blur(8px)',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      bgcolor: bookmarked ? 'primary.dark' : 'rgba(255, 255, 255, 0.16)',
+                      borderColor: bookmarked ? 'primary.dark' : 'rgba(255, 255, 255, 0.45)',
+                      boxShadow: 'none',
+                      transform: 'translateY(-1px)',
+                    },
+                  }}
+                >
+                  {bookmarked ? 'In Watchlist' : 'Watchlist'}
                 </Button>
 
                 {trailer && (

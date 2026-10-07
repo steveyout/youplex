@@ -1,7 +1,8 @@
 import { CONFIG } from '@/config-global';
 import { varAlpha } from '@/theme/styles';
-import { useState, useCallback } from 'react';
+import { usePathname } from '@/routes/hooks';
 import { isExternalLink } from '@/routes/utils';
+import { useState, useEffect, useCallback } from 'react';
 import { useActiveLink } from '@/routes/hooks/use-active-link';
 import { NavLi, navSectionClasses, NavSectionVertical } from '@/components/nav-section';
 
@@ -12,9 +13,25 @@ import { NavItem } from './nav-mobile-item';
 // ----------------------------------------------------------------------
 
 export function NavList({ data }) {
-  const active = useActiveLink(data.path, !!data.children);
+  const pathname = usePathname();
+
+  const isChildActive = data.children?.some((group) =>
+    group.items?.some((item) => {
+      if (!item.path || isExternalLink(item.path)) return false;
+      return pathname === item.path || pathname.startsWith(item.path);
+    })
+  );
+
+  const active = useActiveLink(data.path, !data.children) || !!isChildActive;
 
   const [openMenu, setOpenMenu] = useState(false);
+
+  // Auto-expand if active child
+  useEffect(() => {
+    if (isChildActive) {
+      setOpenMenu(true);
+    }
+  }, [isChildActive]);
 
   const handleToggleMenu = useCallback(() => {
     if (data.children) {
@@ -45,7 +62,7 @@ export function NavList({ data }) {
         <Collapse in={openMenu}>
           <NavSectionVertical
             data={data.children}
-            slotProps={{ rootItem: { sx: { minHeight: 36 } } }}
+            slotProps={{ rootItem: { sx: { minHeight: 38 } } }}
             sx={{
               px: 1.5,
               [`& .${navSectionClasses.item.root}`]: {

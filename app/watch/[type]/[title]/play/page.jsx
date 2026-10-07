@@ -27,7 +27,7 @@ import { DmcaNotice } from '@/components/dmca/dmca-notice';
 import { Player } from '@/components/player';
 import { Iconify } from '@/components/iconify';
 import { CLIENT_SCRAPER_CONFIG } from '@/lib/scrapers/provider-config';
-import { getMovieOrShow, getPlaySources, getSubtitles, getSeasonDetails, searchMedia } from '@/actions/api';
+import { getMovieOrShow, getPlaySources, getSubtitles, getSeasonDetails, searchMedia, getEpisodeImages, getIntroTimestamps } from '@/actions/api';
 
 // ----------------------------------------------------------------------
 
@@ -62,6 +62,7 @@ export default function PlayPage() {
   const [sourcesLoading, setSourcesLoading] = useState(!isDirectlyBlocked);
   const [sourcesError, setSourcesError] = useState(null);
   const [openSubtitles, setOpenSubtitles] = useState([]);
+  const [timelineSegments, setTimelineSegments] = useState([]);
   const [error, setError] = useState(null);
 
   // Live scrape feedback & auto-switching progress
@@ -218,10 +219,21 @@ export default function PlayPage() {
             : {}),
         };
 
-        const [sourceData, subtitleData] = await Promise.allSettled([
+        const [sourceData, subtitleData, timestampsData] = await Promise.allSettled([
           getPlaySources(type, data.id || id, initialPlaybackOptions, handleScrapeProgress),
           getSubtitles(type, data.id || id, initialPlaybackOptions),
+          getIntroTimestamps({
+            tmdbId: data.id || id,
+            imdbId: data.imdb_id,
+            type,
+            season: resolvedSeasonNum,
+            episode: resolvedEpisodeNum,
+          }),
         ]);
+
+        if (timestampsData.status === 'fulfilled' && Array.isArray(timestampsData.value?.segments)) {
+          setTimelineSegments(timestampsData.value.segments);
+        }
 
         if (!active) return;
 
@@ -251,6 +263,7 @@ export default function PlayPage() {
           setError(err?.message || 'Something went wrong while loading this title.');
           setDirectSources({ sources: [], subtitles: [] });
           setOpenSubtitles([]);
+          setTimelineSegments([]);
         }
       })
       .finally(() => {
@@ -388,6 +401,47 @@ export default function PlayPage() {
     (movieOrShow?.backdrop_path ? `https://image.tmdb.org/t/p/original${movieOrShow.backdrop_path}` : '') ||
     movieOrShow?.backdrop ||
     '';
+  // TV Episode scene stills for scrubber hover preview
+  const [episodeStills, setEpisodeStills] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    if (type !== 'tv') {
+      setEpisodeStills([]);
+      return undefined;
+    }
+    const targetId = movieOrShow?.id || id;
+    if (!targetId || !resolvedSeason || !resolvedEpisode) return undefined;
+
+    getEpisodeImages(targetId, resolvedSeason, resolvedEpisode)
+      .then((stills) => {
+        if (active && Array.isArray(stills) && stills.length > 0) {
+          setEpisodeStills(stills.map((p) => (p.startsWith('http') ? p : `https://image.tmdb.org/t/p/w780${p}`)));
+        }
+      })
+      .catch((err) => console.warn('Could not fetch episode images:', err));
+
+    return () => {
+      active = false;
+    };
+  }, [type, id, movieOrShow?.id, resolvedSeason, resolvedEpisode]);
+
+  const sceneImages = useMemo(() => {
+    if (type === 'tv' && episodeStills.length > 0) {
+      return episodeStills;
+    }
+
+    const list = [];
+    if (movieOrShow?.images?.backdrops && Array.isArray(movieOrShow.images.backdrops)) {
+      for (const img of movieOrShow.images.backdrops) {
+        if (img?.file_path) {
+          list.push(`https://image.tmdb.org/t/p/w780${img.file_path}`);
+        }
+      }
+    }
+    return list;
+  }, [type, episodeStills, movieOrShow?.images?.backdrops]);
+
   const currentSeason = seasons.find((item) => item.season_number === selectedSeason);
   const episodeCount = currentSeason?.episode_count || seasonEpisodes.length || 0;
 
@@ -420,17 +474,44 @@ export default function PlayPage() {
     if (type !== 'tv') return false;
     const currentEpNum = Number(selectedEpisode);
     if (seasonEpisodes && seasonEpisodes.length > 0) {
-      return seasonEpisodes.some((ep) => Number(ep.episode_number) === currentEpNum + 1);
+      if (seasonEpisodes.some((ep) => Number(ep.episode_number) === currentEpNum + 1)) {
+        return true;
+      }
+    } else if (episodeCount > 0 && currentEpNum < episodeCount) {
+      return true;
     }
-    return episodeCount > 0 && currentEpNum < episodeCount;
-  }, [type, selectedEpisode, seasonEpisodes, episodeCount]);
+    const currentSeasonNum = Number(selectedSeason);
+    if (Array.isArray(seasons) && seasons.length > 0) {
+      const nextSeason = seasons.find((s) => Number(s.season_number) === currentSeasonNum + 1);
+      if (nextSeason && (nextSeason.episode_count == null || nextSeason.episode_count > 0)) {
+        return true;
+      }
+    }
+    return false;
+  }, [type, selectedEpisode, seasonEpisodes, episodeCount, selectedSeason, seasons]);
 
   const handleNextEpisode = useCallback(() => {
     if (type !== 'tv') return;
     const currentEpNum = Number(selectedEpisode);
     const nextEpNum = currentEpNum + 1;
+    if (seasonEpisodes && seasonEpisodes.some((ep) => Number(ep.episode_number) === nextEpNum)) {
+      navigateToEpisode(selectedSeason, nextEpNum);
+      return;
+    }
+    if (episodeCount > 0 && nextEpNum <= episodeCount) {
+      navigateToEpisode(selectedSeason, nextEpNum);
+      return;
+    }
+    const currentSeasonNum = Number(selectedSeason);
+    if (Array.isArray(seasons) && seasons.length > 0) {
+      const nextSeason = seasons.find((s) => Number(s.season_number) === currentSeasonNum + 1);
+      if (nextSeason) {
+        navigateToEpisode(nextSeason.season_number, 1);
+        return;
+      }
+    }
     navigateToEpisode(selectedSeason, nextEpNum);
-  }, [type, selectedSeason, selectedEpisode, navigateToEpisode]);
+  }, [type, selectedSeason, selectedEpisode, seasonEpisodes, episodeCount, seasons, navigateToEpisode]);
 
   if (isDirectlyBlocked || isBlocked) {
     return (
@@ -494,36 +575,9 @@ export default function PlayPage() {
           </Stack>
         </Stack>
 
-        {/* TV Quick Season / Episode Controls */}
+        {/* TV Quick Episodes Drawer Button */}
         {type === 'tv' && seasons.length > 0 && (
           <Stack direction="row" spacing={{ xs: 0.75, sm: 1.5 }} alignItems="center">
-            {/* Season Selector */}
-            <Select
-              size="small"
-              value={selectedSeason}
-              onChange={(e) => navigateToEpisode(Number(e.target.value), 1)}
-              sx={{
-                color: 'common.white',
-                fontSize: { xs: 12, sm: 13 },
-                height: { xs: 32, sm: 36 },
-                bgcolor: alpha('#ffffff', 0.06),
-                borderRadius: 1.5,
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: alpha('#ffffff', 0.15),
-                },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: alpha('#ffffff', 0.3),
-                },
-                '& .MuiSvgIcon-root': { color: 'common.white' },
-              }}
-            >
-              {seasons.map((s) => (
-                <MenuItem key={s.season_number} value={s.season_number}>
-                  {s.name || `Season ${s.season_number}`}
-                </MenuItem>
-              ))}
-            </Select>
-
             {/* Episodes Drawer Button */}
             <Button
               size="small"
@@ -560,10 +614,44 @@ export default function PlayPage() {
           sx: {
             width: { xs: '92vw', sm: 480, md: 540, lg: 580 },
             maxWidth: 620,
-            bgcolor: '#0a0e14',
+            bgcolor: '#0a0e14 !important',
+            backgroundColor: '#0a0e14 !important',
+            backgroundImage: 'none !important',
+            backdropFilter: 'none !important',
+            WebkitBackdropFilter: 'none !important',
             color: 'common.white',
             borderLeft: `1px solid ${alpha('#ffffff', 0.1)}`,
             boxShadow: '-8px 0 32px rgba(0,0,0,0.65)',
+            zIndex: 100000,
+            pointerEvents: 'auto !important',
+          },
+        }}
+        ModalProps={{
+          BackdropProps: {
+            sx: {
+              bgcolor: 'rgba(0, 0, 0, 0.72)',
+              backdropFilter: 'none',
+              WebkitBackdropFilter: 'none',
+            },
+          },
+        }}
+        sx={{
+          zIndex: 99999,
+          '& .MuiBackdrop-root': {
+            bgcolor: 'rgba(0, 0, 0, 0.72)',
+            backdropFilter: 'none',
+            WebkitBackdropFilter: 'none',
+          },
+          '& .MuiDrawer-paper': {
+            width: { xs: '92vw', sm: 480, md: 540, lg: 580 },
+            maxWidth: 620,
+            bgcolor: '#0a0e14 !important',
+            backgroundColor: '#0a0e14 !important',
+            backgroundImage: 'none !important',
+            backdropFilter: 'none !important',
+            WebkitBackdropFilter: 'none !important',
+            zIndex: 100000,
+            pointerEvents: 'auto !important',
           },
         }}
       >
@@ -609,6 +697,28 @@ export default function PlayPage() {
                   value={selectedSeason}
                   onChange={(e) => {
                     navigateToEpisode(Number(e.target.value), 1);
+                  }}
+                  MenuProps={{
+                    disablePortal: false,
+                    PaperProps: {
+                      sx: {
+                        zIndex: 120000,
+                        bgcolor: '#0a0e14',
+                        color: 'common.white',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        boxShadow: '0 12px 36px rgba(0,0,0,0.85)',
+                        maxHeight: 320,
+                        '& .MuiMenuItem-root': {
+                          fontSize: 13,
+                          py: 1,
+                          '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
+                          '&.Mui-selected': { bgcolor: 'rgba(255,255,255,0.16)' },
+                        },
+                      },
+                    },
+                    sx: {
+                      zIndex: 120000,
+                    },
                   }}
                   sx={{
                     typography: 'subtitle2',
@@ -1071,7 +1181,7 @@ export default function PlayPage() {
       </Drawer>
 
       {/* Player */}
-      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', px: { xs: 0, sm: 3 }, pb: { xs: 1.5, sm: 3 } }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', px: { xs: 0, sm: 3 }, pb: { xs: 0, sm: 3 } }}>
         {isLoading && !movieOrShow && !error ? (
           <VideoLoadingState
             title={displayTitle}
@@ -1100,7 +1210,7 @@ export default function PlayPage() {
             </Stack>
           </Container>
         ) : (
-          <Container maxWidth="xl" disableGutters sx={{ width: 1, px: { xs: 0.5, sm: 2 } }}>
+          <Container maxWidth="xl" disableGutters sx={{ width: 1, px: { xs: 0, sm: 2 } }}>
             <Player
               title={displayTitle}
               type={type}
@@ -1109,11 +1219,23 @@ export default function PlayPage() {
               season={resolvedSeason}
               episode={resolvedEpisode}
               backdrop={backdropUrl}
+              sceneImages={sceneImages}
+              poster={
+                movieOrShow?.poster_path
+                  ? `https://image.tmdb.org/t/p/w500${movieOrShow.poster_path}`
+                  : movieOrShow?.poster || null
+              }
+              cast={combinedCast}
+              seasons={seasons}
+              seasonEpisodes={seasonEpisodes}
+              seasonEpisodesLoading={seasonEpisodesLoading}
+              onSelectEpisode={(s, ep) => navigateToEpisode(s, ep)}
               onBack={backToWatch}
               src={movieOrShow.videoUrl}
               servers={movieOrShow.servers || []}
               directSources={directSources?.sources || []}
               subtitles={[...(directSources?.subtitles || []), ...openSubtitles]}
+              timelineSegments={timelineSegments}
               extractorProviders={CLIENT_SCRAPER_CONFIG}
               activeExtractorId={directSources?.provider || null}
               sourcesLoading={sourcesLoading}

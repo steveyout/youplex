@@ -15,9 +15,9 @@ function getMainVideo() {
  * Hook to provide Netflix/YouTube-style video chunk thumbnail preview on progress bar hover.
  *
  * Uses:
- * 1. Live <canvas> element rendering (bypasses CORS toDataURL SecurityError completely).
+ * 1. Live <canvas> element rendering.
  * 2. Canvas frame cache to store rendered frames for instant re-display during scrubbing.
- * 3. Continuous frame harvester that samples the main playing video on timeupdate/seeked/interval.
+ * 3. Continuous frame harvester that samples the main playing video.
  * 4. Dedicated off-screen low-bitrate <video> that seeks to un-played timestamps.
  */
 export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
@@ -26,7 +26,12 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
   const canvasCacheRef = useRef(new Map());
   const hlsInstanceRef = useRef(null);
   const seekTimeoutRef = useRef(null);
+  const currentHoverTimeRef = useRef(hoverTime);
   const [hasFrame, setHasFrame] = useState(false);
+
+  useEffect(() => {
+    currentHoverTimeRef.current = hoverTime;
+  }, [hoverTime]);
 
   // 1. Off-screen video element in DOM layout for unplayed chunk seeking
   useEffect(() => {
@@ -37,16 +42,19 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
     video.playsInline = true;
     video.crossOrigin = 'anonymous';
     video.preload = 'auto';
+    video.width = 320;
+    video.height = 180;
     video.setAttribute('data-preview-video', 'true');
     video.setAttribute('aria-hidden', 'true');
+    // Inside viewport with tiny opacity so browser hardware video decoder stays active
     video.style.cssText =
-      'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1;';
+      'position:fixed;top:0;left:0;width:4px;height:4px;opacity:0.02;pointer-events:none;z-index:-99999;';
     document.body.appendChild(video);
     previewVideoRef.current = video;
 
     const capturePreviewVideoFrame = () => {
       try {
-        if (!video || video.videoWidth <= 0 || video.videoHeight <= 0) return;
+        if (!video || video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) return;
 
         const sec = Math.floor(video.currentTime);
         const c = document.createElement('canvas');
@@ -56,35 +64,47 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
         if (cCtx) {
           cCtx.drawImage(video, 0, 0, 320, 180);
           canvasCacheRef.current.set(sec, c);
-          for (let d = 1; d <= 2; d++) {
+          for (let d = 1; d <= 5; d++) {
             if (!canvasCacheRef.current.has(sec - d)) canvasCacheRef.current.set(sec - d, c);
             if (!canvasCacheRef.current.has(sec + d)) canvasCacheRef.current.set(sec + d, c);
           }
 
-          if (canvasCacheRef.current.size > 200) {
+          if (canvasCacheRef.current.size > 300) {
             const firstKey = canvasCacheRef.current.keys().next().value;
             canvasCacheRef.current.delete(firstKey);
           }
 
-          if (previewCanvasRef.current) {
-            const pCtx = previewCanvasRef.current.getContext('2d');
-            if (pCtx) {
-              pCtx.drawImage(c, 0, 0, previewCanvasRef.current.width, previewCanvasRef.current.height);
-              setHasFrame(true);
+          // Only paint if user is currently hovering near this timestamp!
+          const targetTime = currentHoverTimeRef.current;
+          if (
+            targetTime != null &&
+            Number.isFinite(targetTime) &&
+            Math.abs(targetTime - video.currentTime) <= 20
+          ) {
+            if (previewCanvasRef.current) {
+              const pCtx = previewCanvasRef.current.getContext('2d');
+              if (pCtx) {
+                pCtx.drawImage(c, 0, 0, previewCanvasRef.current.width, previewCanvasRef.current.height);
+                setHasFrame(true);
+              }
             }
           }
         }
-      } catch {}
+      } catch (err) {
+        // ignore cross-origin canvas security errors
+      }
     };
 
     video.addEventListener('seeked', capturePreviewVideoFrame);
     video.addEventListener('canplay', capturePreviewVideoFrame);
     video.addEventListener('loadeddata', capturePreviewVideoFrame);
+    video.addEventListener('timeupdate', capturePreviewVideoFrame);
 
     return () => {
       video.removeEventListener('seeked', capturePreviewVideoFrame);
       video.removeEventListener('canplay', capturePreviewVideoFrame);
       video.removeEventListener('loadeddata', capturePreviewVideoFrame);
+      video.removeEventListener('timeupdate', capturePreviewVideoFrame);
 
       if (hlsInstanceRef.current) {
         hlsInstanceRef.current.destroy();
@@ -100,7 +120,9 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
   // 2. Attach video source to preview video
   useEffect(() => {
     const video = previewVideoRef.current;
-    if (!video || !videoSrc) {
+    const resolvedSrc = videoSrc || (typeof document !== 'undefined' ? getMainVideo()?.currentSrc : null);
+
+    if (!video || !resolvedSrc) {
       if (hlsInstanceRef.current) {
         hlsInstanceRef.current.destroy();
         hlsInstanceRef.current = null;
@@ -109,9 +131,9 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
     }
 
     const isHls =
-      videoSrc.includes('.m3u8') ||
-      videoSrc.includes('/api/hls') ||
-      videoSrc.includes('m3u8-proxy');
+      resolvedSrc.includes('.m3u8') ||
+      resolvedSrc.includes('/api/hls') ||
+      resolvedSrc.includes('m3u8-proxy');
 
     let isSubscribed = true;
 
@@ -126,15 +148,18 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
             const hls = new Hls({
               autoStartLoad: true,
               startLevel: 0,
-              capLevelToPlayerSize: true,
-              maxBufferLength: 4,
-              maxMaxBufferLength: 8,
+              maxBufferLength: 10,
+              maxMaxBufferLength: 20,
               enableWorker: true,
+              lowLatencyMode: false,
             });
             hlsInstanceRef.current = hls;
-            hls.loadSource(videoSrc);
+            hls.loadSource(resolvedSrc);
             hls.attachMedia(video);
-            hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+            hls.on(Hls.Events.MANIFEST_PARSED, (e, data) => {
+              if (data?.levels?.length > 0) {
+                hls.currentLevel = 0;
+              }
               hls.startLoad();
             });
           }
@@ -145,7 +170,7 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
         hlsInstanceRef.current.destroy();
         hlsInstanceRef.current = null;
       }
-      video.src = videoSrc;
+      video.src = resolvedSrc;
       video.load();
     }
 
@@ -165,7 +190,7 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
     const sampleFrame = () => {
       try {
         const mainVideo = getMainVideo();
-        if (!mainVideo || mainVideo.videoWidth <= 0) return;
+        if (!mainVideo || mainVideo.readyState < 2 || mainVideo.videoWidth <= 0) return;
 
         const sec = Math.floor(mainVideo.currentTime);
         if (canvasCacheRef.current.has(sec)) return;
@@ -177,12 +202,14 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
         if (ctx) {
           ctx.drawImage(mainVideo, 0, 0, 320, 180);
           canvasCacheRef.current.set(sec, c);
-          if (canvasCacheRef.current.size > 200) {
+          if (canvasCacheRef.current.size > 250) {
             const firstKey = canvasCacheRef.current.keys().next().value;
             canvasCacheRef.current.delete(firstKey);
           }
         }
-      } catch {}
+      } catch (err) {
+        // ignore cross-origin error
+      }
     };
 
     const attachListeners = () => {
@@ -213,14 +240,14 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
     };
   }, []);
 
-  // 4. On hover: immediate paint from mainVideo or canvasCache, and debounce seek for previewVideo
+  // 4. On hover: ONLY paint if frame is close (within 15s) or clear canvas
   useEffect(() => {
     if (!isHovering || hoverTime == null || !Number.isFinite(hoverTime)) {
+      setHasFrame(false);
       return undefined;
     }
 
     const roundedTime = Math.floor(hoverTime);
-    let painted = false;
 
     const drawToCanvas = (source) => {
       const canvas = previewCanvasRef.current;
@@ -236,14 +263,9 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
       }
     };
 
-    // A. If hovering within 5s of mainVideo's current playback position, draw live
-    const mainVideo = getMainVideo();
-    if (mainVideo && mainVideo.videoWidth > 0 && Math.abs(mainVideo.currentTime - hoverTime) < 5) {
-      painted = drawToCanvas(mainVideo);
-    }
-
-    // B. Look up closest frame in canvasCache
-    if (!painted && canvasCacheRef.current.size > 0) {
+    // A. Check canvas frame cache for a frame CLOSE to hoverTime (within 15s)
+    let painted = false;
+    if (canvasCacheRef.current.size > 0) {
       let closestCanvas = null;
       let minDiff = Infinity;
 
@@ -255,12 +277,36 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
         }
       }
 
-      if (closestCanvas && minDiff < 90) {
+      // ONLY use the cached frame if it is actually within 15 seconds
+      if (closestCanvas && minDiff <= 15) {
         painted = drawToCanvas(closestCanvas);
       }
     }
 
-    // C. Seek offscreen preview video for unplayed timestamps (debounced 120ms)
+    // B. If no close cached frame, check if mainVideo is within 6 seconds
+    if (!painted) {
+      const mainVideo = getMainVideo();
+      if (
+        mainVideo &&
+        mainVideo.readyState >= 2 &&
+        mainVideo.videoWidth > 0 &&
+        Math.abs(mainVideo.currentTime - hoverTime) <= 6
+      ) {
+        painted = drawToCanvas(mainVideo);
+      }
+    }
+
+    // C. If no frame is close, set hasFrame to false and clear canvas so scene still / backdrop shows cleanly
+    if (!painted) {
+      setHasFrame(false);
+      const canvas = previewCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    // D. Seek offscreen preview video for the target timestamp (debounced 120ms)
     if (seekTimeoutRef.current) {
       clearTimeout(seekTimeoutRef.current);
     }
@@ -269,7 +315,14 @@ export function useVideoPreview({ videoSrc, hoverTime, isHovering }) {
       const pVideo = previewVideoRef.current;
       if (!pVideo) return;
       try {
-        pVideo.currentTime = Math.max(0, hoverTime);
+        if (hlsInstanceRef.current && typeof hlsInstanceRef.current.startLoad === 'function') {
+          hlsInstanceRef.current.startLoad(Math.max(0, hoverTime));
+        }
+        if (typeof pVideo.fastSeek === 'function') {
+          pVideo.fastSeek(Math.max(0, hoverTime));
+        } else {
+          pVideo.currentTime = Math.max(0, hoverTime);
+        }
       } catch {}
     }, 120);
 

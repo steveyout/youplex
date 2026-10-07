@@ -83,24 +83,44 @@ function toWebVtt(content) {
   return `WEBVTT\n\n${normalized}`;
 }
 
+function extractCleanRelease(rawRelease) {
+  if (!rawRelease || typeof rawRelease !== 'string') return '';
+  const s = rawRelease.trim();
+  const match = s.match(/(?:BluRay|BDRip|BRRip|WEB-DL|WEBRip|HDTV|HDRip|DVDRip|YIFY|PSA|RARBG|FLUX|NTb|GalaxyRG)/i);
+  if (match) return match[0];
+  if (s.length <= 14 && !/[<>{}]/.test(s) && !s.includes('.com') && !s.includes('.org') && !s.includes('http')) return s;
+  return '';
+}
+
 function toTrack(file, subtitle, downloadUrl) {
   if (!downloadUrl) return null;
 
   const langCode = (subtitle.language || file?.iso639 || 'en').toLowerCase();
   const langName = LANGUAGE_NAMES[langCode] || langCode.toUpperCase();
   const isCC = Boolean(subtitle.hearing_impaired);
-  const releaseName = subtitle.release || subtitle.feature_details?.movie_name;
-  const label = isCC
-    ? `${langName} [CC]`
-    : releaseName && releaseName !== langName
-    ? `${langName} (${releaseName.slice(0, 24)})`
-    : langName;
+  const isForced = Boolean(subtitle.foreign_parts_only || subtitle.forced);
+  const cleanRelease = extractCleanRelease(subtitle.release);
+
+  let tag = '';
+  if (isForced) {
+    tag = 'Forced';
+  } else if (isCC) {
+    tag = 'SDH';
+  } else if (cleanRelease) {
+    tag = cleanRelease;
+  }
+
+  const label = tag
+    ? `${langName} [${tag}] (OpenSubtitles)`
+    : `${langName} (OpenSubtitles)`;
 
   return {
     label,
     language: langCode,
     url: `/api/subtitles?url=${encodeURIComponent(downloadUrl)}`,
     isCC,
+    isForced,
+    source: 'opensubtitles',
   };
 }
 
@@ -240,13 +260,15 @@ export async function GET(request) {
     const selectedTracks = [];
 
     for (const [lang, langItems] of Object.entries(byLanguage)) {
-      // Pick 1 standard and 1 hearing impaired (CC) if available, or up to 2 top items
-      const standard = langItems.find((it) => !it.attributes?.hearing_impaired);
+      // Pick 1 standard, 1 hearing impaired (SDH/CC), and 1 forced if available
+      const standard = langItems.find((it) => !it.attributes?.hearing_impaired && !it.attributes?.foreign_parts_only);
       const cc = langItems.find((it) => it.attributes?.hearing_impaired);
+      const forced = langItems.find((it) => it.attributes?.foreign_parts_only || it.attributes?.forced);
 
       const toAdd = [];
       if (standard) toAdd.push(standard);
-      if (cc && cc !== standard) toAdd.push(cc);
+      if (cc && !toAdd.includes(cc)) toAdd.push(cc);
+      if (forced && !toAdd.includes(forced)) toAdd.push(forced);
       if (toAdd.length === 0 && langItems[0]) toAdd.push(langItems[0]);
 
       for (const item of toAdd) {
