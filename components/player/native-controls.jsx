@@ -365,6 +365,51 @@ export default function NativeControls({
 
   const hasActiveCaption = captions.some((c) => c.selected && c.value !== 'off');
 
+  // Auto-select English subtitles by default
+  const hasAutoSelectedSubsRef = useRef(false);
+  useEffect(() => {
+    hasAutoSelectedSubsRef.current = false;
+  }, [videoSrc, season, episode]);
+
+  useEffect(() => {
+    if (hasAutoSelectedSubsRef.current) return;
+    if (!captions || captions.length <= 1) return;
+
+    // Check if any non-off subtitle track is already selected
+    const activeTrack = captions.find((c) => c.selected && c.value !== 'off');
+    if (activeTrack) {
+      hasAutoSelectedSubsRef.current = true;
+      return;
+    }
+
+    // Filter available non-off English tracks
+    const englishTracks = captions.filter((c) => {
+      if (c.value === 'off') return false;
+      const lbl = (c.label || c.track?.label || '').toLowerCase();
+      const lang = (c.track?.language || c.track?.langCode || '').toLowerCase();
+      return lbl.includes('english') || lbl.includes('eng') || lang.startsWith('en');
+    });
+
+    if (englishTracks.length > 0) {
+      // Prioritize standard English without forced or SDH if available
+      const targetTrack =
+        englishTracks.find((c) => {
+          const l = (c.label || c.track?.label || '').toLowerCase();
+          return !l.includes('forced') && !l.includes('sdh') && !l.includes('[cc]');
+        }) ||
+        englishTracks.find((c) => {
+          const l = (c.label || c.track?.label || '').toLowerCase();
+          return !l.includes('forced');
+        }) ||
+        englishTracks[0];
+
+      if (targetTrack && typeof targetTrack.select === 'function') {
+        targetTrack.select();
+        hasAutoSelectedSubsRef.current = true;
+      }
+    }
+  }, [captions, videoSrc, season, episode]);
+
   // Sync bookmark state
   useEffect(() => {
     if (!mediaId) return;
@@ -550,35 +595,50 @@ export default function NativeControls({
     setHoverSeek(null);
   };
 
-  // Double click / Double tap handler on video canvas
+  // Desktop click and mobile touch tap handler on video canvas:
+  // Every single click or tap immediately pauses / plays the video!
   const handleVideoCanvasClick = (e) => {
+    e.stopPropagation();
+    showUI();
+
     const now = Date.now();
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const { width } = rect;
     const isDouble = now - lastClickRef.current.time < 300;
 
+    // Double-tap left 28%: Rewind 10s
+    if (isDouble && clickX < width * 0.28) {
+      lastClickRef.current = { time: 0, x: 0 };
+      remote.seek(Math.max(0, currentTime - 10));
+      triggerFeedback('rewind');
+      return;
+    }
+
+    // Double-tap right 28%: Forward 10s
+    if (isDouble && clickX > width * 0.72) {
+      lastClickRef.current = { time: 0, x: 0 };
+      remote.seek(Math.min(maxSeek, currentTime + 10));
+      triggerFeedback('forward');
+      return;
+    }
+
     lastClickRef.current = { time: now, x: clickX };
 
-    if (isDouble) {
-      if (clickX < width * 0.35) {
-        // Rewind 10s
-        remote.seek(Math.max(0, currentTime - 10));
-        triggerFeedback('rewind');
-      } else if (clickX > width * 0.65) {
-        // Forward 10s
-        remote.seek(Math.min(maxSeek, currentTime + 10));
-        triggerFeedback('forward');
-      } else {
-        remote.togglePaused();
-        triggerFeedback(store.paused ? 'play' : 'pause');
-      }
+    // Single click or tap anywhere on the video canvas immediately pauses / plays!
+    if (store.paused) {
+      remote.play(e.nativeEvent || e);
+      triggerFeedback('play');
     } else {
-      setTimeout(() => {
-        if (Date.now() - lastClickRef.current.time >= 280) {
-          showUI();
-        }
-      }, 290);
+      remote.pause(e.nativeEvent || e);
+      triggerFeedback('pause');
+    }
+  };
+
+  const handleVideoCanvasDoubleClick = (e) => {
+    e.stopPropagation();
+    if (store.canFullscreen) {
+      remote.toggleFullscreen(e.nativeEvent || e);
     }
   };
 
@@ -684,7 +744,6 @@ export default function NativeControls({
   return (
     <Box
       onPointerMove={showUI}
-      onPointerDown={showUI}
       sx={{
         position: 'absolute',
         inset: 0,
@@ -697,6 +756,7 @@ export default function NativeControls({
       {/* Clickable video area for Play/Pause and double-tap seeking */}
       <Box
         onClick={handleVideoCanvasClick}
+        onDoubleClick={handleVideoCanvasDoubleClick}
         sx={{
           position: 'absolute',
           inset: 0,
@@ -754,7 +814,10 @@ export default function NativeControls({
           opacity: uiVisible ? 1 : 0,
           transform: uiVisible ? 'translateY(0)' : 'translateY(-10px)',
           transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          pointerEvents: uiVisible ? 'auto' : 'none',
+          pointerEvents: 'none',
+          '& > *': {
+            pointerEvents: uiVisible ? 'auto' : 'none',
+          },
         }}
       >
         {/* Left: Optional Back + Title Metadata */}
@@ -1274,8 +1337,9 @@ export default function NativeControls({
             }}
           >
             <IconButton
-              onClick={() => {
-                remote.togglePaused();
+              onClick={(e) => {
+                e.stopPropagation();
+                remote.play(e.nativeEvent || e);
                 triggerFeedback('play');
               }}
               sx={{
@@ -1303,7 +1367,7 @@ export default function NativeControls({
         <Box
           sx={{
             position: 'absolute',
-            top: '50%',
+            top: { xs: '44%', sm: '50%' },
             left: '50%',
             transform: uiVisible ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.92)',
             zIndex: 4,
@@ -1434,7 +1498,7 @@ export default function NativeControls({
               position: 'relative',
               flexGrow: 1,
               width: { sm: 1 },
-              height: { xs: 34, sm: 24 },
+              height: { xs: 26, sm: 24 },
             display: 'flex',
             alignItems: 'center',
             cursor: canSeek ? 'pointer' : 'default',

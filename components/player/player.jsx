@@ -663,7 +663,7 @@ export default function Player({
               '& media-player': {
                 width: '100%',
                 height: '100%',
-                '--video-aspect-ratio': '16/9',
+                '--video-aspect-ratio': 'unset',
               },
             }}
           >
@@ -746,7 +746,7 @@ export default function Player({
                     kind="subtitles"
                     label={track.displayLabel}
                     lang={track.langCode || 'en'}
-                    default={index === 0}
+                    default={index === 0 && Boolean(track.isEnglish)}
                   />
                 ))}</MediaProvider>
               <Captions className="youplex-vds-captions vds-captions" />
@@ -1018,11 +1018,15 @@ export default function Player({
         sx={{
           position: 'relative',
           width: 1,
-          aspectRatio: { xs: '16/9', sm: '16/9' },
-          minHeight: { xs: 260, sm: 360, md: 480 },
-          height: { xs: 'clamp(260px, 42vh, 480px)', sm: 'auto' },
+          aspectRatio: { xs: 'auto', sm: '16/9' },
+          minHeight: { xs: '70vh', sm: 360, md: 480 },
+          height: { xs: '75vh', sm: 'auto' },
+          '@media (orientation: landscape) and (max-height: 500px)': {
+            height: '100vh',
+            minHeight: '100vh',
+          },
           overflow: 'hidden',
-          bgcolor: '#050709',
+          bgcolor: '#000',
           borderRadius: { xs: 0, sm: 3 },
           border: { xs: 'none', sm: `1px solid ${alpha('#ffffff', 0.12)}` },
           boxShadow: { xs: 'none', sm: `0 24px 60px -12px ${alpha('#000000', 0.9)}` },
