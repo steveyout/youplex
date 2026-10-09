@@ -393,6 +393,11 @@ export default function Player({
   useEffect(() => {
     let active = true;
 
+    if (type === 'live') {
+      setTimelineSegments(EMPTY_ARRAY);
+      return undefined;
+    }
+
     if (initialTimelineSegments && initialTimelineSegments.length > 0) {
       setTimelineSegments(initialTimelineSegments);
     } else if (!resolvedTmdbId) {
@@ -670,6 +675,7 @@ export default function Player({
             <MediaPlayer
               key={`native-player-${activeNativeSrc}-${playbackAttempt}`}
               src={nativeSrc}
+              streamType={type === 'live' ? 'live' : undefined}
               crossOrigin="anonymous"
               autoPlay
               playsInline
@@ -1011,8 +1017,44 @@ export default function Player({
     );
   };
 
+  const hasAnyFullHeight =
+    propHeight === '100%' ||
+    containerSx?.height === '100%' ||
+    Boolean(typeof propHeight === 'object' && propHeight?.sm === '100%') ||
+    Boolean(typeof containerSx?.height === 'object' && containerSx?.height?.sm === '100%');
+
+  const resolvedFullHeight = useMemo(() => {
+    if (propHeight === '100%' || containerSx?.height === '100%') {
+      return 1;
+    }
+    const heightObj =
+      (typeof containerSx?.height === 'object' && containerSx?.height) ||
+      (typeof propHeight === 'object' && propHeight);
+    if (heightObj) {
+      return {
+        xs: heightObj.xs === '100%' ? 1 : 'auto',
+        sm: heightObj.sm === '100%' ? 1 : 'auto',
+        md: heightObj.md === '100%' ? 1 : 'auto',
+      };
+    }
+    return 'auto';
+  }, [propHeight, containerSx]);
+
   return (
-    <Box className="youplex-player" sx={{ width: 1 }}>
+    <Box
+      className="youplex-player"
+      sx={{
+        width: 1,
+        ...(hasAnyFullHeight
+          ? {
+              height: resolvedFullHeight,
+              display: { xs: 'block', sm: 'flex' },
+              alignItems: { sm: 'center' },
+              justifyContent: { sm: 'center' },
+            }
+          : {}),
+      }}
+    >
       {/* Player Canvas Box */}
       <Box
         sx={{

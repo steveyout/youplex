@@ -1,7 +1,6 @@
 'use client';
 
-import { Iconify } from '@/components/iconify';
-import Player from '@/components/player/player';
+import dynamic from 'next/dynamic';
 import { useMemo, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
@@ -25,12 +24,24 @@ import InputAdornment from '@mui/material/InputAdornment';
 import LinearProgress from '@mui/material/LinearProgress';
 import CardActionArea from '@mui/material/CardActionArea';
 
+import { Iconify } from '@/components/iconify';
+
+const Player = dynamic(() => import('@/components/player/player'), {
+  ssr: false,
+});
+
 const categoryNames = { all: 'All channels' };
 const EMPTY_ARRAY = Object.freeze([]);
 
 export default function LiveTvView() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [mounted, setMounted] = useState(false);
+  const isMobileQuery = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = mounted ? isMobileQuery : false;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [channels, setChannels] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -49,30 +60,47 @@ export default function LiveTvView() {
 
   const [modalChannelQuery, setModalChannelQuery] = useState('');
 
+  const selectedChannelId = selected ? String(selected.id) : '';
+
   const currentChannelIndex = useMemo(() => {
     if (!selected || channels.length === 0) return -1;
-    return channels.findIndex((ch) => ch.id === selected.id);
-  }, [selected, channels]);
+    return channels.findIndex((ch) => String(ch.id) === selectedChannelId);
+  }, [selected, channels, selectedChannelId]);
 
   const handlePrevChannel = useCallback(() => {
     if (!channels || channels.length === 0) return;
-    const idx = channels.findIndex((ch) => ch.id === selected?.id);
+    const idx = channels.findIndex((ch) => String(ch.id) === selectedChannelId);
     if (idx <= 0) {
       setSelected(channels[channels.length - 1]);
     } else {
       setSelected(channels[idx - 1]);
     }
-  }, [selected, channels]);
+  }, [selectedChannelId, channels]);
 
   const handleNextChannel = useCallback(() => {
     if (!channels || channels.length === 0) return;
-    const idx = channels.findIndex((ch) => ch.id === selected?.id);
+    const idx = channels.findIndex((ch) => String(ch.id) === selectedChannelId);
     if (idx < 0 || idx >= channels.length - 1) {
       setSelected(channels[0]);
     } else {
       setSelected(channels[idx + 1]);
     }
-  }, [selected, channels]);
+  }, [selectedChannelId, channels]);
+
+  const selectChannelOptions = useMemo(() => {
+    if (!channels || channels.length === 0) {
+      return selected ? [selected] : EMPTY_ARRAY;
+    }
+    const exists = channels.some((c) => String(c.id) === selectedChannelId);
+    if (!exists && selected) {
+      return [selected, ...channels];
+    }
+    return channels;
+  }, [channels, selected, selectedChannelId]);
+
+  const isValidSelectedValue = useMemo(() => {
+    return selectChannelOptions.some((c) => String(c.id) === selectedChannelId);
+  }, [selectChannelOptions, selectedChannelId]);
 
   const modalFilteredChannels = useMemo(() => {
     if (!modalChannelQuery.trim()) return channels;
@@ -169,10 +197,20 @@ export default function LiveTvView() {
                   }}
                 >
                   <CardActionArea
-                    onClick={() => event.channels[0] && setSelected({
-                      id: event.channels[0].channelId,
-                      name: event.title,
-                    })}
+                    onClick={() => {
+                      if (!event.channels[0]) return;
+                      const chId = String(event.channels[0].channelId);
+                      const matchingChannel = channels.find((c) => String(c.id) === chId);
+                      if (matchingChannel) {
+                        setSelected(matchingChannel);
+                      } else {
+                        setSelected({
+                          id: chId,
+                          name: event.channels[0].name || event.title,
+                          firstLetter: (event.channels[0].name || event.title)?.[0] || 'T',
+                        });
+                      }
+                    }}
                     disabled={!event.channels[0]}
                     sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start' }}
                   >
@@ -388,13 +426,29 @@ export default function LiveTvView() {
                 )}
 
                 {/* Desktop Channel Dropdown Selector */}
-                {!isMobile && channels.length > 0 && (
+                {!isMobile && (
                   <Select
                     size="small"
-                    value={selected.id}
+                    value={isValidSelectedValue ? selectedChannelId : ''}
                     onChange={(event) => {
-                      const next = channels.find((channel) => channel.id === event.target.value);
+                      const targetId = String(event.target.value);
+                      const next = selectChannelOptions.find((channel) => String(channel.id) === targetId);
                       if (next) setSelected(next);
+                    }}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: {
+                          maxHeight: 380,
+                          bgcolor: '#0a0e14',
+                          color: 'common.white',
+                          border: `1px solid ${alpha('#ffffff', 0.12)}`,
+                          '& .MuiMenuItem-root': {
+                            fontSize: 13,
+                            '&:hover': { bgcolor: alpha('#ffffff', 0.08) },
+                            '&.Mui-selected': { bgcolor: alpha('#FF3030', 0.16) },
+                          },
+                        },
+                      },
                     }}
                     sx={{
                       minWidth: 180,
@@ -409,8 +463,8 @@ export default function LiveTvView() {
                       '& .MuiSvgIcon-root': { color: 'common.white' },
                     }}
                   >
-                    {channels.slice(0, 300).map((channel) => (
-                      <MenuItem key={`player-channel-${channel.id}`} value={channel.id} sx={{ fontSize: 13 }}>
+                    {selectChannelOptions.map((channel) => (
+                      <MenuItem key={`player-channel-${channel.id}`} value={String(channel.id)} sx={{ fontSize: 13 }}>
                         {channel.name} {channel.country ? `(${channel.country})` : ''}
                       </MenuItem>
                     ))}
@@ -446,6 +500,8 @@ export default function LiveTvView() {
                 flexDirection: 'column',
                 flex: 1,
                 minHeight: 0,
+                alignItems: { xs: 'stretch', sm: 'center' },
+                justifyContent: { xs: 'flex-start', sm: 'center' },
                 '&::-webkit-scrollbar': { width: 6 },
                 '&::-webkit-scrollbar-thumb': {
                   bgcolor: alpha('#ffffff', 0.15),
@@ -457,14 +513,16 @@ export default function LiveTvView() {
               <Box
                 sx={{
                   width: 1,
+                  height: { xs: 'auto', sm: '100%' },
+                  flex: { xs: '0 0 auto', sm: 1 },
+                  flexShrink: 0,
                   position: 'relative',
                   bgcolor: '#000',
-                  flexShrink: 0,
-                  aspectRatio: '16/9',
-                  maxHeight: { sm: 'calc(100vh - 130px)' },
+                  minHeight: 0,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  overflow: 'hidden',
                 }}
               >
                 {streamLoading ? (
@@ -477,6 +535,7 @@ export default function LiveTvView() {
                     tmdbId={selected.id}
                     title={selected.name}
                     src={source.url}
+                    type="live"
                     directSources={playerDirectSources}
                     subtitles={EMPTY_ARRAY}
                     servers={EMPTY_ARRAY}
@@ -486,15 +545,16 @@ export default function LiveTvView() {
                     allowEmbedMode={false}
                     onRetrySources={refreshSelectedStream}
                     aspectRatio="16/9"
-                    height="auto"
+                    height={{ xs: 'auto', sm: '100%' }}
                     minHeight={0}
                     containerSx={{
                       width: '100%',
+                      height: { xs: 'auto', sm: '100%' },
                       aspectRatio: '16/9',
+                      maxWidth: { sm: 'calc((100vh - 140px) * 16 / 9)' },
                       borderRadius: 0,
                       border: 'none',
                       boxShadow: 'none',
-                      maxHeight: { sm: 'calc(100vh - 130px)' },
                     }}
                   />
                 ) : null}
@@ -686,8 +746,9 @@ function LiveTvLoading({ channel }) {
     <Box
       sx={{
         width: 1,
-        height: 1,
+        height: { xs: 'auto', sm: '100%' },
         aspectRatio: '16/9',
+        maxWidth: { sm: 'calc((100vh - 140px) * 16 / 9)' },
         bgcolor: '#05070a',
         borderRadius: 0,
         position: 'relative',
@@ -809,8 +870,9 @@ function LiveTvError({ message, onRetry }) {
       spacing={1.5}
       sx={{
         width: 1,
-        height: 1,
+        height: { xs: 'auto', sm: '100%' },
         aspectRatio: '16/9',
+        maxWidth: { sm: 'calc((100vh - 140px) * 16 / 9)' },
         py: { xs: 3, sm: 6 },
         px: 2,
         textAlign: 'center',

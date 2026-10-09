@@ -39,6 +39,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 
 // ----------------------------------------------------------------------
 
+const EMPTY_ARRAY = Object.freeze([]);
+
 const SEGMENT_PALETTE = {
   intro: {
     color: '#FFB800',
@@ -229,6 +231,15 @@ export default function NativeControls({
   const isAirPlayConnected = useMediaState('isAirPlayConnected');
   const selectServer = onSelectServer || handleSelectServer;
 
+  const [hasChrome, setHasChrome] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && Boolean(window.chrome)) {
+      setHasChrome(true);
+    }
+  }, []);
+
+  const showChromecast = Boolean(canGoogleCast || (!canAirPlay && hasChrome));
+
   // Keyboard shortcuts: 'r' / 'R' for Cast, 'e' / 'E' for Episodes
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -313,9 +324,11 @@ export default function NativeControls({
   const lastClickRef = useRef({ time: 0, x: 0 });
 
   const { currentTime, duration, bufferedEnd, volume, muted } = store;
+  const isLive = Boolean(store.live || type === 'live' || !Number.isFinite(duration));
+  const isLiveEdge = Boolean(store.liveEdge);
   const active = dragVal ?? currentTime;
   const maxSeek = typeof duration === 'number' && Number.isFinite(duration) ? duration : 0;
-  const canSeek = maxSeek > 0;
+  const canSeek = !isLive && maxSeek > 0;
   const bufferPct = canSeek ? Math.min(100, (bufferedEnd / maxSeek) * 100) : 0;
   const playedPct = canSeek ? Math.min(100, (active / maxSeek) * 100) : 0;
 
@@ -338,9 +351,9 @@ export default function NativeControls({
 
   // Compute movie chapters & active chapter info
   const { chapters, getChapterAtTime } = useMovieChapters({
-    duration: maxSeek,
-    timelineSegments,
-    explicitChapters,
+    duration: isLive ? 0 : maxSeek,
+    timelineSegments: isLive ? EMPTY_ARRAY : timelineSegments,
+    explicitChapters: isLive ? null : explicitChapters,
     type,
   });
 
@@ -453,7 +466,7 @@ export default function NativeControls({
 
   // Auto-resume watch progress
   useEffect(() => {
-    if (!canSeek || !mediaId || hasAttemptedResumeRef.current) return;
+    if (isLive || !canSeek || !mediaId || hasAttemptedResumeRef.current) return;
     if (maxSeek < 30) return;
 
     hasAttemptedResumeRef.current = true;
@@ -469,12 +482,12 @@ export default function NativeControls({
       }, 6000);
       return () => clearTimeout(timer);
     }
-  }, [canSeek, mediaId, type, season, episode, maxSeek, remote]);
+  }, [isLive, canSeek, mediaId, type, season, episode, maxSeek, remote]);
 
   // Persist progress function
   const persistProgress = useCallback(
     (timeToSave) => {
-      if (!mediaId || !maxSeek || maxSeek <= 0) return;
+      if (isLive || !mediaId || !maxSeek || maxSeek <= 0) return;
       const t = typeof timeToSave === 'number' ? timeToSave : currentTime;
       if (t < 3) return;
 
@@ -492,7 +505,7 @@ export default function NativeControls({
       });
       lastSavedTimeRef.current = t;
     },
-    [mediaId, tmdbId, type, title, poster, backdrop, season, episode, currentTime, maxSeek]
+    [isLive, mediaId, tmdbId, type, title, poster, backdrop, season, episode, currentTime, maxSeek]
   );
 
   // Save on interval while playing
@@ -608,7 +621,7 @@ export default function NativeControls({
     const isDouble = now - lastClickRef.current.time < 300;
 
     // Double-tap left 28%: Rewind 10s
-    if (isDouble && clickX < width * 0.28) {
+    if (!isLive && isDouble && clickX < width * 0.28) {
       lastClickRef.current = { time: 0, x: 0 };
       remote.seek(Math.max(0, currentTime - 10));
       triggerFeedback('rewind');
@@ -616,7 +629,7 @@ export default function NativeControls({
     }
 
     // Double-tap right 28%: Forward 10s
-    if (isDouble && clickX > width * 0.72) {
+    if (!isLive && isDouble && clickX > width * 0.72) {
       lastClickRef.current = { time: 0, x: 0 };
       remote.seek(Math.min(maxSeek, currentTime + 10));
       triggerFeedback('forward');
@@ -660,15 +673,19 @@ export default function NativeControls({
           break;
         case 'arrowleft':
         case 'j':
-          e.preventDefault();
-          remote.seek(Math.max(0, currentTime - 10));
-          triggerFeedback('rewind');
+          if (canSeek) {
+            e.preventDefault();
+            remote.seek(Math.max(0, currentTime - 10));
+            triggerFeedback('rewind');
+          }
           break;
         case 'arrowright':
         case 'l':
-          e.preventDefault();
-          remote.seek(Math.min(maxSeek, currentTime + 10));
-          triggerFeedback('forward');
+          if (canSeek) {
+            e.preventDefault();
+            remote.seek(Math.min(maxSeek, currentTime + 10));
+            triggerFeedback('forward');
+          }
           break;
         case 'arrowup':
           e.preventDefault();
@@ -1380,28 +1397,30 @@ export default function NativeControls({
           }}
         >
           {/* Rewind 10s Circular Button */}
-          <IconButton
-            onClick={(e) => {
-              e.stopPropagation();
-              remote.seek(Math.max(0, currentTime - 10));
-              triggerFeedback('rewind');
-            }}
-            sx={{
-              color: 'common.white',
-              bgcolor: alpha('#000000', 0.55),
-              backdropFilter: 'blur(12px)',
-              border: `1px solid ${alpha('#ffffff', 0.2)}`,
-              width: 52,
-              height: 52,
-              touchAction: 'manipulation',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-              transition: 'all 0.15s ease',
-              '&:active': { bgcolor: alpha('#000000', 0.8), transform: 'scale(0.92)' },
-            }}
-            aria-label="Rewind 10 seconds"
-          >
-            <Iconify icon="ic:round-replay-10" width={30} />
-          </IconButton>
+          {!isLive && (
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                remote.seek(Math.max(0, currentTime - 10));
+                triggerFeedback('rewind');
+              }}
+              sx={{
+                color: 'common.white',
+                bgcolor: alpha('#000000', 0.55),
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                width: 52,
+                height: 52,
+                touchAction: 'manipulation',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                transition: 'all 0.15s ease',
+                '&:active': { bgcolor: alpha('#000000', 0.8), transform: 'scale(0.92)' },
+              }}
+              aria-label="Rewind 10 seconds"
+            >
+              <Iconify icon="ic:round-replay-10" width={30} />
+            </IconButton>
+          )}
 
           {/* Large Center Play / Pause Button */}
           <IconButton
@@ -1428,34 +1447,38 @@ export default function NativeControls({
           </IconButton>
 
           {/* Forward 10s Circular Button */}
-          <IconButton
-            onClick={(e) => {
-              e.stopPropagation();
-              remote.seek(Math.min(maxSeek, currentTime + 10));
-              triggerFeedback('forward');
-            }}
-            sx={{
-              color: 'common.white',
-              bgcolor: alpha('#000000', 0.55),
-              backdropFilter: 'blur(12px)',
-              border: `1px solid ${alpha('#ffffff', 0.2)}`,
-              width: 52,
-              height: 52,
-              touchAction: 'manipulation',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-              transition: 'all 0.15s ease',
-              '&:active': { bgcolor: alpha('#000000', 0.8), transform: 'scale(0.92)' },
-            }}
-            aria-label="Forward 10 seconds"
-          >
-            <Iconify icon="ic:round-forward-10" width={30} />
-          </IconButton>
+          {!isLive && (
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                remote.seek(Math.min(maxSeek, currentTime + 10));
+                triggerFeedback('forward');
+              }}
+              sx={{
+                color: 'common.white',
+                bgcolor: alpha('#000000', 0.55),
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${alpha('#ffffff', 0.2)}`,
+                width: 52,
+                height: 52,
+                touchAction: 'manipulation',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                transition: 'all 0.15s ease',
+                '&:active': { bgcolor: alpha('#000000', 0.8), transform: 'scale(0.92)' },
+              }}
+              aria-label="Forward 10 seconds"
+            >
+              <Iconify icon="ic:round-forward-10" width={30} />
+            </IconButton>
+          )}
         </Box>
       )}
 
       {/* ===================== BOTTOM CONTROLS HUD ===================== */}
       <Stack
         spacing={1}
+        onPointerEnter={showUI}
+        onPointerMove={showUI}
         sx={{
           position: 'absolute',
           bottom: 0,
@@ -1474,50 +1497,92 @@ export default function NativeControls({
         {/* ================= SEEKBAR ROW ================= */}
         <Box sx={{ width: 1, display: 'flex', alignItems: 'center', gap: { xs: 1.25, sm: 0 } }}>
           {/* Mobile Current Time (Left) */}
-          <Typography
-            variant="caption"
-            sx={{
-              display: { xs: 'block', sm: 'none' },
-              color: 'common.white',
-              fontVariantNumeric: 'tabular-nums',
-              fontWeight: 600,
-              fontSize: 12,
-              minWidth: 36,
-              textAlign: 'left',
-              userSelect: 'none',
-            }}
-          >
-            {durationText(active)}
-          </Typography>
+          {isLive ? (
+            <Box
+              sx={{
+                display: { xs: 'flex', sm: 'none' },
+                alignItems: 'center',
+                gap: 0.5,
+                minWidth: 44,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: 'error.main',
+                  boxShadow: '0 0 6px #FF3030',
+                  animation: 'livetv-blink 1.2s infinite',
+                  '@keyframes livetv-blink': {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: 0.3 },
+                  },
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'common.white',
+                  fontWeight: 800,
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                }}
+              >
+                LIVE
+              </Typography>
+            </Box>
+          ) : (
+            <Typography
+              variant="caption"
+              sx={{
+                display: { xs: 'block', sm: 'none' },
+                color: 'common.white',
+                fontVariantNumeric: 'tabular-nums',
+                fontWeight: 600,
+                fontSize: 12,
+                minWidth: 36,
+                textAlign: 'left',
+                userSelect: 'none',
+              }}
+            >
+              {durationText(active)}
+            </Typography>
+          )}
 
           <Box
             ref={progressBarRef}
             onMouseMove={handleSeekMouseMove}
             onMouseLeave={handleSeekMouseLeave}
+            onClick={() => {
+              if (isLive && typeof remote.seekToLiveEdge === 'function') {
+                remote.seekToLiveEdge();
+              }
+            }}
             sx={{
               position: 'relative',
               flexGrow: 1,
               width: { sm: 1 },
               height: { xs: 26, sm: 24 },
-            display: 'flex',
-            alignItems: 'center',
-            cursor: canSeek ? 'pointer' : 'default',
-            touchAction: 'none',
-            '&:hover .seek-track': {
-              height: 6,
-            },
-            '&:hover .seek-segment': {
-              height: 7,
-            },
-            '&:hover .seek-segment-played': {
-              height: 7,
-            },
-            '&:hover .seek-thumb': {
-              transform: 'translate(-50%, -50%) scale(1.25)',
-              boxShadow: `0 0 12px ${alpha(primaryColor, 0.8)}, 0 2px 6px rgba(0,0,0,0.6)`,
-            },
-          }}
-        >
+              display: 'flex',
+              alignItems: 'center',
+              cursor: canSeek ? 'pointer' : isLive ? 'pointer' : 'default',
+              touchAction: 'none',
+              '&:hover .seek-track': {
+                height: 6,
+              },
+              '&:hover .seek-segment': {
+                height: 7,
+              },
+              '&:hover .seek-segment-played': {
+                height: 7,
+              },
+              '&:hover .seek-thumb': {
+                transform: isLive ? 'translate(50%, -50%) scale(1.3)' : 'translate(-50%, -50%) scale(1.25)',
+                boxShadow: `0 0 12px ${alpha(primaryColor, 0.8)}, 0 2px 6px rgba(0,0,0,0.6)`,
+              },
+            }}
+          >
           {/* Hover Time & Video Frame Preview (Netflix / YouTube Style) */}
           {hoverSeek && canSeek && (
             <Box
@@ -1800,54 +1865,114 @@ export default function NativeControls({
             </Box>
           )}
 
-          {/* Background Track */}
-          <Box
-            className="seek-track"
-            sx={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              height: { xs: 5, sm: 4 },
-              borderRadius: 2,
-              overflow: 'hidden',
-              bgcolor: alpha('#ffffff', 0.2),
-              transition: 'height 0.15s ease',
-              zIndex: 1,
-            }}
-          >
-            {/* Buffered Progress */}
+          {/* Live Progress Bar Glow Track */}
+          {isLive && !canSeek && (
+            <>
+              <Box
+                className="seek-track"
+                sx={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  height: { xs: 5, sm: 4 },
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  bgcolor: alpha('#FF3030', 0.2),
+                  boxShadow: `0 0 8px ${alpha('#FF3030', 0.25)}`,
+                  zIndex: 1,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 1,
+                    height: 1,
+                    background: 'linear-gradient(90deg, rgba(255, 48, 48, 0.35) 0%, #FF3030 100%)',
+                    borderRadius: 2,
+                    boxShadow: '0 0 10px rgba(255, 48, 48, 0.5)',
+                  }}
+                />
+              </Box>
+
+              {/* Pulsing Live Edge Thumb at 100% */}
+              <Box
+                className="seek-thumb"
+                sx={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '50%',
+                  transform: 'translate(50%, -50%)',
+                  width: { xs: 12, sm: 11 },
+                  height: { xs: 12, sm: 11 },
+                  borderRadius: '50%',
+                  bgcolor: '#FF3030',
+                  border: '2px solid #FFFFFF',
+                  boxShadow: '0 0 12px #FF3030, 0 0 4px #FFFFFF',
+                  zIndex: 6,
+                  pointerEvents: 'none',
+                  animation: 'livetv-thumb-pulse 1.8s ease-in-out infinite',
+                  '@keyframes livetv-thumb-pulse': {
+                    '0%, 100%': { transform: 'translate(50%, -50%) scale(1)', boxShadow: '0 0 12px #FF3030, 0 0 4px #FFFFFF' },
+                    '50%': { transform: 'translate(50%, -50%) scale(1.25)', boxShadow: '0 0 20px #FF3030, 0 0 8px #FFFFFF' },
+                  },
+                }}
+              />
+            </>
+          )}
+
+          {/* Background Track (VOD / Seekable) */}
+          {!isLive && (
             <Box
+              className="seek-track"
               sx={{
-                width: `${bufferPct}%`,
-                height: 1,
-                bgcolor: alpha('#ffffff', 0.4),
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                height: { xs: 5, sm: 4 },
                 borderRadius: 2,
-                transition: 'width 0.2s ease',
+                overflow: 'hidden',
+                bgcolor: alpha('#ffffff', 0.2),
+                transition: 'height 0.15s ease',
+                zIndex: 1,
               }}
-            />
-          </Box>
+            >
+              {/* Buffered Progress */}
+              <Box
+                sx={{
+                  width: `${bufferPct}%`,
+                  height: 1,
+                  bgcolor: alpha('#ffffff', 0.4),
+                  borderRadius: 2,
+                  transition: 'width 0.2s ease',
+                }}
+              />
+            </Box>
+          )}
 
           {/* Played Progress Bar */}
-          <Box
-            className="seek-track"
-            sx={{
-              position: 'absolute',
-              left: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: `${playedPct}%`,
-              height: { xs: 5, sm: 4 },
-              borderRadius: 2,
-              background: `linear-gradient(90deg, ${primaryColor} 0%, ${primaryLight} 100%)` ,
-              transition: 'height 0.15s ease',
-              boxShadow: `0 0 8px ${alpha(primaryColor, 0.4)}`,
-              zIndex: 2,
-              pointerEvents: 'none',
-              opacity: 0.88,
-            }}
-          />
+          {!isLive && (
+            <Box
+              className="seek-track"
+              sx={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: `${playedPct}%`,
+                height: { xs: 5, sm: 4 },
+                borderRadius: 2,
+                background: `linear-gradient(90deg, ${primaryColor} 0%, ${primaryLight} 100%)` ,
+                transition: 'height 0.15s ease',
+                boxShadow: `0 0 8px ${alpha(primaryColor, 0.4)}`,
+                zIndex: 2,
+                pointerEvents: 'none',
+                opacity: 0.88,
+              }}
+            />
+          )}
 
           {/* Colored Segments on Timeline with Distinct Gradients and Crisp Boundary Notches */}
           {canSeek &&
@@ -1978,75 +2103,95 @@ export default function NativeControls({
               })}
 
           {/* Scrub Thumb */}
-          <Box
-            className="seek-thumb"
-            sx={{
-              position: 'absolute',
-              left: `${playedPct}%`,
-              top: '50%',
-              transform: 'translate(-50%, -50%) scale(1)',
-              width: { xs: 16, sm: 14 },
-              height: { xs: 16, sm: 14 },
-              borderRadius: '50%',
-              bgcolor: activeSegment
-                ? (SEGMENT_PALETTE[activeSegment.type]?.color || 'common.white')
-                : 'common.white',
-              boxShadow: activeSegment
-                ? `0 0 12px ${SEGMENT_PALETTE[activeSegment.type]?.color || '#ffffff'}, 0 2px 8px rgba(0,0,0,0.8)`
-                : '0 2px 8px rgba(0,0,0,0.6)',
-              pointerEvents: 'none',
-              zIndex: 6,
-              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-            }}
-          />
+          {!isLive && (
+            <Box
+              className="seek-thumb"
+              sx={{
+                position: 'absolute',
+                left: `${playedPct}%`,
+                top: '50%',
+                transform: 'translate(-50%, -50%) scale(1)',
+                width: { xs: 16, sm: 14 },
+                height: { xs: 16, sm: 14 },
+                borderRadius: '50%',
+                bgcolor: activeSegment
+                  ? (SEGMENT_PALETTE[activeSegment.type]?.color || 'common.white')
+                  : 'common.white',
+                boxShadow: activeSegment
+                  ? `0 0 12px ${SEGMENT_PALETTE[activeSegment.type]?.color || '#ffffff'}, 0 2px 8px rgba(0,0,0,0.8)`
+                  : '0 2px 8px rgba(0,0,0,0.6)',
+                pointerEvents: 'none',
+                zIndex: 6,
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              }}
+            />
+          )}
 
           {/* Transparent Slider for Drag Scrubbing */}
-          <Slider
-            size="small"
-            min={0}
-            max={canSeek ? maxSeek : 1}
-            step={0.1}
-            value={canSeek ? clamp(active, 0, maxSeek) : 0}
-            disabled={!canSeek}
-            onChange={(_, value) => setDragVal(value)}
-            onChangeCommitted={seekCommit}
-            track={false}
-            sx={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              width: 1,
-              height: { xs: 34, sm: 24 },
-              opacity: 0,
-              cursor: 'pointer',
-              p: 0,
-              zIndex: 7,
-              '& .MuiSlider-thumb': {
-                width: 28,
-                height: 28,
-              },
-            }}
-          />
+          {!isLive && (
+            <Slider
+              size="small"
+              min={0}
+              max={canSeek ? maxSeek : 1}
+              step={0.1}
+              value={canSeek ? clamp(active, 0, maxSeek) : 0}
+              disabled={!canSeek}
+              onChange={(_, value) => setDragVal(value)}
+              onChangeCommitted={seekCommit}
+              track={false}
+              sx={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                width: 1,
+                height: { xs: 34, sm: 24 },
+                opacity: 0,
+                cursor: 'pointer',
+                p: 0,
+                zIndex: 7,
+                '& .MuiSlider-thumb': {
+                  width: 28,
+                  height: 28,
+                },
+              }}
+            />
+          )}
           </Box>
 
           {/* Mobile Total / Remaining Time (Right) */}
-          <Typography
-            variant="caption"
-            onClick={() => setShowRemainingTime((prev) => !prev)}
-            sx={{
-              display: { xs: 'block', sm: 'none' },
-              color: alpha('#ffffff', 0.75),
-              fontVariantNumeric: 'tabular-nums',
-              fontWeight: 600,
-              fontSize: 12,
-              minWidth: 36,
-              textAlign: 'right',
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
-          >
-            {showRemainingTime ? `-${durationText(Math.max(0, maxSeek - active))}` : durationText(duration)}
-          </Typography>
+          {isLive ? (
+            <Typography
+              variant="caption"
+              sx={{
+                display: { xs: 'block', sm: 'none' },
+                color: alpha('#ffffff', 0.6),
+                fontSize: 11,
+                fontWeight: 600,
+                minWidth: 28,
+                textAlign: 'right',
+              }}
+            >
+              HD
+            </Typography>
+          ) : (
+            <Typography
+              variant="caption"
+              onClick={() => setShowRemainingTime((prev) => !prev)}
+              sx={{
+                display: { xs: 'block', sm: 'none' },
+                color: alpha('#ffffff', 0.75),
+                fontVariantNumeric: 'tabular-nums',
+                fontWeight: 600,
+                fontSize: 12,
+                minWidth: 36,
+                textAlign: 'right',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+            >
+              {showRemainingTime ? `-${durationText(Math.max(0, maxSeek - active))}` : durationText(duration)}
+            </Typography>
+          )}
         </Box>
 
         {/* ================= MOBILE BOTTOM ACTION BAR (Matching Screenshot Layout) ================= */}
@@ -2181,31 +2326,87 @@ export default function NativeControls({
             </IconButton>
           </PlayerTooltip>
 
-          {/* 10s Rewind (Desktop) */}
-          <PlayerTooltip title="Rewind 10s (j)" placement="top" arrow>
-            <IconButton
-              onClick={() => {
-                remote.seek(Math.max(0, currentTime - 10));
-                triggerFeedback('rewind');
-              }}
-              sx={{ ...controlButtonSx, display: { xs: 'none', sm: 'inline-flex' } }}
+          {/* Live Edge Button or 10s skips */}
+          {isLive ? (
+            <PlayerTooltip
+              title={isLiveEdge ? 'Streaming live broadcast' : 'Click to jump to live edge'}
+              placement="top"
+              arrow
             >
-              <Iconify icon="ic:round-replay-10" width={25} />
-            </IconButton>
-          </PlayerTooltip>
+              <Button
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (typeof remote.seekToLiveEdge === 'function') {
+                    remote.seekToLiveEdge();
+                  }
+                }}
+                startIcon={
+                  <Box
+                    sx={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      bgcolor: '#FF3030',
+                      boxShadow: '0 0 8px #FF3030',
+                      animation: 'livetv-blink 1.2s infinite',
+                      '@keyframes livetv-blink': {
+                        '0%, 100%': { opacity: 1 },
+                        '50%': { opacity: 0.3 },
+                      },
+                    }}
+                  />
+                }
+                sx={{
+                  color: 'common.white',
+                  bgcolor: alpha('#FF3030', 0.16),
+                  border: `1px solid ${alpha('#FF3030', 0.4)}`,
+                  fontWeight: 800,
+                  fontSize: 11.5,
+                  letterSpacing: 0.5,
+                  px: 1.25,
+                  py: 0.4,
+                  minWidth: 0,
+                  borderRadius: 1.5,
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    bgcolor: alpha('#FF3030', 0.28),
+                    borderColor: '#FF3030',
+                  },
+                }}
+              >
+                LIVE
+              </Button>
+            </PlayerTooltip>
+          ) : (
+            <>
+              {/* 10s Rewind (Desktop) */}
+              <PlayerTooltip title="Rewind 10s (j)" placement="top" arrow>
+                <IconButton
+                  onClick={() => {
+                    remote.seek(Math.max(0, currentTime - 10));
+                    triggerFeedback('rewind');
+                  }}
+                  sx={{ ...controlButtonSx, display: { xs: 'none', sm: 'inline-flex' } }}
+                >
+                  <Iconify icon="ic:round-replay-10" width={25} />
+                </IconButton>
+              </PlayerTooltip>
 
-          {/* 10s Forward (Desktop) */}
-          <PlayerTooltip title="Forward 10s (l)" placement="top" arrow>
-            <IconButton
-              onClick={() => {
-                remote.seek(Math.min(maxSeek, currentTime + 10));
-                triggerFeedback('forward');
-              }}
-              sx={{ ...controlButtonSx, display: { xs: 'none', sm: 'inline-flex' } }}
-            >
-              <Iconify icon="ic:round-forward-10" width={25} />
-            </IconButton>
-          </PlayerTooltip>
+              {/* 10s Forward (Desktop) */}
+              <PlayerTooltip title="Forward 10s (l)" placement="top" arrow>
+                <IconButton
+                  onClick={() => {
+                    remote.seek(Math.min(maxSeek, currentTime + 10));
+                    triggerFeedback('forward');
+                  }}
+                  sx={{ ...controlButtonSx, display: { xs: 'none', sm: 'inline-flex' } }}
+                >
+                  <Iconify icon="ic:round-forward-10" width={25} />
+                </IconButton>
+              </PlayerTooltip>
+            </>
+          )}
 
           {/* Volume Control with Expandable Slider (Desktop only) */}
           <Stack
@@ -2259,31 +2460,50 @@ export default function NativeControls({
           </Stack>
 
           {/* Timestamp Display */}
-          <PlayerTooltip title="Click to toggle remaining time" arrow placement="top">
+          {isLive ? (
             <Typography
               variant="caption"
-              onClick={() => setShowRemainingTime((prev) => !prev)}
               sx={{
-                color: 'common.white',
+                color: alpha('#ffffff', 0.8),
                 fontVariantNumeric: 'tabular-nums',
                 ml: { xs: 0.25, sm: 1 },
                 whiteSpace: 'nowrap',
                 fontWeight: 600,
                 fontSize: { xs: 11.5, sm: 13 },
-                cursor: 'pointer',
-                p: 0.5,
-                borderRadius: 1,
-                transition: 'background 0.2s',
-                '&:hover': { bgcolor: alpha('#ffffff', 0.1) },
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.75,
               }}
             >
-              {timeFormatted}{' '}
-              <Box component="span" sx={{ color: alpha('#ffffff', 0.4), mx: 0.25 }}>
-                /
-              </Box>{' '}
-              {durationText(duration)}
+              <span>High-Speed Broadcast</span>
             </Typography>
-          </PlayerTooltip>
+          ) : (
+            <PlayerTooltip title="Click to toggle remaining time" arrow placement="top">
+              <Typography
+                variant="caption"
+                onClick={() => setShowRemainingTime((prev) => !prev)}
+                sx={{
+                  color: 'common.white',
+                  fontVariantNumeric: 'tabular-nums',
+                  ml: { xs: 0.25, sm: 1 },
+                  whiteSpace: 'nowrap',
+                  fontWeight: 600,
+                  fontSize: { xs: 11.5, sm: 13 },
+                  cursor: 'pointer',
+                  p: 0.5,
+                  borderRadius: 1,
+                  transition: 'background 0.2s',
+                  '&:hover': { bgcolor: alpha('#ffffff', 0.1) },
+                }}
+              >
+                {timeFormatted}{' '}
+                <Box component="span" sx={{ color: alpha('#ffffff', 0.4), mx: 0.25 }}>
+                  /
+                </Box>{' '}
+                {durationText(duration)}
+              </Typography>
+            </PlayerTooltip>
+          )}
 
           {/* IntroDB Segment Pills (Direct Jump Buttons) */}
           {timelineSegments && timelineSegments.length > 0 && (
@@ -2544,7 +2764,7 @@ export default function NativeControls({
           )}
 
           {/* Google Cast / Chromecast (Desktop direct, Mobile in overflow menu) */}
-          {(canGoogleCast || (!canAirPlay && typeof window !== 'undefined' && !!window.chrome)) && (
+          {showChromecast && (
             <Box sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
               <PlayerTooltip
                 title={isGoogleCastConnected ? 'Chromecast Connected (Tap to Disconnect)' : 'Cast to TV (Chromecast)'}
@@ -2930,7 +3150,7 @@ export default function NativeControls({
         )}
 
         {/* Chromecast */}
-        {(canGoogleCast || (!canAirPlay && typeof window !== 'undefined' && !!window.chrome)) && (
+        {showChromecast && (
           <MenuItem
             component="div"
             onClick={() => setMobileMoreAnchor(null)}
