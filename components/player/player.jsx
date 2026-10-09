@@ -675,7 +675,7 @@ export default function Player({
             <MediaPlayer
               key={`native-player-${activeNativeSrc}-${playbackAttempt}`}
               src={nativeSrc}
-              streamType={type === 'live' ? 'live' : undefined}
+              {...(type === 'live' ? { streamType: 'live' } : {})}
               crossOrigin="anonymous"
               autoPlay
               playsInline

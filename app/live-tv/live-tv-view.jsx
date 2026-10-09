@@ -344,7 +344,7 @@ export default function LiveTvView() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 800,
-                    color: 'primary.light',
+                    color: '#FF7A7A',
                     fontSize: { xs: 14, sm: 17 },
                     flexShrink: 0,
                   }}
@@ -699,7 +699,7 @@ export default function LiveTvView() {
                               width: 26,
                               height: 26,
                               borderRadius: 1,
-                              bgcolor: isCurrent ? 'primary.main' : alpha('#ffffff', 0.1),
+                              bgcolor: isCurrent ? '#FF3030' : alpha('#ffffff', 0.1),
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -716,7 +716,7 @@ export default function LiveTvView() {
                               variant="caption"
                               noWrap
                               sx={{
-                                color: isCurrent ? 'primary.light' : 'common.white',
+                                color: isCurrent ? '#FF7A7A' : 'common.white',
                                 fontWeight: isCurrent ? 700 : 600,
                                 fontSize: 11.5,
                               }}
@@ -799,7 +799,7 @@ function LiveTvLoading({ channel }) {
             boxShadow: '0 0 30px rgba(255, 48, 48, 0.45)',
           }}
         >
-          <Typography variant="h3" sx={{ fontWeight: 800, color: 'primary.light' }}>
+          <Typography variant="h3" sx={{ fontWeight: 800, color: '#FF7A7A' }}>
             {channel?.firstLetter || channel?.name?.[0] || 'TV'}
           </Typography>
         </Box>
@@ -809,12 +809,12 @@ function LiveTvLoading({ channel }) {
       <Stack spacing={1} alignItems="center" sx={{ textAlign: 'center', px: 2, zIndex: 1 }}>
         <Chip
           size="small"
-          icon={<Iconify icon="solar:record-bold" width={12} sx={{ color: 'error.main', animation: 'livetv-blink 1.2s infinite' }} />}
+          icon={<Iconify icon="solar:record-bold" width={12} sx={{ color: '#FF3030', animation: 'livetv-blink 1.2s infinite' }} />}
           label="CONNECTING LIVE FEED"
           sx={{
             bgcolor: 'rgba(255, 48, 48, 0.12)',
             border: '1px solid rgba(255, 48, 48, 0.35)',
-            color: 'primary.light',
+            color: '#FF7A7A',
             fontWeight: 800,
             fontSize: 10.5,
             letterSpacing: 0.75,
@@ -832,15 +832,17 @@ function LiveTvLoading({ channel }) {
         </Typography>
 
         {/* Shimmering Progress Bar */}
-        <Box sx={{ width: 190, mt: 1.5 }}>
+        <Box sx={{ width: { xs: 200, sm: 240 }, mt: 1.5 }}>
           <LinearProgress
+            color="error"
             sx={{
               height: 4,
               borderRadius: 2,
-              bgcolor: 'rgba(255, 255, 255, 0.08)',
+              bgcolor: alpha('#FF3030', 0.16),
               '& .MuiLinearProgress-bar': {
-                bgcolor: 'primary.main',
-                background: 'linear-gradient(90deg, #FF3030 0%, #FF6060 100%)',
+                borderRadius: 2,
+                bgcolor: '#FF3030',
+                backgroundImage: 'linear-gradient(90deg, #FF3030 0%, #FF7A7A 50%, #FF3030 100%)',
               },
             }}
           />
