@@ -807,23 +807,45 @@ function LiveTvLoading({ channel }) {
 
       {/* Connection Text & Status */}
       <Stack spacing={1} alignItems="center" sx={{ textAlign: 'center', px: 2, zIndex: 1 }}>
-        <Chip
-          size="small"
-          icon={<Iconify icon="solar:record-bold" width={12} sx={{ color: '#FF3030', animation: 'livetv-blink 1.2s infinite' }} />}
-          label="CONNECTING LIVE FEED"
+        <Box
           sx={{
-            bgcolor: 'rgba(255, 48, 48, 0.12)',
-            border: '1px solid rgba(255, 48, 48, 0.35)',
-            color: '#FF7A7A',
-            fontWeight: 800,
-            fontSize: 10.5,
-            letterSpacing: 0.75,
-            '@keyframes livetv-blink': {
-              '0%, 100%': { opacity: 1 },
-              '50%': { opacity: 0.3 },
-            },
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.85,
+            bgcolor: alpha('#FF3030', 0.16),
+            border: `1px solid ${alpha('#FF3030', 0.45)}`,
+            borderRadius: 2,
+            px: 1.5,
+            py: 0.5,
+            boxShadow: '0 0 16px rgba(255, 48, 48, 0.25)',
           }}
-        />
+        >
+          <Box
+            sx={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              bgcolor: '#FF3030',
+              boxShadow: '0 0 10px #FF3030',
+              animation: 'livetv-blink 1.2s infinite',
+              '@keyframes livetv-blink': {
+                '0%, 100%': { opacity: 1 },
+                '50%': { opacity: 0.3 },
+              },
+            }}
+          />
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'common.white',
+              fontWeight: 800,
+              fontSize: 11,
+              letterSpacing: 0.75,
+            }}
+          >
+            CONNECTING LIVE FEED
+          </Typography>
+        </Box>
         <Typography variant="h6" sx={{ color: 'common.white', fontWeight: 700 }}>
           {channel?.name || 'Tuning channel...'}
         </Typography>

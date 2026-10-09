@@ -675,8 +675,7 @@ export default function Player({
             <MediaPlayer
               key={`native-player-${activeNativeSrc}-${playbackAttempt}`}
               src={nativeSrc}
-              {...(type === 'live' ? { streamType: 'live' } : {})}
-              crossOrigin="anonymous"
+                            crossOrigin="anonymous"
               autoPlay
               playsInline
               title={title || ''}
@@ -1154,13 +1153,54 @@ export default function Player({
               animation: 'fade-in 0.2s ease',
             }}
           >
-            <CircularProgress size={52} thickness={4} sx={{ color: 'primary.main' }} />
+            <CircularProgress size={52} thickness={4} sx={{ color: type === 'live' ? '#FF3030' : 'primary.main' }} />
             <Stack alignItems="center" spacing={0.5} sx={{ px: 2, textAlign: 'center' }}>
+              {type === 'live' && (
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    bgcolor: alpha('#FF3030', 0.16),
+                    border: `1px solid ${alpha('#FF3030', 0.45)}`,
+                    borderRadius: 1.5,
+                    px: 1.25,
+                    py: 0.4,
+                    mb: 0.5,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      bgcolor: '#FF3030',
+                      boxShadow: '0 0 8px #FF3030',
+                      animation: 'livetv-blink 1.2s infinite',
+                      '@keyframes livetv-blink': {
+                        '0%, 100%': { opacity: 1 },
+                        '50%': { opacity: 0.3 },
+                      },
+                    }}
+                  />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'common.white',
+                      fontWeight: 800,
+                      fontSize: 10.5,
+                      letterSpacing: 0.75,
+                    }}
+                  >
+                    CONNECTING LIVE FEED
+                  </Typography>
+                </Box>
+              )}
               <Typography variant="subtitle2" sx={{ color: 'common.white', fontWeight: 600 }}>
-                {scrapeFeedback?.message || 'Connecting to best media source...'}
+                {type === 'live' ? 'Tuning live broadcast...' : (scrapeFeedback?.message || 'Connecting to best media source...')}
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {sourcesLoading ? 'Scraping high-speed direct streams' : 'Buffering media stream'}
+                {type === 'live' ? 'Securing encrypted high-speed stream' : (sourcesLoading ? 'Scraping high-speed direct streams' : 'Buffering media stream')}
               </Typography>
             </Stack>
 

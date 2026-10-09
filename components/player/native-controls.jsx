@@ -1386,13 +1386,13 @@ export default function NativeControls({
             position: 'absolute',
             top: { xs: '44%', sm: '50%' },
             left: '50%',
-            transform: uiVisible ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.92)',
+            transform: (uiVisible || store.paused) ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.92)',
             zIndex: 4,
             display: { xs: 'flex', sm: 'none' },
             alignItems: 'center',
             gap: 2.75,
-            pointerEvents: uiVisible ? 'auto' : 'none',
-            opacity: uiVisible ? 1 : 0,
+            pointerEvents: (uiVisible || store.paused) ? 'auto' : 'none',
+            opacity: (uiVisible || store.paused) ? 1 : 0,
             transition: 'opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
           }}
         >
