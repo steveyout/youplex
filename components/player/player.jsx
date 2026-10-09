@@ -165,25 +165,21 @@ function normalizeSubtitles(subtitles) {
   const seenUrls = new Set();
   const rawList = [];
 
-  for (const track of subtitles) {
-    if (!track?.url || seenUrls.has(track.url)) continue;
+  subtitles.forEach((track) => {
+    if (!track?.url || seenUrls.has(track.url)) return;
     seenUrls.add(track.url);
 
     let langCode = (track.language || track.lang || '').toLowerCase().trim();
     let langName = SUBTITLE_LANGUAGE_MAP[langCode];
     if (!langName) {
       const raw = `${track.label || ''}`.toLowerCase();
-      for (const [code, name] of Object.entries(SUBTITLE_LANGUAGE_MAP)) {
-        if (raw.includes(name.toLowerCase())) {
-          langCode = code;
-          langName = name;
-          break;
-        }
+      const matchedEntry = Object.entries(SUBTITLE_LANGUAGE_MAP).find(([, name]) => raw.includes(name.toLowerCase()));
+      if (matchedEntry) {
+        [langCode, langName] = matchedEntry;
       }
       if (!langName) langName = track.label || 'English';
     }
 
-    const rawSearch = `${track.label || ''} ${track.url || ''}`.toLowerCase();
     const isCC = Boolean(
       track.isCC ||
       track.hearingImpaired ||
@@ -221,17 +217,15 @@ function normalizeSubtitles(subtitles) {
         category = 'os_std';
         baseLabel = `${langName} (OpenSubtitles)`;
       }
+    } else if (isForced) {
+      category = 'stream_forced';
+      baseLabel = `${langName} [Forced]`;
+    } else if (isCC) {
+      category = 'stream_sdh';
+      baseLabel = `${langName} [SDH]`;
     } else {
-      if (isForced) {
-        category = 'stream_forced';
-        baseLabel = `${langName} [Forced]`;
-      } else if (isCC) {
-        category = 'stream_sdh';
-        baseLabel = `${langName} [SDH]`;
-      } else {
-        category = 'stream_std';
-        baseLabel = `${langName} [Stream]`;
-      }
+      category = 'stream_std';
+      baseLabel = `${langName} [Stream]`;
     }
 
     rawList.push({
@@ -242,16 +236,15 @@ function normalizeSubtitles(subtitles) {
       baseLabel,
       isEnglish: langName === 'English',
     });
-  }
+  });
 
   // Cap counts per category to prevent 10+ ambiguous English options
   const categoryCounts = {};
   const filtered = [];
 
-  for (const item of rawList) {
+  rawList.forEach((item) => {
     const key = `${item.langName}_${item.category}`;
     const count = categoryCounts[key] || 0;
-    // Keep max 2 stream_std for English, 1 for others; max 1 each for SDH, Forced, OpenSubtitles
     const maxAllowed = item.category === 'stream_std' && item.isEnglish ? 2 : 1;
     if (count < maxAllowed) {
       categoryCounts[key] = count + 1;
@@ -261,7 +254,7 @@ function normalizeSubtitles(subtitles) {
       }
       filtered.push({ ...item, displayLabel: label });
     }
-  }
+  });
 
   // Sort: English first (Stream -> SDH -> Forced -> OpenSubtitles), then others alphabetically
   const catOrder = {
@@ -316,6 +309,10 @@ export default function Player({
   seasonEpisodes = EMPTY_ARRAY,
   seasonEpisodesLoading = false,
   onSelectEpisode = null,
+  aspectRatio: propAspectRatio,
+  height: propHeight,
+  minHeight: propMinHeight,
+  containerSx = null,
 }) {
   const [isLoading, setIsLoading] = useState(true);
   const [embedLoading, setEmbedLoading] = useState(false);
@@ -655,12 +652,15 @@ export default function Player({
         return (
           <Box
             sx={{
-              position: 'relative',
+              position: 'absolute',
+              inset: 0,
               width: '100%',
               height: '100%',
               bgcolor: '#000',
               zIndex: playbackError ? 12 : 1,
               '& media-player': {
+                position: 'absolute',
+                inset: 0,
                 width: '100%',
                 height: '100%',
                 '--video-aspect-ratio': 'unset',
@@ -1018,9 +1018,9 @@ export default function Player({
         sx={{
           position: 'relative',
           width: 1,
-          aspectRatio: { xs: 'auto', sm: '16/9' },
-          minHeight: { xs: '70vh', sm: 360, md: 480 },
-          height: { xs: '75vh', sm: 'auto' },
+          aspectRatio: propAspectRatio ?? { xs: 'auto', sm: '16/9' },
+          minHeight: propMinHeight ?? { xs: '70vh', sm: 360, md: 480 },
+          height: propHeight ?? { xs: '75vh', sm: 'auto' },
           '@media (orientation: landscape) and (max-height: 500px)': {
             height: '100vh',
             minHeight: '100vh',
@@ -1038,6 +1038,7 @@ export default function Player({
             width: '100%',
             height: '100%',
           },
+          ...containerSx,
         }}
         onMouseEnter={() => {
           if (resolvedMode === 'embed') setEmbedHeaderVisible(true);

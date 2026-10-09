@@ -1,31 +1,28 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { formatTime } from '@vidstack/react';
-
-import Box from '@mui/material/Box';
-import Card from '@mui/material/Card';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
-import Stack from '@mui/material/Stack';
-import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import Container from '@mui/material/Container';
-import IconButton from '@mui/material/IconButton';
-import Typography from '@mui/material/Typography';
-import CircularProgress from '@mui/material/CircularProgress';
-import { alpha, useTheme } from '@mui/material/styles';
-
 import { paths } from '@/routes/paths';
-import { paramCase } from '@/utils/change-case';
+import { useMemo, useState } from 'react';
+import { formatTime } from '@vidstack/react';
 import { toast } from '@/components/snackbar';
 import { Iconify } from '@/components/iconify';
 import { RouterLink } from '@/routes/components';
 import { PostItem } from '@/sections/movies/post-item';
 import { useWatchHistory } from '@/hooks/use-watch-history';
+
+import Box from '@mui/material/Box';
+import Tab from '@mui/material/Tab';
+import Tabs from '@mui/material/Tabs';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import Container from '@mui/material/Container';
+import IconButton from '@mui/material/IconButton';
+import Typography from '@mui/material/Typography';
+import DialogTitle from '@mui/material/DialogTitle';
+import { alpha, useTheme } from '@mui/material/styles';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import CircularProgress from '@mui/material/CircularProgress';
 
 // ----------------------------------------------------------------------
 
@@ -36,10 +33,21 @@ export default function HistoryPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
 
-  const inProgressList = useMemo(
-    () => history.filter((item) => !item.isCompleted && (item.progress || 0) < 0.93),
-    [history]
-  );
+  const inProgressList = useMemo(() => {
+    if (!history || history.length === 0) return [];
+    const seenMedia = new Set();
+    const list = [];
+    history.forEach((item) => {
+      const mediaKey = `${item.type || 'movie'}-${item.id}`;
+      if (seenMedia.has(mediaKey)) return;
+      seenMedia.add(mediaKey);
+      if (!item.isCompleted && (item.progress || 0) < 0.93) {
+        list.push(item);
+      }
+    });
+    return list;
+  }, [history]);
+
   const completedList = useMemo(
     () => history.filter((item) => item.isCompleted || (item.progress || 0) >= 0.93),
     [history]
@@ -261,7 +269,7 @@ export default function HistoryPage() {
               const pctWatched = Math.min(100, Math.round((item.progress || 0) * 100));
 
               return (
-                <Box key={item.key || `${item.type}-${item.id}`} sx={{ position: 'relative' }}>
+                <Box key={item.key || `${item.type}-${item.id}-${idx}`} sx={{ position: 'relative' }}>
                   <PostItem post={postData} index={idx} />
 
                   {/* Remove Button */}

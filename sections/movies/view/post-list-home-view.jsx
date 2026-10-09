@@ -6,8 +6,8 @@ import { varAlpha } from '@/theme/styles';
 import { searchMedia } from '@/actions/api';
 import { Iconify } from '@/components/iconify';
 import { useDebounce } from '@/hooks/use-debounce';
-import { useWatchHistory } from '@/hooks/use-watch-history';
 import { useMemo, useState, useCallback } from 'react';
+import { useWatchHistory } from '@/hooks/use-watch-history';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -59,21 +59,48 @@ export function PostListHomeView({ categories = {}, pageType = 'all' }) {
   const theme = useTheme();
   const { history } = useWatchHistory();
 
-  const continueWatchingItems = useMemo(() => {
-    if (!history || history.length === 0) return [];
-    return history
-      .filter((item) => !item.isCompleted && (item.currentTime || 0) > 10 && (item.progress || 0) < 0.93)
-      .slice(0, 12)
-      .map((item) => ({
-        ...item,
-        isResume: true,
-      }));
-  }, [history]);
   const [activeTab, setActiveTab] = useState('all');
   const [sortBy, setSortBy] = useState('latest');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+
+  const continueWatchingItems = useMemo(() => {
+    if (!history || history.length === 0) return [];
+
+    const targetType =
+      pageType === 'tv' || activeTab === 'tv'
+        ? 'tv'
+        : pageType === 'movies' || activeTab === 'movies'
+        ? 'movie'
+        : null;
+
+    const seenMedia = new Set();
+    const inProgressItems = [];
+
+    history.forEach((item) => {
+      const itemType = item.type || 'movie';
+      if (targetType && itemType !== targetType) return;
+
+      const mediaKey = `${itemType}-${item.id}`;
+      // Deduplicate so only the single most recently watched episode/item per show or movie is shown
+      if (seenMedia.has(mediaKey)) return;
+      seenMedia.add(mediaKey);
+
+      const isProgressValid =
+        !item.isCompleted && (item.currentTime || 0) > 10 && (item.progress || 0) < 0.93;
+
+      if (isProgressValid) {
+        inProgressItems.push({
+          ...item,
+          key: item.key || `${itemType}-${item.id}`,
+          isResume: true,
+        });
+      }
+    });
+
+    return inProgressItems.slice(0, 12);
+  }, [history, pageType, activeTab]);
 
   const debouncedQuery = useDebounce(searchQuery);
 
@@ -195,6 +222,10 @@ export function PostListHomeView({ categories = {}, pageType = 'all' }) {
     return [];
   }, [categories]);
 
+  const showContinueWatching =
+    (activeTab === 'all' || activeTab === 'tv' || activeTab === 'movies') &&
+    continueWatchingItems.length > 0;
+
   return (
     <Box sx={{ position: 'relative', overflow: 'hidden' }}>
       {/* Ambient background glow */}
@@ -294,13 +325,14 @@ export function PostListHomeView({ categories = {}, pageType = 'all' }) {
 
         {/* Dynamic Sections */}
         <Stack spacing={8}>
-          {activeTab === 'all' && continueWatchingItems.length > 0 && (
+          {showContinueWatching && (
             <BoxSection
               sectionKey="continueWatching"
               title="Continue Watching"
               icon="solar:history-bold"
               posts={continueWatchingItems}
               index={0}
+              disableFeatured
             />
           )}
           {Object.keys(filteredCategories).map((key, sectionIdx) => {
@@ -332,7 +364,7 @@ export function PostListHomeView({ categories = {}, pageType = 'all' }) {
 
 // ----------------------------------------------------------------------
 
-function BoxSection({ sectionKey, title, icon, posts, index }) {
+function BoxSection({ sectionKey, title, icon, posts, index, disableFeatured = false }) {
   const theme = useTheme();
 
   return (
@@ -388,7 +420,11 @@ function BoxSection({ sectionKey, title, icon, posts, index }) {
         </Stack>
       </m.div>
 
-      <PostList posts={posts} startIndex={(index ?? 0) * 4} />
+      <PostList
+        posts={posts}
+        startIndex={(index ?? 0) * 4}
+        disableFeatured={disableFeatured || sectionKey === 'continueWatching'}
+      />
     </Stack>
   );
 }

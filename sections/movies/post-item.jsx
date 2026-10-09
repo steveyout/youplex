@@ -27,7 +27,7 @@ const getPosterUrl = (path) => {
 function getSafeYear(dateStr) {
   if (!dateStr) return null;
   const d = new Date(dateStr);
-  if (!isNaN(d.getTime())) return d.getFullYear();
+  if (!Number.isNaN(d.getTime())) return d.getFullYear();
   if (typeof dateStr === 'string' && /^\d{4}/.test(dateStr)) return dateStr.slice(0, 4);
   return null;
 }
@@ -103,7 +103,7 @@ export function PostItem({ post, index = 0 }) {
     <Link
       component={RouterLink}
       href={linkTo}
-      scroll={true}
+      scroll
       sx={{
         display: 'block',
         height: '100%',
@@ -368,19 +368,27 @@ export function PostItemLatest({ post, index = 0 }) {
 
   const displayTitle = title || name || 'Untitled';
   const displayDate = release_date || first_air_date;
-  const type = media_type || (release_date ? 'movie' : 'tv');
+  const type = media_type || post.type || (release_date ? 'movie' : 'tv');
 
-  const linkTo = paths.watch.details(type, id, displayTitle);
+  const linkTo = post.isResume
+    ? paths.watch.play(type, id, displayTitle, post.season || 1, post.episode || 1)
+    : paths.watch.details(type, id, displayTitle);
 
   const backdropUrl = backdrop_path
     ? `https://image.tmdb.org/t/p/w780${backdrop_path}`
     : '/assets/placeholder-backdrop.jpg';
 
+  const progressRatio = typeof post.progress === 'number'
+    ? post.progress
+    : (post.currentTime && post.duration)
+    ? post.currentTime / post.duration
+    : null;
+
   return (
     <Link
       component={RouterLink}
       href={linkTo}
-      scroll={true}
+      scroll
       sx={{
         display: 'block',
         height: '100%',
@@ -450,7 +458,7 @@ export function PostItemLatest({ post, index = 0 }) {
               boxShadow: `0 4px 14px ${varAlpha(theme.vars.palette.primary.mainChannel, 0.5)}`,
             }}
           >
-            Featured
+            {post.isResume ? 'Continue' : 'Featured'}
           </Label>
         </Stack>
 
@@ -468,6 +476,30 @@ export function PostItemLatest({ post, index = 0 }) {
             sx={{ width: 1, height: 1 }}
           />
         </Box>
+
+        {/* Watch Progress Bar Overlay */}
+        {progressRatio != null && progressRatio > 0 && (
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 4,
+              bgcolor: 'rgba(0, 0, 0, 0.65)',
+              zIndex: 10,
+            }}
+          >
+            <Box
+              sx={{
+                width: `${Math.min(100, Math.round(progressRatio * 100))}%`,
+                height: '100%',
+                bgcolor: 'primary.main',
+                boxShadow: `0 0 8px ${theme.palette.primary.main}`,
+              }}
+            />
+          </Box>
+        )}
 
         {/* Hover play button (desktop only) */}
         <Box
@@ -540,6 +572,24 @@ export function PostItemLatest({ post, index = 0 }) {
               {type === 'tv' ? 'Series' : 'Movie'}
             </Box>
 
+            {post.season != null && post.episode != null && (
+              <Box
+                sx={{
+                  px: 0.8,
+                  py: 0.2,
+                  borderRadius: 0.75,
+                  bgcolor: 'rgba(255, 48, 48, 0.25)',
+                  border: '1px solid rgba(255, 48, 48, 0.45)',
+                  color: 'primary.light',
+                  fontWeight: 800,
+                  fontSize: '0.72rem',
+                  letterSpacing: 0.5,
+                }}
+              >
+                S{post.season} E{post.episode}
+              </Box>
+            )}
+
             {displayDate && <span>&bull; {fDate(displayDate, 'MMMM D, YYYY')}</span>}
           </Stack>
 
@@ -555,7 +605,7 @@ export function PostItemLatest({ post, index = 0 }) {
           <Stack direction="row" spacing={2} sx={{ mt: 2, typography: 'subtitle2' }}>
             <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: 'primary.light', fontWeight: 700 }}>
               <Iconify icon="solar:play-circle-bold" width={18} />
-              Watch Now
+              {post.isResume ? 'Continue Watching' : 'Watch Now'}
             </Stack>
 
             {vote_average > 0 && (

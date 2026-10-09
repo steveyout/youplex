@@ -20,7 +20,7 @@ function isoTime(time) {
   return now.toISOString();
 }
 
-function parseEvents(html, category) {
+function parseEvents(html, category, categoryIndex = 0) {
   const events = [];
   const eventPattern = /<div[^>]*class="[^"]*schedule__event[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*schedule__event|$)/gi;
   let match;
@@ -37,8 +37,10 @@ function parseEvents(html, category) {
     const isLive = /is-live|>LIVE</i.test(block)
       || (eventDate.toString() !== 'Invalid Date' && Date.now() - eventDate.getTime() >= 0 && Date.now() - eventDate.getTime() < 3600000);
     const teams = title.match(/(.+?)\s+vs\.?\s+(.+)/i);
+    const cleanCategory = category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
     events.push({
-      id: `event-${category}-${events.length}`,
+      id: `event-${categoryIndex}-${cleanCategory}-${events.length}-${cleanTitle}`,
       title,
       sport: category,
       time,
@@ -67,7 +69,7 @@ export async function GET() {
       const start = match.index;
       const end = matches[index + 1]?.index || html.length;
       const name = match[1].trim();
-      const events = parseEvents(html.slice(start, end), name);
+      const events = parseEvents(html.slice(start, end), name, index);
       if (events.length) categories.push({ name, icon: iconFor(name), events });
     });
     return Response.json({ success: true, schedule: { categories }, stats: {
