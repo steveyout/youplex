@@ -148,6 +148,8 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
     ...(opts.season ? { season: String(opts.season) } : {}),
     ...(opts.episode ? { episode: String(opts.episode) } : {}),
     ...(opts.provider ? { provider: opts.provider } : {}),
+    ...(opts.startFrom ? { startFrom: opts.startFrom } : {}),
+    ...(opts.exclude ? { exclude: Array.isArray(opts.exclude) ? opts.exclude.join(String.fromCharCode(44)) : String(opts.exclude) } : {}),
     ...(opts.title ? { title: String(opts.title) } : {}),
     ...(opts.year || opts.releaseYear ? { year: String(opts.year || opts.releaseYear) } : {}),
     ...(opts.seasonId ? { seasonId: String(opts.seasonId) } : {}),

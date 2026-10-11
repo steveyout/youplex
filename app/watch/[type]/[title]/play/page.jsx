@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
 import Box from '@mui/material/Box';
@@ -66,6 +66,8 @@ export default function PlayPage() {
   const [error, setError] = useState(null);
 
   // Live scrape feedback & auto-switching progress
+  const failedProvidersRef = useRef(new Set());
+
   const [scrapeFeedback, setScrapeFeedback] = useState({
     activeProviderId: null,
     activeProviderName: null,
@@ -151,6 +153,7 @@ export default function PlayPage() {
     setSourcesLoading(true);
     setSourcesError(null);
     setError(null);
+    failedProvidersRef.current.clear();
     setScrapeFeedback({
       activeProviderId: null,
       activeProviderName: null,
@@ -329,6 +332,40 @@ export default function PlayPage() {
     };
   }, [type, id, movieOrShow?.id, resolvedSeason]);
 
+  const autoSwitchSources = useCallback(
+    async (failedProviderId) => {
+      if (failedProviderId) {
+        failedProvidersRef.current.add(failedProviderId);
+      }
+      setSourcesLoading(true);
+      setSourcesError(null);
+
+      try {
+        const targetId = id || movieOrShow?.id;
+        const opts = {
+          startFrom: failedProviderId,
+          exclude: Array.from(failedProvidersRef.current),
+          ...playbackOptions,
+        };
+        const data = await getPlaySources(type, targetId, opts, handleScrapeProgress);
+        if (data?.success || (data?.sources || []).length > 0) {
+          setDirectSources(data);
+          setSourcesError(null);
+          return true;
+        }
+        setSourcesError('No more stream sources available.');
+        return false;
+      } catch (err) {
+        console.warn('[PlayPage] autoSwitchSources error:', err);
+        setSourcesError(err?.message || 'Error auto-switching providers.');
+        return false;
+      } finally {
+        setSourcesLoading(false);
+      }
+    },
+    [type, id, movieOrShow?.id, playbackOptions, handleScrapeProgress]
+  );
+
   const selectExtractor = useCallback(
     async (providerId) => {
       try {
@@ -342,18 +379,18 @@ export default function PlayPage() {
         const data = await getPlaySources(type, targetId, opts, handleScrapeProgress);
         if (data?.success || (data?.sources || []).length > 0) {
           setDirectSources(data);
+          setSourcesError(null);
           return true;
         }
-        setSourcesError('This provider did not return a stream yet.');
         return false;
       } catch (err) {
-        setSourcesError(err?.message || 'This provider is taking longer than usual to respond.');
+        console.warn(`[PlayPage] Extractor ${providerId} failed:`, err);
         return false;
       } finally {
         setSourcesLoading(false);
       }
     },
-    [type, id, playbackOptions, handleScrapeProgress]
+    [type, id, movieOrShow?.id, playbackOptions, handleScrapeProgress]
   );
 
   const retrySources = useCallback(
@@ -1233,7 +1270,7 @@ export default function PlayPage() {
               onBack={backToWatch}
               src={movieOrShow.videoUrl}
               servers={movieOrShow.servers || []}
-              directSources={directSources?.sources || []}
+              directSources={directSources}
               subtitles={[...(directSources?.subtitles || []), ...openSubtitles]}
               timelineSegments={timelineSegments}
               extractorProviders={CLIENT_SCRAPER_CONFIG}
@@ -1243,6 +1280,7 @@ export default function PlayPage() {
               sourcesError={sourcesError}
               scrapeFeedback={scrapeFeedback}
               onSelectExtractor={selectExtractor}
+              onAutoSwitch={autoSwitchSources}
               onRetrySources={retrySources}
               hasNextEpisode={hasNextEpisode}
               onNextEpisode={handleNextEpisode}

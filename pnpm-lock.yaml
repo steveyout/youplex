@@ -61,7 +61,7 @@ importers:
         version: 16.3.4(next@16.3.4(@babel/core@7.29.7(supports-color@8.1.1))(@playwright/test@1.63.0)(@types/node@22.20.2)(babel-plugin-macros@3.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
       '@p-stream/providers':
         specifier: github:steveyout/providers#production
-        version: https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9
+        version: https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf
       '@vidstack/react':
         specifier: 1.15.6
         version: 1.15.6(@types/react@18.3.31)(react@19.3.0)
@@ -1394,8 +1394,8 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9':
-    resolution: {gitHosted: true, integrity: sha512-zkqlp55EoVJaIYGGJXZvlQ8bEdO1W+09pBcJ2ScnnXmjwwpMwW6csw3Dm+OYbTcflnJvci2IAX0r/k9Z6vVUig==, tarball: https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9}
+  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf':
+    resolution: {gitHosted: true, integrity: sha512-Bf9HqpI6kIeVxUDjXcr6qMLDFM3lTdfgl2Hyd7hKdvY0X7hhAEiOiB6H5MNxoqEsttr4am0/Ie1MHluPzhk5nQ==, tarball: https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf}
     version: 3.2.0
 
   '@pkgr/core@0.3.6':
@@ -5457,7 +5457,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.3
 
-  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/80aaea5ce3bb5451dec1ebe30200c2d415fdc8c9':
+  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf':
     dependencies:
       abort-controller: 3.0.0
       cheerio: 1.0.0-rc.12

@@ -125,7 +125,6 @@ function toVidstackSrcs(sources) {
 
 const EMPTY_ARRAY = Object.freeze([]);
 
-
 const SUBTITLE_LANGUAGE_MAP = {
   en: 'English', eng: 'English',
   es: 'Spanish', spa: 'Spanish',
@@ -324,6 +323,7 @@ export default function Player({
   const [playbackError, setPlaybackError] = useState(null);
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
   const [isAutoRetrying, setIsAutoRetrying] = useState(false);
+  const [isAutoSwitching, setIsAutoSwitching] = useState(false);
   const [autoSwitchNotice, setAutoSwitchNotice] = useState(null);
   const [embedHeaderVisible, setEmbedHeaderVisible] = useState(false);
   const [embedSrvAnchor, setEmbedSrvAnchor] = useState(null);
@@ -332,6 +332,8 @@ export default function Player({
 
   const autoRetryCountRef = useRef(0);
   const retryTimerRef = useRef(null);
+  const triedExtractorsRef = useRef(new Set());
+  const isSwitchingRef = useRef(false);
 
   const resolvedTmdbId = tmdbId || id;
   const resolvedSeasonNum = season ? Number(season) : undefined;
@@ -360,6 +362,8 @@ export default function Player({
     autoRetryCountRef.current = 0;
     setIsAutoRetrying(false);
     setAutoSwitchNotice(null);
+    triedExtractorsRef.current.clear();
+    isSwitchingRef.current = false;
   }, [resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum]);
 
   // Load Google Cast Web SDK for Chromecast support
@@ -456,19 +460,22 @@ export default function Player({
   const activeNativeSrc = nativeSrc[0]?.src;
   const resolvedMode = playbackMode;
 
-  // Build server list based on mode
+  // Build server list based on mode with completely anonymous extractor names
   const serverList = useMemo(() => {
     if (resolvedMode === 'native') {
-      return extractorProviders.map((ep) => ({
-        id: ep.id,
-        name: (ep.label || extractorAlias(ep.id)).replace(/\\s*\\([^)]*\\)/g, '').trim(),
-        kind: 'extractor',
-      }));
+      const mediaType = type === 'tv' ? 'tv' : 'movie';
+      return extractorProviders
+        .filter((ep) => !ep.supportedContent || ep.supportedContent.includes(mediaType))
+        .map((ep) => ({
+          id: ep.id,
+          name: (ep.label || extractorAlias(ep.id)).replace(/\s*\([^)]*\)/g, '').trim(),
+          kind: 'extractor',
+        }));
     }
     const baseProviders = servers && servers.length > 0 ? servers : defaultProviders.filter((p) => p.enabled);
     return baseProviders.map((s) => ({
       id: s.id,
-      name: (s.name || '').replace(/\\s*\\([^)]*\\)/g, '').trim(),
+      name: (s.name || '').replace(/\s*\([^)]*\)/g, '').trim(),
       kind: 'embed',
       url: resolvedTmdbId
         ? getEmbedUrl(s.id, type, resolvedTmdbId, resolvedSeasonNum, resolvedEpisodeNum)
@@ -618,6 +625,207 @@ export default function Player({
     }
   }, [playbackMode]);
 
+  /**
+   * Automatically advances to the next available native extractor in sequence.
+   * Runs sequentially across untried scrapers until a playable stream is acquired.
+   * If all native scrapers fail, seamlessly falls back to the embed player.
+   */
+  const switchToNextExtractor = useCallback(
+    async (currentId, reason = '') => {
+      if (isSwitchingRef.current) return;
+      isSwitchingRef.current = true;
+      setIsAutoSwitching(true);
+
+      try {
+        const failedId = currentId || effectiveSelectedExtractor || serverList[0]?.id;
+        if (failedId) {
+          triedExtractorsRef.current.add(failedId);
+          setFailedExtractorId(failedId);
+        }
+
+        const reasonText = reason ? ` (${reason})` : '';
+        setAutoSwitchNotice(`Stream unavailable${reasonText}. Auto-switching to next stream...`);
+        setIsLoading(true);
+        setPlaybackError(null);
+
+        // Priority 1: Use onAutoSwitch (streamwatch resumeScraping pattern across all providers)
+        if (typeof onAutoSwitch === 'function') {
+          try {
+            const success = await onAutoSwitch(failedId);
+            if (success) {
+              setPlaybackAttempt((prev) => prev + 1);
+              setPlaybackError(null);
+              setFailedExtractorId(null);
+              setIsAutoSwitching(false);
+              setIsLoading(false);
+              setAutoSwitchNotice('Auto-switched stream successfully.');
+              setTimeout(() => setAutoSwitchNotice(null), 3000);
+              return;
+            }
+          } catch (err) {
+            console.warn('[Player] onAutoSwitch failed:', err);
+          }
+        }
+
+        // Priority 2: Fallback to sequential onSelectExtractor if onAutoSwitch unavailable or failed
+        const extractors = serverList.filter((s) => s.kind === 'extractor');
+        let nextCandidate = extractors.find(
+          (e) => !triedExtractorsRef.current.has(e.id)
+        );
+
+        while (nextCandidate) {
+          triedExtractorsRef.current.add(nextCandidate.id);
+          setAutoSwitchNotice(`Stream unavailable${reasonText}. Auto-switching to ${nextCandidate.name}...`);
+          setSelectedExtractorId(nextCandidate.id);
+
+          if (onSelectExtractor) {
+            try {
+              const success = await onSelectExtractor(nextCandidate.id);
+              if (success) {
+                setPlaybackAttempt((prev) => prev + 1);
+                setPlaybackError(null);
+                setFailedExtractorId(null);
+                setIsAutoSwitching(false);
+                setIsLoading(false);
+                setAutoSwitchNotice(`Switched to ${nextCandidate.name}.`);
+                setTimeout(() => setAutoSwitchNotice(null), 3000);
+                return;
+              }
+            } catch (err) {
+              console.warn(`[Player] Extractor ${nextCandidate.name} failed:`, err);
+            }
+          }
+
+          setFailedExtractorId(nextCandidate.id);
+          nextCandidate = extractors.find(
+            (e) => !triedExtractorsRef.current.has(e.id)
+          );
+        }
+
+        // All native extractors exhausted!
+        setIsAutoSwitching(false);
+        if (allowEmbedMode && embedAvailable) {
+          setAutoSwitchNotice('All direct sources unavailable. Switched to Embed Player.');
+          setPlaybackMode('embed');
+          setIsLoading(false);
+          setEmbedLoading(true);
+          setTimeout(() => setAutoSwitchNotice(null), 4000);
+        } else {
+          setIsLoading(false);
+          setPlaybackError(
+            'All native stream sources were unavailable. You can retry or choose a provider manually.'
+          );
+        }
+      } finally {
+        isSwitchingRef.current = false;
+      }
+    },
+    [serverList, effectiveSelectedExtractor, onAutoSwitch, onSelectExtractor, allowEmbedMode, embedAvailable]
+  );
+
+  /**
+   * Robust playback failure handler for Vidstack / HLS / Media errors.
+   * Auto-switches immediately when HTTP 404, 403, 401, or manifest load errors occur.
+   */
+  const handlePlaybackFailure = useCallback(
+    (errorDetail, source = 'media') => {
+      console.warn(`[Player] Native playback failure (${source}):`, errorDetail);
+      setIsLoading(false);
+
+      const rawStatus =
+        errorDetail?.status ||
+        errorDetail?.detail?.status ||
+        errorDetail?.detail?.response?.status ||
+        errorDetail?.error?.response?.status ||
+        errorDetail?.data?.response?.status ||
+        errorDetail?.response?.status ||
+        errorDetail?.detail?.networkDetails?.status;
+
+      const code = errorDetail?.code || errorDetail?.detail?.code;
+
+      let msg = '';
+      try {
+        msg = String(
+          errorDetail?.message ||
+            errorDetail?.detail?.message ||
+            errorDetail?.error?.message ||
+            errorDetail?.details ||
+            errorDetail?.detail?.details ||
+            ''
+        ).toLowerCase();
+      } catch {
+        msg = '';
+      }
+
+      let fullStr = '';
+      try {
+        fullStr = JSON.stringify(errorDetail, Object.getOwnPropertyNames(errorDetail || {})).toLowerCase();
+      } catch {
+        fullStr = msg;
+      }
+
+      const is404Or403 =
+        rawStatus === 404 ||
+        rawStatus === 403 ||
+        rawStatus === 401 ||
+        rawStatus === 410 ||
+        rawStatus === 500 ||
+        rawStatus === 502 ||
+        fullStr.includes('404') ||
+        fullStr.includes('403') ||
+        fullStr.includes('401') ||
+        fullStr.includes('manifestloaderror') ||
+        fullStr.includes('manifestparsingerror') ||
+        fullStr.includes('levelloaderror') ||
+        fullStr.includes('manifest') ||
+        fullStr.includes('forbidden') ||
+        fullStr.includes('not found');
+
+      const isNetworkError =
+        is404Or403 ||
+        code === 2 || // MEDIA_ERR_NETWORK
+        code === 4 || // MEDIA_ERR_SRC_NOT_SUPPORTED
+        fullStr.includes('network') ||
+        fullStr.includes('failed to fetch');
+
+      const statusLabel = rawStatus
+        ? `HTTP ${rawStatus}`
+        : is404Or403
+          ? 'Manifest error'
+          : isNetworkError
+            ? 'Network error'
+            : 'Playback error';
+
+      // Fatal manifest / HTTP / network error: Auto-switch immediately without waiting on dead URL
+      if (isNetworkError || is404Or403) {
+        autoRetryCountRef.current = 0;
+        setIsAutoRetrying(false);
+        switchToNextExtractor(effectiveSelectedExtractor, statusLabel);
+        return;
+      }
+
+      // Transient non-network playback failure: Allow 1 quick retry
+      if (autoRetryCountRef.current < 1) {
+        autoRetryCountRef.current += 1;
+        setIsAutoRetrying(true);
+        setAutoSwitchNotice('Stream interrupted. Retrying native playback...');
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = setTimeout(() => {
+          setIsAutoRetrying(false);
+          setAutoSwitchNotice(null);
+          setPlaybackAttempt((prev) => prev + 1);
+        }, 1200);
+        return;
+      }
+
+      // Retries exhausted: Auto-switch to next extractor
+      autoRetryCountRef.current = 0;
+      setIsAutoRetrying(false);
+      switchToNextExtractor(effectiveSelectedExtractor, statusLabel);
+    },
+    [effectiveSelectedExtractor, switchToNextExtractor]
+  );
+
   const handleSelectServer = useCallback(
     async (server) => {
       if (!server) return;
@@ -630,6 +838,7 @@ export default function Player({
           const success = await onSelectExtractor(server.id);
           if (!success) {
             setFailedExtractorId(server.id);
+            switchToNextExtractor(server.id, 'Provider unavailable');
           }
         }
       } else {
@@ -639,7 +848,7 @@ export default function Player({
         setPlaybackAttempt((attempt) => attempt + 1);
       }
     },
-    [resolvedMode, onSelectExtractor]
+    [resolvedMode, onSelectExtractor, switchToNextExtractor]
   );
 
   const handleRetry = useCallback(() => {
@@ -675,7 +884,7 @@ export default function Player({
             <MediaPlayer
               key={`native-player-${activeNativeSrc}-${playbackAttempt}`}
               src={nativeSrc}
-                            crossOrigin="anonymous"
+              crossOrigin="anonymous"
               autoPlay
               playsInline
               title={title || ''}
@@ -717,29 +926,10 @@ export default function Player({
                 }
               }}
               onError={(detail) => {
-                console.warn('Native player playback error:', detail);
-                setIsLoading(false);
-
-                // Auto-retry on transient playback failure
-                if (autoRetryCountRef.current < 2) {
-                  autoRetryCountRef.current += 1;
-                  setIsAutoRetrying(true);
-                  setAutoSwitchNotice('Stream interrupted. Retrying native playback...');
-                  retryTimerRef.current = setTimeout(() => {
-                    setIsAutoRetrying(false);
-                    setAutoSwitchNotice(null);
-                    setPlaybackAttempt((prev) => prev + 1);
-                  }, 1500);
-                  return;
-                }
-
-                setIsAutoRetrying(false);
-
-                // Do not auto-switch to embed when native stream was found.
-                // Keep the player on native and display error UI with options to switch or retry.
-                setPlaybackError(
-                  'The native stream encountered an error. You can retry, choose another extractor, or switch to Embed Player.'
-                );
+                handlePlaybackFailure(detail, 'media');
+              }}
+              onHlsError={(detail) => {
+                handlePlaybackFailure(detail, 'hls');
               }}
             >
               <MediaProvider>
@@ -753,7 +943,8 @@ export default function Player({
                     lang={track.langCode || 'en'}
                     default={index === 0 && Boolean(track.isEnglish)}
                   />
-                ))}</MediaProvider>
+                ))}
+              </MediaProvider>
               <Captions className="youplex-vds-captions vds-captions" />
               <NativeControls
                 title={title}
