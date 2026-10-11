@@ -222,6 +222,7 @@ export default function PlayPage() {
             : {}),
         };
 
+        failedProvidersRef.current.clear();
         const [sourceData, subtitleData, timestampsData] = await Promise.allSettled([
           getPlaySources(type, data.id || id, initialPlaybackOptions, handleScrapeProgress),
           getSubtitles(type, data.id || id, initialPlaybackOptions),
@@ -504,6 +505,7 @@ export default function PlayPage() {
     setIsLoading(true);
     setSourcesLoading(true);
     setSourcesError(null);
+    failedProvidersRef.current.clear();
     setDirectSources({ sources: [], subtitles: [] });
     const params = new URLSearchParams({ id: id || movieOrShow?.id || '' });
     params.set('season', String(nextSeason));

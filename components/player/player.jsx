@@ -735,14 +735,23 @@ export default function Player({
    */
   const handlePlaybackFailure = useCallback(
     (errorDetail, source = 'media') => {
+      // Ignore subtitle track errors
+      if (
+        errorDetail?.target?.nodeName === 'TRACK' ||
+        errorDetail?.target?.tagName === 'TRACK' ||
+        errorDetail?.type === 'track'
+      ) {
+        return;
+      }
+
       // 1. If HLS event: STRICTLY ignore non-fatal events (buffer stalls, fragment retries)
       if (source === 'hls') {
         const hlsData = errorDetail?.detail || errorDetail?.data || errorDetail;
         const isFatal = Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
         const detailsStr = String(hlsData?.details || errorDetail?.details || '').toLowerCase();
 
-        // Non-fatal HLS events (e.g. bufferStalledError, bufferNudgeOnStall, levelLoadTimeOut, fragLoadTimeOut)
-        // Hls.js recovers from these automatically. NEVER switch providers on non-fatal events!
+        // Non-fatal HLS events (e.g. bufferStalledError, levelLoadError with levelRetry, fragLoadError, timeouts)
+        // Hls.js recovers and switches levels automatically. ONLY switch if fatal is true OR manifest itself fails to load!
         if (!isFatal && !detailsStr.includes('manifestloaderror') && !detailsStr.includes('manifestparsingerror')) {
           return;
         }
@@ -762,9 +771,6 @@ export default function Player({
         }
       }
 
-      console.warn(`[Player] Fatal playback failure (${source}):`, errorDetail);
-      setIsLoading(false);
-
       const rawStatus =
         errorDetail?.status ||
         errorDetail?.detail?.status ||
@@ -775,7 +781,12 @@ export default function Player({
         errorDetail?.response?.status ||
         errorDetail?.detail?.networkDetails?.status;
 
-      const code = Number(errorDetail?.code || errorDetail?.detail?.code || 0);
+      const code = Number(
+        errorDetail?.code ||
+        errorDetail?.detail?.code ||
+        errorDetail?.target?.error?.code ||
+        0
+      );
 
       const detailsStr = String(
         errorDetail?.detail?.details ||
@@ -794,17 +805,27 @@ export default function Player({
         rawStatus === 500 ||
         rawStatus === 502;
 
-      // Explicit fatal manifest load errors
+      // Explicit fatal manifest load errors (only master playlist failures, not rendition levels)
       const isManifestFatal =
         detailsStr.includes('manifestloaderror') ||
-        detailsStr.includes('manifestparsingerror') ||
-        detailsStr.includes('levelloaderror');
+        detailsStr.includes('manifestparsingerror');
 
       const isNetworkFatal =
         isHttpFatal ||
         isManifestFatal ||
         code === 2 || // MEDIA_ERR_NETWORK
         code === 4;   // MEDIA_ERR_SRC_NOT_SUPPORTED
+
+      const hlsData = errorDetail?.detail || errorDetail?.data || errorDetail;
+      const isFatalHls = source === 'hls' && Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
+
+      // If not a true fatal error, do NOT switch providers!
+      if (!isNetworkFatal && !isFatalHls) {
+        return;
+      }
+
+      console.warn(`[Player] Fatal playback failure (${source}):`, errorDetail);
+      setIsLoading(false);
 
       const statusLabel = rawStatus
         ? `HTTP ${rawStatus}`
