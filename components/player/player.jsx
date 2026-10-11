@@ -287,6 +287,8 @@ export default function Player({
   sourcesError = null,
   scrapeFeedback = null,
   onSelectExtractor,
+  onAutoSwitch,
+  onPlaybackSuccess,
   onRetrySources,
   allowEmbedMode = true,
   title,
@@ -331,6 +333,7 @@ export default function Player({
   const [videoDurationMs, setVideoDurationMs] = useState(null);
 
   const autoRetryCountRef = useRef(0);
+  const hasStartedPlayingRef = useRef(false);
   const retryTimerRef = useRef(null);
   const triedExtractorsRef = useRef(new Set());
   const isSwitchingRef = useRef(false);
@@ -380,6 +383,7 @@ export default function Player({
   // Reset retry counters on source / stream change
   useEffect(() => {
     autoRetryCountRef.current = 0;
+    hasStartedPlayingRef.current = false;
     setIsAutoRetrying(false);
     setPlaybackError(null);
   }, [src, directSources, activeExtractorId, selectedExtractorId]);
@@ -532,6 +536,8 @@ export default function Player({
   useEffect(() => {
     if (
       resolvedMode === 'native' &&
+      !isAutoSwitching &&
+      !isSwitchingRef.current &&
       !sourcesLoading &&
       !nativeReady &&
       !loading &&
@@ -549,7 +555,7 @@ export default function Player({
       }
     }
     return undefined;
-  }, [resolvedMode, sourcesLoading, nativeReady, loading, sourcesError, directSources, allowEmbedMode, embedAvailable]);
+  }, [resolvedMode, isAutoSwitching, sourcesLoading, nativeReady, loading, sourcesError, directSources, allowEmbedMode, embedAvailable]);
 
   // Safety timer: Never allow spinning loader to persist indefinitely
   useEffect(() => {
@@ -729,96 +735,100 @@ export default function Player({
    */
   const handlePlaybackFailure = useCallback(
     (errorDetail, source = 'media') => {
-      console.warn(`[Player] Native playback failure (${source}):`, errorDetail);
+      // 1. If HLS event: STRICTLY ignore non-fatal events (buffer stalls, fragment retries)
+      if (source === 'hls') {
+        const hlsData = errorDetail?.detail || errorDetail?.data || errorDetail;
+        const isFatal = Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
+        const detailsStr = String(hlsData?.details || errorDetail?.details || '').toLowerCase();
+
+        // Non-fatal HLS events (e.g. bufferStalledError, bufferNudgeOnStall, levelLoadTimeOut, fragLoadTimeOut)
+        // Hls.js recovers from these automatically. NEVER switch providers on non-fatal events!
+        if (!isFatal && !detailsStr.includes('manifestloaderror') && !detailsStr.includes('manifestparsingerror')) {
+          return;
+        }
+      }
+
+      // 2. If Media element event: Ignore aborted operations (code 1)
+      if (source === 'media') {
+        const code = Number(
+          errorDetail?.code ||
+          errorDetail?.detail?.code ||
+          errorDetail?.target?.error?.code ||
+          0
+        );
+        if (code === 1) {
+          // MEDIA_ERR_ABORTED - browser aborted fetch because of source switch/remount
+          return;
+        }
+      }
+
+      console.warn(`[Player] Fatal playback failure (${source}):`, errorDetail);
       setIsLoading(false);
 
       const rawStatus =
         errorDetail?.status ||
         errorDetail?.detail?.status ||
         errorDetail?.detail?.response?.status ||
+        errorDetail?.detail?.response?.code ||
         errorDetail?.error?.response?.status ||
         errorDetail?.data?.response?.status ||
         errorDetail?.response?.status ||
         errorDetail?.detail?.networkDetails?.status;
 
-      const code = errorDetail?.code || errorDetail?.detail?.code;
+      const code = Number(errorDetail?.code || errorDetail?.detail?.code || 0);
 
-      let msg = '';
-      try {
-        msg = String(
-          errorDetail?.message ||
-            errorDetail?.detail?.message ||
-            errorDetail?.error?.message ||
-            errorDetail?.details ||
-            errorDetail?.detail?.details ||
-            ''
-        ).toLowerCase();
-      } catch {
-        msg = '';
-      }
+      const detailsStr = String(
+        errorDetail?.detail?.details ||
+        errorDetail?.details ||
+        errorDetail?.detail?.message ||
+        errorDetail?.message ||
+        ''
+      ).toLowerCase();
 
-      let fullStr = '';
-      try {
-        fullStr = JSON.stringify(errorDetail, Object.getOwnPropertyNames(errorDetail || {})).toLowerCase();
-      } catch {
-        fullStr = msg;
-      }
-
-      const is404Or403 =
+      // Explicit fatal HTTP status checks
+      const isHttpFatal =
         rawStatus === 404 ||
         rawStatus === 403 ||
         rawStatus === 401 ||
         rawStatus === 410 ||
         rawStatus === 500 ||
-        rawStatus === 502 ||
-        fullStr.includes('404') ||
-        fullStr.includes('403') ||
-        fullStr.includes('401') ||
-        fullStr.includes('manifestloaderror') ||
-        fullStr.includes('manifestparsingerror') ||
-        fullStr.includes('levelloaderror') ||
-        fullStr.includes('manifest') ||
-        fullStr.includes('forbidden') ||
-        fullStr.includes('not found');
+        rawStatus === 502;
 
-      const isNetworkError =
-        is404Or403 ||
+      // Explicit fatal manifest load errors
+      const isManifestFatal =
+        detailsStr.includes('manifestloaderror') ||
+        detailsStr.includes('manifestparsingerror') ||
+        detailsStr.includes('levelloaderror');
+
+      const isNetworkFatal =
+        isHttpFatal ||
+        isManifestFatal ||
         code === 2 || // MEDIA_ERR_NETWORK
-        code === 4 || // MEDIA_ERR_SRC_NOT_SUPPORTED
-        fullStr.includes('network') ||
-        fullStr.includes('failed to fetch');
+        code === 4;   // MEDIA_ERR_SRC_NOT_SUPPORTED
 
       const statusLabel = rawStatus
         ? `HTTP ${rawStatus}`
-        : is404Or403
+        : isManifestFatal
           ? 'Manifest error'
-          : isNetworkError
+          : isNetworkFatal
             ? 'Network error'
             : 'Playback error';
 
-      // Fatal manifest / HTTP / network error: Auto-switch immediately without waiting on dead URL
-      if (isNetworkError || is404Or403) {
-        autoRetryCountRef.current = 0;
-        setIsAutoRetrying(false);
-        switchToNextExtractor(effectiveSelectedExtractor, statusLabel);
-        return;
-      }
-
-      // Transient non-network playback failure: Allow 1 quick retry
-      if (autoRetryCountRef.current < 1) {
+      // If the stream was ALREADY playing successfully, allow 1 retry first in case of momentary connection dip
+      if (hasStartedPlayingRef.current && autoRetryCountRef.current < 1) {
         autoRetryCountRef.current += 1;
         setIsAutoRetrying(true);
-        setAutoSwitchNotice('Stream interrupted. Retrying native playback...');
+        setAutoSwitchNotice('Stream interrupted. Reconnecting...');
         if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
         retryTimerRef.current = setTimeout(() => {
           setIsAutoRetrying(false);
           setAutoSwitchNotice(null);
           setPlaybackAttempt((prev) => prev + 1);
-        }, 1200);
+        }, 1500);
         return;
       }
 
-      // Retries exhausted: Auto-switch to next extractor
+      // If fatal error before playback started (e.g. dead link 404/403) or retries exhausted:
       autoRetryCountRef.current = 0;
       setIsAutoRetrying(false);
       switchToNextExtractor(effectiveSelectedExtractor, statusLabel);
@@ -862,6 +872,27 @@ export default function Player({
 
   const renderPlayer = () => {
     if (resolvedMode === 'native') {
+      if (isAutoSwitching || sourcesLoading || (isLoading && !nativeReady)) {
+        return (
+          <Stack
+            alignItems="center"
+            justifyContent="center"
+            spacing={2.5}
+            sx={{ position: 'absolute', inset: 0, bgcolor: '#000', zIndex: 10, color: 'common.white', p: 3 }}
+          >
+            <CircularProgress size={48} sx={{ color: 'primary.main' }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              {autoSwitchNotice || scrapeFeedback?.message || 'Switching to next stream...'}
+            </Typography>
+            {scrapeFeedback?.activeProviderName && (
+              <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.6) }}>
+                Connecting to {scrapeFeedback.activeProviderName}...
+              </Typography>
+            )}
+          </Stack>
+        );
+      }
+
       if (nativeReady && !playbackError) {
         return (
           <Box
@@ -896,6 +927,10 @@ export default function Player({
                 autoRetryCountRef.current = 0;
                 setIsAutoRetrying(false);
                 setPlaybackError(null);
+                hasStartedPlayingRef.current = true;
+                if (typeof onPlaybackSuccess === 'function') {
+                  onPlaybackSuccess();
+                }
               }}
               onLoadedData={() => {
                 setIsLoading(false);
@@ -905,6 +940,10 @@ export default function Player({
               }}
               onPlaying={() => {
                 setIsLoading(false);
+                hasStartedPlayingRef.current = true;
+                if (typeof onPlaybackSuccess === 'function') {
+                  onPlaybackSuccess();
+                }
               }}
               onPlay={() => {
                 setIsLoading(false);

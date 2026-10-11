@@ -332,6 +332,10 @@ export default function PlayPage() {
     };
   }, [type, id, movieOrShow?.id, resolvedSeason]);
 
+  const handlePlaybackSuccess = useCallback(() => {
+    failedProvidersRef.current.clear();
+  }, []);
+
   const autoSwitchSources = useCallback(
     async (failedProviderId) => {
       if (failedProviderId) {
@@ -1281,6 +1285,7 @@ export default function PlayPage() {
               scrapeFeedback={scrapeFeedback}
               onSelectExtractor={selectExtractor}
               onAutoSwitch={autoSwitchSources}
+              onPlaybackSuccess={handlePlaybackSuccess}
               onRetrySources={retrySources}
               hasNextEpisode={hasNextEpisode}
               onNextEpisode={handleNextEpisode}
