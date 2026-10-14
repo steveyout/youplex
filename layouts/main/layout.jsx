@@ -15,6 +15,7 @@ import { BackgroundGradient } from './background-gradient';
 import { HeaderBase } from '../core/header-base';
 import { LayoutSection } from '../core/layout-section';
 import { navData as mainNavData } from '../config-nav-main';
+import { FloatingSideAds } from '@/components/ads';
 
 // ----------------------------------------------------------------------
 
@@ -36,6 +37,8 @@ export function MainLayout({ sx, data, children }) {
       <BackToTop />
 
       <BackgroundGradient />
+
+      <FloatingSideAds />
 
       <LayoutSection
         /** **************************************

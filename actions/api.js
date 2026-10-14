@@ -193,17 +193,19 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
             onProgress(evt);
 
             if (evt.type === 'success') {
-            finalResult = {
-              ...finalResult,
-              ...evt,
-              sources: evt.sources?.length ? evt.sources : finalResult?.sources || [],
-              subtitles: evt.subtitles?.length ? evt.subtitles : finalResult?.subtitles || [],
-            };
-          } else if (evt.type === 'failure') {
-            if (!finalResult || finalResult.type !== 'success') {
-              finalResult = evt;
+              finalResult = {
+                ...finalResult,
+                ...evt,
+                sources: evt.sources?.length ? evt.sources : finalResult?.sources || [],
+                subtitles: evt.subtitles?.length ? evt.subtitles : finalResult?.subtitles || [],
+                thumbnailTrack: evt.thumbnailTrack || finalResult?.thumbnailTrack || null,
+                attemptedProviders: evt.attemptedProviders || finalResult?.attemptedProviders || [],
+              };
+            } else if (evt.type === 'failure') {
+              if (!finalResult || finalResult.type !== 'success') {
+                finalResult = evt;
+              }
             }
-          }
           } catch (e) {
             // ignore malformed event lines
           }
@@ -218,8 +220,10 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
           success: (finalResult.sources || []).length > 0,
           sources: finalResult.sources || [],
           subtitles: finalResult.subtitles || [],
+          thumbnailTrack: finalResult.thumbnailTrack || null,
           provider: finalResult.provider || null,
           providerLabel: cleanLabel,
+          attemptedProviders: finalResult.attemptedProviders || [],
         };
       }
 
@@ -230,6 +234,7 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
           sources: [],
           subtitles: [],
           error: finalResult.error || 'No active streams found',
+          attemptedProviders: finalResult.attemptedProviders || [],
         };
       }
     } catch (sseErr) {
@@ -253,8 +258,10 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
       success: Boolean(data.success && data.sources?.length > 0),
       sources: data.sources || [],
       subtitles: data.subtitles || [],
+      thumbnailTrack: data.thumbnailTrack || null,
       provider: data.provider || null,
       providerLabel: cleanLabel,
+      attemptedProviders: data.attemptedProviders || [],
     };
   } catch (error) {
     console.error('Failed to fetch play sources:', error);
@@ -310,7 +317,6 @@ export async function getSubtitles(arg1, arg2 = {}, arg3 = {}) {
     return [];
   }
 }
-
 
 // ----------------------------------------------------------------------
 
@@ -375,14 +381,6 @@ export async function getSeasonDetails(tvId, seasonNumber) {
     return null;
   }
 }
-
-// ----------------------------------------------------------------------
-
-/**
- * Fetch recommendations for a movie or TV show
- * @param {string} type - 'movie' or 'tv'
- * @param {string|number} id - TMDB ID
- */
 
 // ----------------------------------------------------------------------
 
@@ -518,14 +516,14 @@ function normalizeIntroDbSegments(data, durationSec = null) {
 
 // Client-side cache to avoid repeat network requests and respect IntroDB rate limits
 const introDbCache = new Map();
-const INTRO_DB_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const INTRO_DB_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function getFromIntroDbCache(key) {
   const now = Date.now();
-  if (introDbCache.has(key)) {
-    const entry = introDbCache.get(key);
-    if (now - entry.timestamp < INTRO_DB_CACHE_TTL_MS) {
-      return entry.data;
+  const cached = introDbCache.get(key);
+  if (cached) {
+    if (now - cached.timestamp < INTRO_DB_CACHE_TTL_MS) {
+      return cached.data;
     }
     introDbCache.delete(key);
   }
@@ -619,13 +617,12 @@ export async function getIntroTimestamps({ tmdbId, imdbId, tvdbId, type = 'movie
         const notFoundData = {
           success: false,
           segments: [],
-          message: 'No intro/credits timestamps available for this title',
+          message: 'No intro/outro timestamps found in TheIntroDB',
         };
         setToIntroDbCache(cacheKey, notFoundData);
         return notFoundData;
       }
-
-      return { success: false, segments: [] };
+      throw new Error(`IntroDB HTTP ${res.status}`);
     }
 
     const data = await res.json();
@@ -634,10 +631,6 @@ export async function getIntroTimestamps({ tmdbId, imdbId, tvdbId, type = 'movie
 
     const result = {
       success: true,
-      tmdb_id: data.tmdb_id,
-      type: data.type || (isTv ? 'tv' : 'movie'),
-      season: data.season,
-      episode: data.episode,
       segments,
       raw: data,
     };
@@ -646,13 +639,13 @@ export async function getIntroTimestamps({ tmdbId, imdbId, tvdbId, type = 'movie
     return result;
   } catch (error) {
     console.warn('Failed to fetch Intro DB timestamps client-side:', error);
-    return { success: false, segments: [] };
+    return { success: false, segments: [], error: error?.message || 'Network error' };
   }
 }
 
 /**
- * Submit timestamps to TheIntroDB (/v3/submit) directly client-side.
- * @param {Object} payload
+ * Submit user-voted intro/outro timestamps to Intro DB.
+ * Directly called from client-side to preserve user IP origin.
  */
 export async function submitIntroTimestamp(payload) {
   try {
@@ -724,3 +717,4 @@ export async function submitIntroTimestamp(payload) {
     return { success: false, error: error?.message || 'Network error' };
   }
 }
+

@@ -34,6 +34,7 @@ import { DmcaNotice } from '@/components/dmca/dmca-notice';
 import { getWatchProgress } from '@/lib/watch-history';
 import { isBookmarked, toggleBookmark, BOOKMARKS_EVENT } from '@/lib/bookmarks';
 import { formatTime } from '@vidstack/react';
+import { AdBanner } from '@/components/ads';
 import {
   getMovieOrShow,
   getRecommendations,
@@ -1491,6 +1492,11 @@ function WatchContent({
               </Box>
             </Box>
           )}
+
+          {/* Sponsored Ad Banner */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', my: { xs: 2.5, md: 3.5 } }}>
+            <AdBanner format="banner" closable label="Sponsored" />
+          </Box>
 
           {/* Recommended Movies / Shows Section */}
           {displayedRecs.length > 0 && (

@@ -25,6 +25,7 @@ import CardActionArea from '@mui/material/CardActionArea';
 import { isContentDmcaBlocked } from '@/lib/dmca';
 import { DmcaNotice } from '@/components/dmca/dmca-notice';
 import { Player } from '@/components/player';
+import { AdBanner } from '@/components/ads';
 import { Iconify } from '@/components/iconify';
 import { CLIENT_SCRAPER_CONFIG } from '@/lib/scrapers/provider-config';
 import { getMovieOrShow, getPlaySources, getSubtitles, getSeasonDetails, searchMedia, getEpisodeImages, getIntroTimestamps } from '@/actions/api';
@@ -245,6 +246,13 @@ export default function PlayPage() {
         if (sourceData.status === 'fulfilled' && (sourceData.value?.success || hasSources)) {
           setDirectSources(sourceData.value);
           setSourcesError(null);
+          if (Array.isArray(sourceData.value?.attemptedProviders)) {
+            sourceData.value.attemptedProviders.forEach((p) => {
+              if (p !== sourceData.value.provider) {
+                failedProvidersRef.current.add(p);
+              }
+            });
+          }
         } else {
           setDirectSources({ sources: [], subtitles: [] });
           setSourcesError(
@@ -353,9 +361,17 @@ export default function PlayPage() {
           ...playbackOptions,
         };
         const data = await getPlaySources(type, targetId, opts, handleScrapeProgress);
-        if (data?.success || (data?.sources || []).length > 0) {
+        const hasSources = (data?.sources || []).length > 0;
+        if (data?.success || hasSources) {
           setDirectSources(data);
           setSourcesError(null);
+          if (Array.isArray(data?.attemptedProviders)) {
+            data.attemptedProviders.forEach((p) => {
+              if (p !== data.provider) {
+                failedProvidersRef.current.add(p);
+              }
+            });
+          }
           return true;
         }
         setSourcesError('No more stream sources available.');
@@ -402,6 +418,7 @@ export default function PlayPage() {
     async () => {
       setSourcesLoading(true);
       setSourcesError(null);
+      failedProvidersRef.current.clear();
 
       try {
         const opts = {
@@ -409,15 +426,28 @@ export default function PlayPage() {
         };
         const targetId = id || movieOrShow?.id;
         const data = await getPlaySources(type, targetId, opts, handleScrapeProgress);
-        if (!data?.success) throw new Error('The providers did not return a stream yet.');
-        setDirectSources(data);
+        const hasSources = (data?.sources || []).length > 0;
+        if (data?.success || hasSources) {
+          setDirectSources(data);
+          setSourcesError(null);
+          if (Array.isArray(data?.attemptedProviders)) {
+            data.attemptedProviders.forEach((p) => {
+              if (p !== data.provider) {
+                failedProvidersRef.current.add(p);
+              }
+            });
+          }
+          return true;
+        }
+        throw new Error('The providers did not return a stream yet.');
       } catch (err) {
         setSourcesError(err?.message || 'The providers are taking longer than usual to respond.');
+        return false;
       } finally {
         setSourcesLoading(false);
       }
     },
-    [type, id, playbackOptions, handleScrapeProgress]
+    [type, id, movieOrShow?.id, playbackOptions, handleScrapeProgress]
   );
 
   const backToWatch = () => {
@@ -1231,7 +1261,7 @@ export default function PlayPage() {
             season={type === 'tv' ? selectedSeason : null}
             episode={type === 'tv' ? selectedEpisode : null}
             backdrop={backdropUrl}
-              cast={combinedCast}
+            cast={combinedCast}
             feedback={scrapeFeedback}
           />
         ) : error || !movieOrShow ? (
@@ -1294,6 +1324,11 @@ export default function PlayPage() {
             />
           </Container>
         )}
+      </Box>
+
+      {/* Bottom Sponsored Ad Banner */}
+      <Box sx={{ display: 'flex', justifyContent: 'center', pb: { xs: 2.5, sm: 3 }, pt: 0.5 }}>
+        <AdBanner format="banner" closable label="Sponsored" />
       </Box>
     </Box>
   );

@@ -463,10 +463,32 @@ export async function GET(req) {
     return new Response('Missing "url" query parameter', { status: 400, headers: CORS_HEADERS });
   }
 
-  const rawReferer = searchParams.get('referer');
-  const rawOrigin = searchParams.get('origin');
-  const ua = searchParams.get('ua') || DEFAULT_UA;
+  let effectiveTarget = target;
+  let rawReferer = searchParams.get('referer');
+  let rawOrigin = searchParams.get('origin');
+  let ua = searchParams.get('ua') || DEFAULT_UA;
   const tokenUrl = searchParams.get('tokenUrl') || undefined;
+
+  // If target is wrapped inside an external proxy URL (e.g. api.youplex.site/proxy), unwrap it
+  if (
+    effectiveTarget.includes('api.youplex.site/proxy') ||
+    effectiveTarget.includes('proxy.youplex.site') ||
+    (effectiveTarget.startsWith('http') && (effectiveTarget.includes('/proxy?') || effectiveTarget.includes('/m3u8-proxy?')))
+  ) {
+    try {
+      const parsed = new URL(effectiveTarget);
+      const inner =
+        parsed.searchParams.get('url') ||
+        parsed.searchParams.get('destination') ||
+        parsed.searchParams.get('src');
+      if (inner) {
+        effectiveTarget = inner;
+        if (!rawReferer) rawReferer = parsed.searchParams.get('referer');
+        if (!rawOrigin) rawOrigin = parsed.searchParams.get('origin');
+        if (!searchParams.get('ua') && parsed.searchParams.get('ua')) ua = parsed.searchParams.get('ua');
+      }
+    } catch (e) {}
+  }
 
   // Derive origin from referer or vice versa if either is missing
   let derivedOrigin = rawOrigin;
@@ -492,7 +514,7 @@ export async function GET(req) {
     }
   }
 
-  const fetchTarget = await resolveTokenTarget(target, tokenUrl, derivedReferer, derivedOrigin, ua);
+  const fetchTarget = await resolveTokenTarget(effectiveTarget, tokenUrl, derivedReferer, derivedOrigin, ua);
 
   const range = req.headers.get('range');
   const isRequestedPlaylist = /\.m3u8?$/i.test(new URL(fetchTarget).pathname);

@@ -143,7 +143,9 @@ export async function GET(request) {
       async start(controller) {
         function emit(data) {
           try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}
+
+`));
           } catch (e) {}
         }
 
@@ -195,12 +197,14 @@ export async function GET(request) {
               })),
               thumbnailTrack: providerResult.thumbnailTrack || providerResult.sources?.[0]?.thumbnailTrack || null,
               subtitles: providerResult.subtitles || [],
+              attemptedProviders: providerResult.attemptedProviders || [],
             });
           } else {
             emit({
               type: 'failure',
               provider: provider || 'none',
               error: providerResult?.error || 'All providers failed',
+              attemptedProviders: providerResult?.attemptedProviders || [],
             });
           }
         } catch (err) {
@@ -265,6 +269,7 @@ export async function GET(request) {
         })),
         thumbnailTrack: providerResult.thumbnailTrack || providerResult.sources?.[0]?.thumbnailTrack || null,
         subtitles: providerResult.subtitles || [],
+        attemptedProviders: providerResult.attemptedProviders || [],
       });
     }
 
@@ -275,6 +280,7 @@ export async function GET(request) {
         subtitles: [],
         provider: provider || 'none',
         error: providerResult?.error || 'All providers failed',
+        attemptedProviders: providerResult?.attemptedProviders || [],
       },
       { status: 404 }
     );

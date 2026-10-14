@@ -65,37 +65,83 @@ function extractorAlias(id) {
  * Map direct stream objects into Vidstack source format.
  * If alreadyProxied is true, the URL is used directly.
  */
+function unwrapProxyUrl(rawUrl, existingHeaders = {}) {
+  if (!rawUrl || typeof rawUrl !== 'string') return { url: rawUrl, headers: existingHeaders };
+  if (
+    rawUrl.includes('api.youplex.site/proxy') ||
+    rawUrl.includes('proxy.youplex.site') ||
+    (rawUrl.startsWith('http') && (rawUrl.includes('/proxy?') || rawUrl.includes('/m3u8-proxy?')))
+  ) {
+    try {
+      const parsed = new URL(rawUrl);
+      const inner =
+        parsed.searchParams.get('url') ||
+        parsed.searchParams.get('destination') ||
+        parsed.searchParams.get('src');
+      if (inner) {
+        let parsedHeaders = {};
+        const rawH = parsed.searchParams.get('headers') || parsed.searchParams.get('proxyHeaders');
+        if (rawH) {
+          try {
+            parsedHeaders = typeof rawH === 'string' ? JSON.parse(rawH) : rawH;
+          } catch (e) {}
+        }
+        return {
+          url: inner,
+          headers: {
+            ...existingHeaders,
+            ...parsedHeaders,
+            ...(parsed.searchParams.get('referer') ? { referer: parsed.searchParams.get('referer') } : {}),
+            ...(parsed.searchParams.get('origin') ? { origin: parsed.searchParams.get('origin') } : {}),
+            ...(parsed.searchParams.get('ua') ? { 'user-agent': parsed.searchParams.get('ua') } : {}),
+          },
+        };
+      }
+    } catch (e) {}
+  }
+  return { url: rawUrl, headers: existingHeaders };
+}
+
 function isUrlProxied(url) {
   if (!url || typeof url !== 'string') return false;
-  return (
-    url.startsWith('/api/hls') ||
-    url.startsWith('/proxy') ||
-    url.startsWith('/api/subtitles') ||
-    url.includes('proxy.youplex.site') ||
-    url.includes('/api/hls?') ||
-    url.includes('/proxy?') ||
-    url.includes('m3u8-proxy')
-  );
+  return url.startsWith('/api/hls') || url.startsWith('/api/subtitles');
 }
 
 function toProxyUrl(source) {
   if (!source?.url) return '';
-  const { url } = source;
+  const rawUrl = source.url;
 
   // Subtitles always need CORS headers and proper VTT formatting
-  if (source.isSubtitle || url.endsWith('.vtt') || url.endsWith('.srt') || url.includes('.vtt?') || url.includes('.srt?')) {
-    if (url.startsWith('/api/subtitles') || (url.startsWith('/') && !url.startsWith('/proxy'))) return url;
-    return `/api/subtitles?url=${encodeURIComponent(url)}`;
+  if (
+    source.isSubtitle ||
+    rawUrl.endsWith('.vtt') ||
+    rawUrl.endsWith('.srt') ||
+    rawUrl.includes('.vtt?') ||
+    rawUrl.includes('.srt?')
+  ) {
+    if (rawUrl.startsWith('/api/subtitles')) return rawUrl;
+    return `/api/subtitles?url=${encodeURIComponent(rawUrl)}`;
   }
 
-  if (isUrlProxied(url)) {
-    return url;
+  if (isUrlProxied(rawUrl)) {
+    return rawUrl;
   }
 
-  const params = new URLSearchParams({ url });
-  if (source.headers?.referer) params.set('referer', source.headers.referer);
-  if (source.headers?.origin) params.set('origin', source.headers.origin);
-  const ua = source.headers?.['user-agent'] || source.headers?.['User-Agent'];
+  const unwrapped = unwrapProxyUrl(rawUrl, {
+    ...(source.headers || {}),
+    ...(source.preferredHeaders || {}),
+  });
+
+  const targetUrl = unwrapped.url;
+  const mergedHeaders = unwrapped.headers;
+
+  const params = new URLSearchParams({ url: targetUrl });
+  const referer = mergedHeaders.referer || mergedHeaders.Referer;
+  const origin = mergedHeaders.origin || mergedHeaders.Origin;
+  const ua = mergedHeaders['user-agent'] || mergedHeaders['User-Agent'];
+
+  if (referer) params.set('referer', referer);
+  if (origin) params.set('origin', origin);
   if (ua) params.set('ua', ua);
   return `/api/hls?${params.toString()}`;
 }
@@ -337,6 +383,7 @@ export default function Player({
   const retryTimerRef = useRef(null);
   const triedExtractorsRef = useRef(new Set());
   const isSwitchingRef = useRef(false);
+  const embedFallbackRetryRef = useRef(0);
 
   const resolvedTmdbId = tmdbId || id;
   const resolvedSeasonNum = season ? Number(season) : undefined;
@@ -363,6 +410,7 @@ export default function Player({
     setIsLoading(true);
     setPlaybackAttempt(0);
     autoRetryCountRef.current = 0;
+    embedFallbackRetryRef.current = 0;
     setIsAutoRetrying(false);
     setAutoSwitchNotice(null);
     triedExtractorsRef.current.clear();
@@ -534,6 +582,7 @@ export default function Player({
 
   // When native scraping finishes without any playable streams, auto-switch to Embed Player
   useEffect(() => {
+    let timer = null;
     if (
       resolvedMode === 'native' &&
       !isAutoSwitching &&
@@ -543,8 +592,18 @@ export default function Player({
       !loading &&
       (sourcesError || (Array.isArray(directSources?.sources) && directSources.sources.length === 0))
     ) {
+      if (embedFallbackRetryRef.current < 1 && typeof onRetrySources === 'function') {
+        embedFallbackRetryRef.current += 1;
+        setAutoSwitchNotice('Direct stream unavailable. Retrying providers before embed...');
+        triedExtractorsRef.current.clear();
+        setSelectedExtractorId(null);
+        setFailedExtractorId(null);
+        onRetrySources();
+        return undefined;
+      }
+
       if (allowEmbedMode && embedAvailable) {
-        const timer = setTimeout(() => {
+        timer = setTimeout(() => {
           setPlaybackMode('embed');
           setIsLoading(false);
           setEmbedLoading(true);
@@ -555,7 +614,7 @@ export default function Player({
       }
     }
     return undefined;
-  }, [resolvedMode, isAutoSwitching, sourcesLoading, nativeReady, loading, sourcesError, directSources, allowEmbedMode, embedAvailable]);
+  }, [resolvedMode, isAutoSwitching, sourcesLoading, nativeReady, loading, sourcesError, directSources, allowEmbedMode, embedAvailable, onRetrySources]);
 
   // Safety timer: Never allow spinning loader to persist indefinitely
   useEffect(() => {
@@ -659,6 +718,7 @@ export default function Player({
           try {
             const success = await onAutoSwitch(failedId);
             if (success) {
+              setSelectedExtractorId(null);
               setPlaybackAttempt((prev) => prev + 1);
               setPlaybackError(null);
               setFailedExtractorId(null);
@@ -675,7 +735,13 @@ export default function Player({
 
         // Priority 2: Fallback to sequential onSelectExtractor if onAutoSwitch unavailable or failed
         const extractors = serverList.filter((s) => s.kind === 'extractor');
-        let nextCandidate = extractors.find(
+        const currentIndex = extractors.findIndex((e) => e.id === failedId);
+        const orderedCandidates =
+          currentIndex !== -1
+            ? [...extractors.slice(currentIndex + 1), ...extractors.slice(0, currentIndex)]
+            : extractors;
+
+        let nextCandidate = orderedCandidates.find(
           (e) => !triedExtractorsRef.current.has(e.id)
         );
 
@@ -703,12 +769,35 @@ export default function Player({
           }
 
           setFailedExtractorId(nextCandidate.id);
-          nextCandidate = extractors.find(
+          nextCandidate = orderedCandidates.find(
             (e) => !triedExtractorsRef.current.has(e.id)
           );
         }
 
-        // All native extractors exhausted!
+        // All native extractors exhausted! Before switching to embed, retry providers once
+        if (embedFallbackRetryRef.current < 1 && typeof onRetrySources === 'function') {
+          embedFallbackRetryRef.current += 1;
+          setAutoSwitchNotice('Direct stream unavailable. Retrying providers before embed...');
+          triedExtractorsRef.current.clear();
+          setSelectedExtractorId(null);
+          setFailedExtractorId(null);
+          setIsLoading(true);
+          try {
+            const success = await onRetrySources();
+            if (success) {
+              setPlaybackAttempt((prev) => prev + 1);
+              setPlaybackError(null);
+              setIsAutoSwitching(false);
+              setIsLoading(false);
+              setAutoSwitchNotice('Stream connected successfully.');
+              setTimeout(() => setAutoSwitchNotice(null), 3000);
+              return;
+            }
+          } catch (retryErr) {
+            console.warn('[Player] Retry before embed failed:', retryErr);
+          }
+        }
+
         setIsAutoSwitching(false);
         if (allowEmbedMode && embedAvailable) {
           setAutoSwitchNotice('All direct sources unavailable. Switched to Embed Player.');
@@ -726,7 +815,7 @@ export default function Player({
         isSwitchingRef.current = false;
       }
     },
-    [serverList, effectiveSelectedExtractor, onAutoSwitch, onSelectExtractor, allowEmbedMode, embedAvailable]
+    [serverList, effectiveSelectedExtractor, onAutoSwitch, onSelectExtractor, onRetrySources, allowEmbedMode, embedAvailable]
   );
 
   /**
@@ -744,15 +833,33 @@ export default function Player({
         return;
       }
 
-      // 1. If HLS event: STRICTLY ignore non-fatal events (buffer stalls, fragment retries)
-      if (source === 'hls') {
-        const hlsData = errorDetail?.detail || errorDetail?.data || errorDetail;
-        const isFatal = Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
-        const detailsStr = String(hlsData?.details || errorDetail?.details || '').toLowerCase();
+      // Check for HLS details (whether forwarded via onHlsError or onError)
+      const hlsData = errorDetail?.detail || errorDetail?.data || errorDetail;
+      const isHls =
+        source === 'hls' ||
+        Boolean(hlsData?.details) ||
+        Boolean(errorDetail?.details) ||
+        Boolean(hlsData?.levelRetry) ||
+        Boolean(errorDetail?.levelRetry) ||
+        (hlsData?.type === 'networkError' && Boolean(hlsData?.details));
 
-        // Non-fatal HLS events (e.g. bufferStalledError, levelLoadError with levelRetry, fragLoadError, timeouts)
+      if (isHls) {
+        const isFatal = Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
+        const detailsStr = String(
+          hlsData?.details || errorDetail?.details || ''
+        ).toLowerCase();
+
+        // Non-fatal HLS events (e.g. levelLoadError with levelRetry, fragLoadError, buffer stalls)
         // Hls.js recovers and switches levels automatically. ONLY switch if fatal is true OR manifest itself fails to load!
-        if (!isFatal && !detailsStr.includes('manifestloaderror') && !detailsStr.includes('manifestparsingerror')) {
+        if (
+          !isFatal &&
+          !detailsStr.includes('manifestloaderror') &&
+          !detailsStr.includes('manifestparsingerror')
+        ) {
+          return;
+        }
+
+        if (hlsData?.levelRetry || errorDetail?.levelRetry) {
           return;
         }
       }
@@ -803,21 +910,27 @@ export default function Player({
         rawStatus === 401 ||
         rawStatus === 410 ||
         rawStatus === 500 ||
-        rawStatus === 502;
+        rawStatus === 502 ||
+        rawStatus === 503 ||
+        (rawStatus >= 520 && rawStatus <= 526);
 
       // Explicit fatal manifest load errors (only master playlist failures, not rendition levels)
       const isManifestFatal =
         detailsStr.includes('manifestloaderror') ||
         detailsStr.includes('manifestparsingerror');
 
+      const isCorsOrConnectionFatal =
+        isManifestFatal ||
+        (isFatalHls && rawStatus === 0) ||
+        (detailsStr.includes('networkerror') && rawStatus === 0 && !hlsData?.levelRetry);
+
       const isNetworkFatal =
         isHttpFatal ||
-        isManifestFatal ||
+        isCorsOrConnectionFatal ||
         code === 2 || // MEDIA_ERR_NETWORK
         code === 4;   // MEDIA_ERR_SRC_NOT_SUPPORTED
 
-      const hlsData = errorDetail?.detail || errorDetail?.data || errorDetail;
-      const isFatalHls = source === 'hls' && Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
+      const isFatalHls = isHls && Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
 
       // If not a true fatal error, do NOT switch providers!
       if (!isNetworkFatal && !isFatalHls) {
@@ -831,9 +944,11 @@ export default function Player({
         ? `HTTP ${rawStatus}`
         : isManifestFatal
           ? 'Manifest error'
-          : isNetworkFatal
-            ? 'Network error'
-            : 'Playback error';
+          : isCorsOrConnectionFatal
+            ? 'CORS / Network error'
+            : isNetworkFatal
+              ? 'Network error'
+              : 'Playback error';
 
       // If the stream was ALREADY playing successfully, allow 1 retry first in case of momentary connection dip
       if (hasStartedPlayingRef.current && autoRetryCountRef.current < 1) {
@@ -860,7 +975,7 @@ export default function Player({
   const handleSelectServer = useCallback(
     async (server) => {
       if (!server) return;
-      if (resolvedMode === 'native') {
+      if (server.kind === 'extractor' || resolvedMode === 'native') {
         setSelectedExtractorId(server.id);
         setFailedExtractorId(null);
         setPlaybackError(null);
@@ -883,6 +998,9 @@ export default function Player({
   );
 
   const handleRetry = useCallback(() => {
+    embedFallbackRetryRef.current = 0;
+    autoRetryCountRef.current = 0;
+    setSelectedExtractorId(null);
     setPlaybackError(null);
     setIsLoading(true);
     setPlaybackAttempt((attempt) => attempt + 1);
@@ -946,6 +1064,7 @@ export default function Player({
               onCanPlay={() => {
                 setIsLoading(false);
                 autoRetryCountRef.current = 0;
+                embedFallbackRetryRef.current = 0;
                 setIsAutoRetrying(false);
                 setPlaybackError(null);
                 hasStartedPlayingRef.current = true;
@@ -962,6 +1081,7 @@ export default function Player({
               onPlaying={() => {
                 setIsLoading(false);
                 hasStartedPlayingRef.current = true;
+                embedFallbackRetryRef.current = 0;
                 if (typeof onPlaybackSuccess === 'function') {
                   onPlaybackSuccess();
                 }
