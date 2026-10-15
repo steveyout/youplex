@@ -143,9 +143,7 @@ export async function GET(request) {
       async start(controller) {
         function emit(data) {
           try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}
-
-`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
           } catch (e) {}
         }
 
@@ -273,6 +271,8 @@ export async function GET(request) {
       });
     }
 
+    // Return HTTP 200 with success: false instead of HTTP 404 to prevent BunkerWeb / Cloudflare
+    // from intercepting the response and replacing it with an HTML error page in production
     return NextResponse.json(
       {
         success: false,
@@ -282,7 +282,7 @@ export async function GET(request) {
         error: providerResult?.error || 'All providers failed',
         attemptedProviders: providerResult?.attemptedProviders || [],
       },
-      { status: 404 }
+      { status: 200 }
     );
   } catch (providerError) {
     console.warn('@p-stream/providers scrape encountered error:', providerError?.message);
@@ -292,8 +292,9 @@ export async function GET(request) {
         sources: [],
         subtitles: [],
         error: providerError?.message || 'Scrape failed',
+        attemptedProviders: [],
       },
-      { status: 500 }
+      { status: 200 }
     );
   }
 }

@@ -66,45 +66,20 @@ function extractorAlias(id) {
  * If alreadyProxied is true, the URL is used directly.
  */
 function unwrapProxyUrl(rawUrl, existingHeaders = {}) {
-  if (!rawUrl || typeof rawUrl !== 'string') return { url: rawUrl, headers: existingHeaders };
-  if (
-    rawUrl.includes('api.youplex.site/proxy') ||
-    rawUrl.includes('proxy.youplex.site') ||
-    (rawUrl.startsWith('http') && (rawUrl.includes('/proxy?') || rawUrl.includes('/m3u8-proxy?')))
-  ) {
-    try {
-      const parsed = new URL(rawUrl);
-      const inner =
-        parsed.searchParams.get('url') ||
-        parsed.searchParams.get('destination') ||
-        parsed.searchParams.get('src');
-      if (inner) {
-        let parsedHeaders = {};
-        const rawH = parsed.searchParams.get('headers') || parsed.searchParams.get('proxyHeaders');
-        if (rawH) {
-          try {
-            parsedHeaders = typeof rawH === 'string' ? JSON.parse(rawH) : rawH;
-          } catch (e) {}
-        }
-        return {
-          url: inner,
-          headers: {
-            ...existingHeaders,
-            ...parsedHeaders,
-            ...(parsed.searchParams.get('referer') ? { referer: parsed.searchParams.get('referer') } : {}),
-            ...(parsed.searchParams.get('origin') ? { origin: parsed.searchParams.get('origin') } : {}),
-            ...(parsed.searchParams.get('ua') ? { 'user-agent': parsed.searchParams.get('ua') } : {}),
-          },
-        };
-      }
-    } catch (e) {}
-  }
   return { url: rawUrl, headers: existingHeaders };
 }
 
 function isUrlProxied(url) {
   if (!url || typeof url !== 'string') return false;
-  return url.startsWith('/api/hls') || url.startsWith('/api/subtitles');
+  return (
+    url.startsWith('/api/hls') ||
+    url.startsWith('/api/subtitles') ||
+    url.includes('/m3u8-proxy?url=') ||
+    url.includes('/?destination=') ||
+    url.includes('api.youplex.site/proxy') ||
+    url.includes('proxy.youplex.site') ||
+    url.includes('simple-proxy')
+  );
 }
 
 function toProxyUrl(source) {
@@ -119,31 +94,35 @@ function toProxyUrl(source) {
     rawUrl.includes('.vtt?') ||
     rawUrl.includes('.srt?')
   ) {
-    if (rawUrl.startsWith('/api/subtitles')) return rawUrl;
+    if (rawUrl.startsWith('/api/subtitles') || isUrlProxied(rawUrl)) return rawUrl;
     return `/api/subtitles?url=${encodeURIComponent(rawUrl)}`;
   }
 
-  if (isUrlProxied(rawUrl)) {
+  // If already proxied by m3u8 proxy / worker or marked alreadyProxied from scraper, use directly!
+  if (source.alreadyProxied || isUrlProxied(rawUrl)) {
     return rawUrl;
   }
 
-  const unwrapped = unwrapProxyUrl(rawUrl, {
+  // If the stream requires custom headers and is not already proxied, route through /api/hls
+  const mergedHeaders = {
     ...(source.headers || {}),
     ...(source.preferredHeaders || {}),
-  });
+  };
+  const hasHeaders = Object.keys(mergedHeaders).length > 0;
 
-  const targetUrl = unwrapped.url;
-  const mergedHeaders = unwrapped.headers;
+  if (hasHeaders) {
+    const params = new URLSearchParams({ url: rawUrl });
+    const referer = mergedHeaders.referer || mergedHeaders.Referer;
+    const origin = mergedHeaders.origin || mergedHeaders.Origin;
+    const ua = mergedHeaders['user-agent'] || mergedHeaders['User-Agent'];
 
-  const params = new URLSearchParams({ url: targetUrl });
-  const referer = mergedHeaders.referer || mergedHeaders.Referer;
-  const origin = mergedHeaders.origin || mergedHeaders.Origin;
-  const ua = mergedHeaders['user-agent'] || mergedHeaders['User-Agent'];
+    if (referer) params.set('referer', referer);
+    if (origin) params.set('origin', origin);
+    if (ua) params.set('ua', ua);
+    return `/api/hls?${params.toString()}`;
+  }
 
-  if (referer) params.set('referer', referer);
-  if (origin) params.set('origin', origin);
-  if (ua) params.set('ua', ua);
-  return `/api/hls?${params.toString()}`;
+  return rawUrl;
 }
 
 function toVidstackSrcs(sources) {
@@ -919,18 +898,25 @@ export default function Player({
         detailsStr.includes('manifestloaderror') ||
         detailsStr.includes('manifestparsingerror');
 
+      // Detail from Hls.js error event
+      const isFatalHls = isHls && Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
+
+      // In HLS.js, non-fatal errors (e.g. fragLoadError retry, levelLoadError retry, buffer stalls)
+      // are handled automatically by Hls.js internal retry mechanism.
+      // Never fail or auto-switch on non-fatal HLS errors!
+      if (isHls && !isFatalHls) {
+        return;
+      }
+
       const isCorsOrConnectionFatal =
         isManifestFatal ||
-        (isFatalHls && rawStatus === 0) ||
-        (detailsStr.includes('networkerror') && rawStatus === 0 && !hlsData?.levelRetry);
+        (isFatalHls && rawStatus === 0);
 
       const isNetworkFatal =
         isHttpFatal ||
         isCorsOrConnectionFatal ||
         code === 2 || // MEDIA_ERR_NETWORK
         code === 4;   // MEDIA_ERR_SRC_NOT_SUPPORTED
-
-      const isFatalHls = isHls && Boolean(hlsData?.fatal ?? errorDetail?.fatal ?? false);
 
       // If not a true fatal error, do NOT switch providers!
       if (!isNetworkFatal && !isFatalHls) {

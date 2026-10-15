@@ -142,6 +142,60 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
     };
   }
 
+  // Priority 1: When in the browser, scrape directly client-side via @p-stream/providers (mirrors streamwatch)
+  // This bypasses VPS datacenter IP blocking, BunkerWeb proxy timeouts, and browser extension fetch hook failures.
+  if (typeof window !== 'undefined') {
+    try {
+      const { scrapeMedia } = await import('@/lib/providers');
+      const excludeList = Array.isArray(opts.exclude)
+        ? opts.exclude
+        : opts.exclude
+        ? String(opts.exclude).split(',').map((s) => s.trim())
+        : [];
+
+      const result = await scrapeMedia({
+        type,
+        id,
+        title: opts.title,
+        releaseYear: opts.year || opts.releaseYear,
+        season: opts.season,
+        episode: opts.episode,
+        seasonTmdbId: opts.seasonId,
+        episodeTmdbId: opts.episodeId,
+        imdbId: opts.imdbId,
+        provider: opts.provider,
+        startFrom: opts.startFrom,
+        exclude: excludeList,
+        onProgress,
+      });
+
+      if (result && (result.success || (result.sources || []).length > 0)) {
+        return {
+          success: true,
+          sources: result.sources || [],
+          subtitles: result.subtitles || [],
+          thumbnailTrack: result.thumbnailTrack || null,
+          provider: result.provider || null,
+          providerLabel: (result.providerLabel || result.provider || '').replace(/\s*\([^)]*\)/g, '').trim(),
+          attemptedProviders: result.attemptedProviders || [],
+        };
+      }
+
+      if (result && !result.success && Array.isArray(result.attemptedProviders) && result.attemptedProviders.length > 0) {
+        return {
+          success: false,
+          sources: [],
+          subtitles: [],
+          provider: opts.provider || 'none',
+          error: result.error || 'All providers failed',
+          attemptedProviders: result.attemptedProviders || [],
+        };
+      }
+    } catch (clientErr) {
+      console.warn('[getPlaySources] Client-side scrape failed, falling back to server route:', clientErr);
+    }
+  }
+
   const params = new URLSearchParams({
     type,
     id: String(id),
