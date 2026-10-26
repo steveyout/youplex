@@ -33,7 +33,7 @@ export const NavItem = forwardRef(
           <Box
             component="span"
             sx={{
-              mr: 1.25,
+              mr: 1.5,
               display: 'inline-flex',
               alignItems: 'center',
               color: active ? 'primary.main' : 'text.secondary',
@@ -137,11 +137,11 @@ const StyledNavItem = styled(ButtonBase, {
       ...baseStyles.item,
       justifyContent: 'flex-start',
       width: '100%',
-      px: 1.25,
-      py: 1,
+      px: 1.5,
+      py: 1.15,
       borderRadius: Number(theme.shape.borderRadius) || 8,
       color: theme.vars.palette.text.secondary,
-      fontSize: theme.typography.pxToRem(13),
+      fontSize: theme.typography.pxToRem(13.5),
       '&:hover': {
         color: theme.vars.palette.text.primary,
         backgroundColor: varAlpha(theme.vars.palette.text.primaryChannel, 0.08),

@@ -57,30 +57,30 @@ export function LibraryPopover({ sx, ...other }) {
         onClose={popover.onClose}
         slotProps={{ arrow: { placement: 'top-right' } }}
       >
-        <MenuList sx={{ width: 180, p: 0.75 }}>
+        <MenuList sx={{ width: 205, p: 1 }}>
           <MenuItem
             onClick={() => handleNavigate(paths.bookmarks)}
-            sx={{ py: 1, px: 1.5, borderRadius: 1 }}
+            sx={{ py: 1.1, px: 1.5, borderRadius: 1.25, mb: 0.5 }}
           >
             <ListItemIcon sx={{ minWidth: 28, color: 'primary.main' }}>
               <Iconify icon="solar:bookmark-bold-duotone" width={20} />
             </ListItemIcon>
             <ListItemText
               primary="Watchlist"
-              primaryTypographyProps={{ typography: 'subtitle2', fontWeight: 600 }}
+              primaryTypographyProps={{ typography: 'subtitle2', fontWeight: 600, fontSize: 13.5 }}
             />
           </MenuItem>
 
           <MenuItem
             onClick={() => handleNavigate(paths.history)}
-            sx={{ py: 1, px: 1.5, borderRadius: 1 }}
+            sx={{ py: 1.1, px: 1.5, borderRadius: 1.25 }}
           >
-            <ListItemIcon sx={{ minWidth: 28, color: 'primary.main' }}>
+            <ListItemIcon sx={{ minWidth: 28, color: 'warning.main' }}>
               <Iconify icon="solar:history-bold-duotone" width={20} />
             </ListItemIcon>
             <ListItemText
               primary="Watch History"
-              primaryTypographyProps={{ typography: 'subtitle2', fontWeight: 600 }}
+              primaryTypographyProps={{ typography: 'subtitle2', fontWeight: 600, fontSize: 13.5 }}
             />
           </MenuItem>
         </MenuList>

@@ -54,11 +54,20 @@
 html {
   height: 100%;
   -webkit-overflow-scrolling: touch;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 
 html[data-scroll-behavior="smooth"] {
   scroll-behavior: smooth;
 }
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 body,
 #root,
 #root__layout {
@@ -67,26 +76,40 @@ body,
   min-height: 100%;
   flex-direction: column;
 }
+
 * {
   -webkit-tap-highlight-color: transparent;
 }
+
+button,
+a,
+input,
+select,
+[role='button'] {
+  touch-action: manipulation;
+}
+
 img {
   max-width: 100%;
   vertical-align: middle;
 }
+
 ul {
   margin: 0;
   padding: 0;
   list-style-type: none;
 }
+
 input[type='number'] {
   -moz-appearance: textfield;
   appearance: none;
 }
+
 input[type='number']::-webkit-outer-spin-button {
   margin: 0;
   -webkit-appearance: none;
 }
+
 input[type='number']::-webkit-inner-spin-button {
   margin: 0;
   -webkit-appearance: none;
@@ -149,7 +172,6 @@ input[type='number']::-webkit-inner-spin-button {
     opacity: 1;
   }
 }
-
 
 /* Video Player Loader and Radar Pulse */
 @keyframes youplex-radar-pulse {
@@ -334,4 +356,3 @@ input[type='number']::-webkit-inner-spin-button {
     line-height: 1.45;
   }
 }
-

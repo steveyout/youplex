@@ -63,15 +63,12 @@ export function NavList({ data }) {
   const renderNavItem = (
     <NavItem
       ref={navItemRef}
-      // slots
       title={data.title}
       path={data.path}
-      // state
       active={active}
       hasChild={!!data.children}
       open={data.children && !!openMenu}
       externalLink={isExternalLink(data.path)}
-      // action
       onMouseEnter={handleOpenMenu}
       onMouseLeave={handleCloseMenu}
     />
@@ -110,7 +107,7 @@ export function NavList({ data }) {
 
     const menuLeft =
       typeof window !== 'undefined'
-        ? Math.max(16, Math.min(clientRect.left - 12, window.innerWidth - 240))
+        ? Math.max(16, Math.min(clientRect.left - 12, window.innerWidth - 250))
         : clientRect.left;
 
     return (
@@ -137,7 +134,7 @@ export function NavList({ data }) {
                       }
                     : {
                         left: menuLeft,
-                        minWidth: 200,
+                        minWidth: 220,
                       }),
                 }}
               >
@@ -146,10 +143,10 @@ export function NavList({ data }) {
                   sx={{
                     ...paper({ theme, dropdown: true }),
                     borderRadius: 2,
-                    p: isMegaMenu ? theme.spacing(5, 1, 1, 4) : 1,
+                    p: isMegaMenu ? theme.spacing(4, 1, 1, 3) : 1.25,
                     boxShadow:
                       theme.customShadows?.dropdown ||
-                      '0 12px 32px -4px rgba(0, 0, 0, 0.5)',
+                      '0 16px 40px -4px rgba(0, 0, 0, 0.55)',
                     border: `1px solid ${varAlpha(theme.vars.palette.grey['500Channel'], 0.16)}`,
                     backdropFilter: 'blur(20px)',
                     WebkitBackdropFilter: 'blur(20px)',
@@ -165,7 +162,7 @@ export function NavList({ data }) {
                             flexDirection: 'row',
                           }
                         : {
-                            gap: 0.5,
+                            gap: 0.75,
                             flexDirection: 'column',
                           }),
                     }}

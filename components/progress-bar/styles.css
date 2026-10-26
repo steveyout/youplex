@@ -3,15 +3,17 @@
   left: 0;
   width: 100%;
   height: 2.5px;
-  z-index: 9999;
+  z-index: 99999;
   position: fixed;
   pointer-events: none;
 }
+
 #nprogress .bar {
   height: 100%;
-  background-color: var(--palette-primary-main);
-  box-shadow: 0 0 2.5px var(--palette-primary-main);
+  background: linear-gradient(90deg, var(--palette-primary-main, #FF3030), var(--palette-primary-light, #FF6666));
+  box-shadow: 0 0 10px var(--palette-primary-main, #FF3030), 0 0 4px var(--palette-primary-main, #FF3030);
 }
+
 #nprogress .peg {
   right: 0;
   opacity: 1;
@@ -21,6 +23,44 @@
   position: absolute;
   transform: rotate(3deg) translate(0px, -4px);
   box-shadow:
-    0 0 10px var(--palette-primary-main),
-    0 0 5px var(--palette-primary-main);
+    0 0 14px var(--palette-primary-main, #FF3030),
+    0 0 6px var(--palette-primary-main, #FF3030);
+}
+
+/* Circular loader on the right of the loading navigation progress bar */
+#nprogress .spinner {
+  display: block;
+  position: fixed;
+  z-index: 99999;
+  top: 12px;
+  right: 16px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+#nprogress .spinner-icon {
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 2.5px solid rgba(255, 255, 255, 0.16);
+  border-top-color: var(--palette-primary-main, #FF3030);
+  border-right-color: var(--palette-primary-main, #FF3030);
+  border-radius: 50%;
+  filter: drop-shadow(0 0 8px var(--palette-primary-main, #FF3030));
+  animation: nprogress-spinner 550ms linear infinite;
+}
+
+.nprogress-custom-parent #nprogress .spinner,
+.nprogress-custom-parent #nprogress .bar {
+  position: absolute;
+}
+
+@keyframes nprogress-spinner {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }

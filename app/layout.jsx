@@ -14,6 +14,7 @@ import { detectSettings } from '@/components/settings/server';
 import PRIMARY_COLOR from '@/theme/with-settings/primary-color.json';
 import { getInitColorSchemeScript } from '@/theme/color-scheme-script';
 import { SettingsDrawer, defaultSettings, SettingsProvider } from '@/components/settings';
+import { SyncAuthProvider } from '@/lib/sync/auth-context';
 
 // ----------------------------------------------------------------------
 
@@ -33,7 +34,9 @@ export const metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 5,
   themeColor: PRIMARY_COLOR.red.main,
+  viewportFit: 'cover',
 };
 
 const extensionErrorSuppressor = `
@@ -94,7 +97,7 @@ const antiInspectScript = `
     // Disable context menu to block right-click inspect element
     window.addEventListener('contextmenu', function(e) {
       e.preventDefault();
-      return false;
+      return false,
     }, true);
 
     // Block keyboard inspection and scraping shortcuts
@@ -136,7 +139,8 @@ const antiInspectScript = `
     if (typeof console !== 'undefined') {
       var noop = function() {};
       ['log', 'debug', 'info', 'warn', 'error', 'table', 'dir'].forEach(function(m) {
-        try { console[m] = noop; } catch(e) {}\n      });
+        try { console[m] = noop; } catch(e) {}
+      });
     }
 
     // Early docked DevTools window threshold check
@@ -176,10 +180,12 @@ export default async function RootLayout({ children }) {
                 <MotionLazy>
                   <Snackbar />
                   <ProgressBar />
-                  <SettingsDrawer />
-                  {/* Google tag (gtag.js) */}
-                  <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? ''} />
-                  {children}
+                  <SyncAuthProvider>
+                    <SettingsDrawer />
+                    {/* Google tag (gtag.js) */}
+                    <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? ''} />
+                    {children}
+                  </SyncAuthProvider>
                 </MotionLazy>
               </ThemeProvider>
             </SettingsProvider>

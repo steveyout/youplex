@@ -15,6 +15,7 @@ import { BackgroundGradient } from './background-gradient';
 import { HeaderBase } from '../core/header-base';
 import { LayoutSection } from '../core/layout-section';
 import { navData as mainNavData } from '../config-nav-main';
+import { _notifications } from '../config-notifications';
 import { FloatingSideAds } from '@/components/ads';
 
 // ----------------------------------------------------------------------
@@ -27,6 +28,7 @@ export function MainLayout({ sx, data, children }) {
   const layoutQuery = 'md';
 
   const navData = data?.nav ?? mainNavData;
+  const notificationsData = data?.notifications ?? _notifications;
 
   return (
     <>
@@ -48,11 +50,13 @@ export function MainLayout({ sx, data, children }) {
           <HeaderBase
             layoutQuery={layoutQuery}
             onOpenNav={mobileNavOpen.onTrue}
+            data={{ nav: navData, notifications: notificationsData }}
             slotsDisplay={{
               helpLink: false,
               searchbar: true,
-              localization: true,
+              localization: false,
               notifications: true,
+              account: true,
               signIn: false,
             }}
             slots={{

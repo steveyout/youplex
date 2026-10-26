@@ -12,6 +12,7 @@ import { fToNow } from 'utils/format-time';
 import { CONFIG } from 'config-global';
 
 import { Label } from 'components/label';
+import { Iconify } from 'components/iconify';
 import { FileThumbnail } from 'components/file-thumbnail';
 
 // ----------------------------------------------------------------------
@@ -21,6 +22,20 @@ export function NotificationItem({ notification }) {
     <ListItemAvatar>
       {notification.avatarUrl ? (
         <Avatar src={notification.avatarUrl} sx={{ bgcolor: 'background.neutral' }} />
+      ) : notification.icon ? (
+        <Stack
+          alignItems="center"
+          justifyContent="center"
+          sx={{
+            width: 42,
+            height: 42,
+            borderRadius: '50%',
+            bgcolor: notification.iconBg || 'rgba(255, 48, 48, 0.12)',
+            color: notification.iconColor || 'primary.main',
+          }}
+        >
+          <Iconify icon={notification.icon} width={22} />
+        </Stack>
       ) : (
         <Stack
           alignItems="center"
@@ -45,21 +60,21 @@ export function NotificationItem({ notification }) {
         <Stack
           direction="row"
           alignItems="center"
-          sx={{ typography: 'caption', color: 'text.disabled' }}
+          sx={{ typography: 'caption', color: 'text.disabled', mt: 0.5 }}
           divider={
             <Box
               sx={{
                 width: 2,
                 height: 2,
                 bgcolor: 'currentColor',
-                mx: 0.5,
+                mx: 0.75,
                 borderRadius: '50%',
               }}
             />
           }
         >
-          {fToNow(notification.createdAt)}
-          {notification.category}
+          <span>{fToNow(notification.createdAt)}</span>
+          <span>{notification.category}</span>
         </Stack>
       }
     />
@@ -68,13 +83,14 @@ export function NotificationItem({ notification }) {
   const renderUnReadBadge = notification.isUnRead && (
     <Box
       sx={{
-        top: 26,
+        top: 24,
         width: 8,
         height: 8,
-        right: 20,
+        right: 18,
         borderRadius: '50%',
-        bgcolor: 'info.main',
+        bgcolor: 'primary.main',
         position: 'absolute',
+        boxShadow: (theme) => `0 0 8px ${theme.vars.palette.primary.main}`,
       }}
     />
   );
@@ -191,16 +207,22 @@ export function NotificationItem({ notification }) {
     <ListItemButton
       disableRipple
       sx={{
-        p: 2.5,
+        p: 2,
+        px: 2.5,
+        gap: 1.5,
         alignItems: 'flex-start',
         borderBottom: (theme) => `dashed 1px ${theme.vars.palette.divider}`,
+        transition: (theme) => theme.transitions.create(['background-color']),
+        ...(notification.isUnRead && {
+          bgcolor: (theme) => `rgba(${theme.vars.palette.primary.mainChannel} / 0.04)`,
+        }),
       }}
     >
       {renderUnReadBadge}
 
       {renderAvatar}
 
-      <Stack sx={{ flexGrow: 1 }}>
+      <Stack sx={{ flexGrow: 1, minWidth: 0 }}>
         {renderText}
         {notification.type === 'friend' && friendAction}
         {notification.type === 'project' && projectAction}
@@ -219,10 +241,10 @@ function reader(data) {
     <Box
       dangerouslySetInnerHTML={{ __html: data }}
       sx={{
-        mb: 0.5,
-        '& p': { typography: 'body2', m: 0 },
+        mb: 0.25,
+        '& p': { typography: 'body2', m: 0, fontSize: 13.5, lineHeight: 1.5 },
         '& a': { color: 'inherit', textDecoration: 'none' },
-        '& strong': { typography: 'subtitle2' },
+        '& strong': { typography: 'subtitle2', fontWeight: 600, fontSize: 13.5 },
       }}
     />
   );

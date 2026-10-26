@@ -11,8 +11,24 @@ const withPWA = withPWAInit({
 const nextConfig = {
   trailingSlash: false,
   basePath: process.env.NEXT_PUBLIC_BASE_PATH,
+  compress: true,
+  poweredByHeader: false,
+  reactStrictMode: true,
   env: {
     BUILD_STATIC_EXPORT: isStaticExport,
+  },
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'image.tmdb.org',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.tmdb.org',
+      },
+    ],
   },
   modularizeImports: {
     '@mui/icons-material': {

@@ -11,45 +11,51 @@ import { useRouter, usePathname, useSearchParams } from 'routes/hooks';
 
 export function ProgressBar() {
   useEffect(() => {
-    NProgress.configure({ showSpinner: false });
+    NProgress.configure({
+      showSpinner: true,
+      minimum: 0.12,
+      trickleSpeed: 200,
+    });
 
-    const handleAnchorClick = (event) => {
-      const targetUrl = event.currentTarget.href;
+    const handleDocumentClick = (event) => {
+      // Find closest anchor tag
+      const anchor = event.target.closest?.('a[href]');
+      if (!anchor) return;
 
-      const currentUrl = window.location.href;
+      const href = anchor.getAttribute('href');
+      const target = anchor.getAttribute('target');
+      const rel = anchor.getAttribute('rel');
 
-      if (targetUrl !== currentUrl) {
-        NProgress.start();
+      // Only handle internal relative page routes
+      if (
+        href?.startsWith('/') &&
+        !href.startsWith('//') &&
+        target !== '_blank' &&
+        rel !== 'noopener' &&
+        !href.startsWith('/#')
+      ) {
+        const targetUrl = anchor.href;
+        const currentUrl = window.location.href;
+
+        if (targetUrl !== currentUrl && !event.defaultPrevented) {
+          NProgress.start();
+        }
       }
     };
 
-    const handleMutation = () => {
-      const anchorElements = document.querySelectorAll('a[href]');
+    document.addEventListener('click', handleDocumentClick, { capture: true, passive: true });
 
-      const filteredAnchors = Array.from(anchorElements).filter((element) => {
-        const rel = element.getAttribute('rel');
-
-        const href = element.getAttribute('href');
-
-        const target = element.getAttribute('target');
-
-        return href?.startsWith('/') && target !== '_blank' && rel !== 'noopener';
-      });
-
-      filteredAnchors.forEach((anchor) => anchor.addEventListener('click', handleAnchorClick));
+    const originalPushState = window.history.pushState;
+    window.history.pushState = function (...args) {
+      NProgress.done();
+      return originalPushState.apply(this, args);
     };
 
-    const mutationObserver = new MutationObserver(handleMutation);
-
-    mutationObserver.observe(document, { childList: true, subtree: true });
-
-    window.history.pushState = new Proxy(window.history.pushState, {
-      apply: (target, thisArg, argArray) => {
-        NProgress.done();
-        return target.apply(thisArg, argArray);
-      },
-    });
-  });
+    return () => {
+      document.removeEventListener('click', handleDocumentClick, { capture: true });
+      window.history.pushState = originalPushState;
+    };
+  }, []);
 
   return (
     <Suspense fallback={null}>
@@ -62,9 +68,7 @@ export function ProgressBar() {
 
 function NProgressDone() {
   const pathname = usePathname();
-
   const router = useRouter();
-
   const searchParams = useSearchParams();
 
   useEffect(() => {

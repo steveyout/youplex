@@ -10,6 +10,7 @@ import { HeaderSection } from './header-section';
 import { Searchbar } from '../components/searchbar';
 import { MenuButton } from '../components/menu-button';
 import { SignInButton } from '../components/sign-in-button';
+import { AccountButton } from '../components/account-button';
 import { SettingsButton } from '../components/settings-button';
 import { LibraryPopover } from '../components/library-popover';
 import { LanguagePopover } from '../components/language-popover';
@@ -54,11 +55,12 @@ export function HeaderBase({
 
   slotsDisplay: {
     signIn = true,
+    account = true,
     helpLink = true,
     settings = true,
     searchbar = true,
     menuButton = true,
-    localization = true,
+    localization = false,
     notifications = true,
     library = false,
   } = {},
@@ -141,6 +143,9 @@ export function HeaderBase({
 
               {/* -- Settings button -- */}
               {settings && <SettingsButton data-slot="settings" />}
+
+              {/* -- Account icon button -- */}
+              {account && <AccountButton data-slot="account" />}
 
               {/* -- Sign in button -- */}
               {signIn && <SignInButton />}

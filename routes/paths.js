@@ -17,6 +17,12 @@ export const paths = {
   search: '/search',
   bookmarks: '/bookmarks',
   history: '/history',
+  auth: {
+    root: '/auth/account',
+    signIn: '/auth/sign-in',
+    signUp: '/auth/sign-up',
+    account: '/auth/account',
+  },
   torrents: 'https://torrents.youplex.site/',
   discord: 'https://discord.gg/5eWu9Vz6tQ',
   telegram: 'https://t.me/youplexannouncments',
