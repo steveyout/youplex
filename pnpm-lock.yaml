@@ -101,6 +101,9 @@ importers:
       framer-motion:
         specifier: ^11.2.10
         version: 11.18.2(@emotion/is-prop-valid@1.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      halloween.js:
+        specifier: ^1.0.3
+        version: 1.0.3
       hls.js:
         specifier: ^1.7.2
         version: 1.7.2
@@ -2615,6 +2618,9 @@ packages:
 
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
+
+  halloween.js@1.0.3:
+    resolution: {integrity: sha512-vLQCYvYxgeejzTG/bWx1K6EagUaKZlG5PUoA2eqK9OnHdWsrBIzL33uPGfRFkRR67ekXBhVeYyEjXUDmGSRtqA==}
 
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
@@ -6906,6 +6912,8 @@ snapshots:
   graceful-fs@4.2.11: {}
 
   graphemer@1.4.0: {}
+
+  halloween.js@1.0.3: {}
 
   has-bigints@1.1.0: {}
 

@@ -7,6 +7,7 @@ import { detectLanguage } from '@/locales/server';
 import { DevToolsGuard } from '@/components/security';
 import { ThemeProvider } from '@/theme/theme-provider';
 import { I18nProvider } from '@/locales/i18n-provider';
+import { Halloween } from '@/components/halloween';
 import { ProgressBar } from '@/components/progress-bar';
 import { GoogleAnalytics } from '@next/third-parties/google';
 import { MotionLazy } from '@/components/animate/motion-lazy';
@@ -97,7 +98,7 @@ const antiInspectScript = `
     // Disable context menu to block right-click inspect element
     window.addEventListener('contextmenu', function(e) {
       e.preventDefault();
-      return false,
+      return false;
     }, true);
 
     // Block keyboard inspection and scraping shortcuts
@@ -167,9 +168,10 @@ export default async function RootLayout({ children }) {
         <script dangerouslySetInnerHTML={{ __html: extensionErrorSuppressor }} />
         <script dangerouslySetInnerHTML={{ __html: antiInspectScript }} />
       </head>
-      <body>
+      <body className="halloween halloween-screen-left-top halloween-screen-right-bottom halloween-eyes halloween-witches halloween-spider-drop halloween-tombstones">
         {getInitColorSchemeScript}
         <DevToolsGuard />
+        <Halloween />
         <I18nProvider lang={CONFIG.isStaticExport ? undefined : lang}>
           <LocalizationProvider>
             <SettingsProvider
