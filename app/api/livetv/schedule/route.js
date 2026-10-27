@@ -1,83 +1,176 @@
+import { fetchWithDns, getBaseUrls } from '@/lib/livetv/fetch';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const icons = {
-  soccer: '⚽', football: '🏈', basketball: '🏀', tennis: '🎾', cricket: '🏏',
-  hockey: '🏒', baseball: '⚾', golf: '⛳', motorsport: '🏎️', boxing: '🥊',
-  mma: '🥊', ufc: '🥊', wwe: '🤼', volleyball: '🏐',
+const SPORT_ICONS = {
+  soccer: '⚽',
+  football: '🏈',
+  basketball: '🏀',
+  tennis: '🎾',
+  cricket: '🏏',
+  hockey: '🏒',
+  baseball: '⚾',
+  golf: '⛳',
+  motorsport: '🏎️',
+  racing: '🏎️',
+  boxing: '🥊',
+  mma: '🥊',
+  ufc: '🥊',
+  wrestling: '🤼',
+  wwe: '🤼',
+  volleyball: '🏐',
+  darts: '🎯',
+  snooker: '🎱',
+  badminton: '🏸',
+  cycling: '🚴',
+  tv: '📺',
+  shows: '📺',
 };
 
 function iconFor(name) {
-  const key = Object.keys(icons).find((item) => name.toLowerCase().includes(item));
-  return key ? icons[key] : '📺';
+  const lower = (name || '').toLowerCase();
+  const key = Object.keys(SPORT_ICONS).find((item) => lower.includes(item));
+  return key ? SPORT_ICONS[key] : '📺';
 }
 
 function isoTime(time) {
-  const match = time.match(/^(\d{1,2}):(\d{2})$/);
+  const match = (time || '').match(/^(\d{1,2}):(\d{2})$/);
   if (!match) return '';
   const now = new Date();
   now.setUTCHours(Number(match[1]), Number(match[2]), 0, 0);
   return now.toISOString();
 }
 
-function parseEvents(html, category, categoryIndex = 0) {
-  const events = [];
-  const eventPattern = /<div[^>]*class="[^"]*schedule__event[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*schedule__event|$)/gi;
-  let match;
-  while ((match = eventPattern.exec(html))) {
-    const block = match[0];
-    const time = block.match(/schedule__time[^>]*>([^<]*)</i)?.[1]?.trim() || '';
-    const title = block.match(/schedule__eventTitle[^>]*>([^<]*)</i)?.[1]?.trim() || '';
-    if (!title) continue;
-    const dataTime = block.match(/data-time="([^"]*)"/i)?.[1] || '';
-    const channels = [...block.matchAll(/<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/gi)]
-      .map((item) => ({ name: item[2].trim(), channelId: item[1].match(/id=(\d+)/)?.[1] || '', href: item[1] }))
-      .filter((item) => item.name);
-    const eventDate = dataTime && /^\d+$/.test(dataTime) ? new Date(Number(dataTime) * 1000) : new Date(isoTime(time));
-    const isLive = /is-live|>LIVE</i.test(block)
-      || (eventDate.toString() !== 'Invalid Date' && Date.now() - eventDate.getTime() >= 0 && Date.now() - eventDate.getTime() < 3600000);
-    const teams = title.match(/(.+?)\s+vs\.?\s+(.+)/i);
-    const cleanCategory = category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
-    events.push({
-      id: `event-${categoryIndex}-${cleanCategory}-${events.length}-${cleanTitle}`,
-      title,
-      sport: category,
-      time,
-      isoTime: isoTime(time),
-      isLive,
-      channels,
-      ...(teams ? { teams: { home: teams[1].trim(), away: teams[2].trim() } } : {}),
-    });
-  }
-  return events;
+function checkIsLive(timeStr, now = new Date()) {
+  const match = (timeStr || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return false;
+  const eventHours = parseInt(match[1], 10);
+  const eventMins = parseInt(match[2], 10);
+  const eventTotalMins = eventHours * 60 + eventMins;
+
+  const curHours = now.getUTCHours();
+  const curMins = now.getUTCMinutes();
+  const curTotalMins = curHours * 60 + curMins;
+
+  const diff = curTotalMins - eventTotalMins;
+  // Live if scheduled within 15 mins from now, or started in the last 2.5 hours
+  return diff >= -15 && diff <= 160;
 }
 
 export async function GET() {
+  const baseUrls = getBaseUrls();
+  let scheduleData = null;
+  let lastError = null;
+
+  for (const base of baseUrls) {
+    try {
+      const url = `${base}/schedule/schedule-generated.json`;
+      const res = await fetchWithDns(url, {
+        headers: {
+          Referer: `${base}/`,
+          Accept: 'application/json, text/plain, */*',
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (res.ok) {
+        scheduleData = await res.json();
+        break;
+      }
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  if (!scheduleData || typeof scheduleData !== 'object') {
+    console.warn('[Live TV schedule] Unable to fetch schedule:', lastError?.message);
+    return Response.json({
+      success: true,
+      schedule: { categories: [] },
+      warning: 'Schedule temporarily unavailable',
+    });
+  }
+
   try {
-    const response = await fetch('https://dlhd.st/', {
-      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/html' },
-      signal: AbortSignal.timeout(15000),
-      cache: 'no-store',
+    const categoriesMap = new Map();
+    const now = new Date();
+
+    for (const [dateHeader, catGroup] of Object.entries(scheduleData)) {
+      if (!catGroup || typeof catGroup !== 'object') continue;
+
+      for (const [catRaw, eventList] of Object.entries(catGroup)) {
+        if (!Array.isArray(eventList)) continue;
+
+        const cleanCategory = catRaw.replace(/<[^>]*>/g, '').trim() || 'Other';
+        if (!categoriesMap.has(cleanCategory)) {
+          categoriesMap.set(cleanCategory, {
+            name: cleanCategory,
+            icon: iconFor(cleanCategory),
+            events: [],
+          });
+        }
+
+        const catObj = categoriesMap.get(cleanCategory);
+
+        for (const item of eventList) {
+          const title = (item.event || '').trim();
+          if (!title) continue;
+
+          const time = (item.time || '').trim();
+          const rawChannels = [...(item.channels || []), ...(item.channels2 || [])];
+          const channels = rawChannels
+            .map((ch) => ({
+              name: (ch.channel_name || '').trim(),
+              channelId: String(ch.channel_id || '').trim(),
+            }))
+            .filter((ch) => ch.name && ch.channelId);
+
+          const isLive = checkIsLive(time, now);
+          const teamsMatch = title.match(/(.+?)\s+vs\.?\s+(.+)/i);
+
+          const cleanCatSlug = cleanCategory.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          const cleanTitleSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+          const id = `event-${cleanCatSlug}-${catObj.events.length}-${cleanTitleSlug}`;
+
+          catObj.events.push({
+            id,
+            title,
+            sport: cleanCategory,
+            time,
+            isoTime: isoTime(time),
+            isLive,
+            channels,
+            ...(teamsMatch
+              ? {
+                  teams: {
+                    home: teamsMatch[1].trim(),
+                    away: teamsMatch[2].trim(),
+                  },
+                }
+              : {}),
+          });
+        }
+      }
+    }
+
+    const categories = Array.from(categoriesMap.values()).filter((c) => c.events.length > 0);
+    const totalEvents = categories.reduce((sum, c) => sum + c.events.length, 0);
+    const liveEvents = categories.reduce((sum, c) => sum + c.events.filter((e) => e.isLive).length, 0);
+
+    return Response.json({
+      success: true,
+      schedule: { categories },
+      stats: {
+        totalEvents,
+        liveEvents,
+      },
     });
-    if (!response.ok) throw new Error(`Schedule request failed: ${response.status}`);
-    const html = await response.text();
-    const categories = [];
-    const categoryPattern = /<div[^>]*class="card__meta"[^>]*>([^<]+)<\/div>/gi;
-    const matches = [...html.matchAll(categoryPattern)];
-    matches.forEach((match, index) => {
-      const start = match.index;
-      const end = matches[index + 1]?.index || html.length;
-      const name = match[1].trim();
-      const events = parseEvents(html.slice(start, end), name, index);
-      if (events.length) categories.push({ name, icon: iconFor(name), events });
-    });
-    return Response.json({ success: true, schedule: { categories }, stats: {
-      totalEvents: categories.reduce((sum, category) => sum + category.events.length, 0),
-      liveEvents: categories.reduce((sum, category) => sum + category.events.filter((event) => event.isLive).length, 0),
-    } });
   } catch (error) {
-    console.error('[Live TV schedule]', error);
-    return Response.json({ success: true, schedule: { categories: [] }, warning: 'Schedule temporarily unavailable' });
+    console.error('[Live TV schedule parsing error]', error);
+    return Response.json({
+      success: true,
+      schedule: { categories: [] },
+      warning: 'Schedule parsing failed',
+    });
   }
 }

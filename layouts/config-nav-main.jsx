@@ -30,6 +30,11 @@ export const navData = [
     icon: <Iconify width={22} icon="solar:tv-bold-duotone" />,
   },
   {
+    title: 'Embed',
+    path: paths.embed,
+    icon: <Iconify width={22} icon="solar:code-square-bold-duotone" />,
+  },
+  {
     title: 'Library',
     path: paths.bookmarks,
     icon: <Iconify width={22} icon="solar:bookmark-square-minimalistic-bold-duotone" />,
@@ -68,6 +73,11 @@ export const navData = [
             title: 'Discord',
             path: paths.discord,
             icon: <Iconify width={20} icon="ic:round-discord" />,
+          },
+          {
+            title: 'Embed API',
+            path: paths.embed,
+            icon: <Iconify width={20} icon="solar:code-square-bold-duotone" />,
           },
         ],
       },

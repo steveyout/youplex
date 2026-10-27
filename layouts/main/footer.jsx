@@ -23,6 +23,7 @@ const LINKS = [
       { name: 'About us', href: paths.about },
       { name: 'Contact us', href: paths.contact },
       { name: 'FAQs', href: paths.faqs },
+      { name: 'Embed API', href: paths.embed },
     ],
   },
   {
@@ -58,17 +59,17 @@ export function Footer({ layoutQuery, sx }) {
 
   return (
     <Box
-    component="footer"
-    sx={{
-      position: 'relative',
-      bgcolor: varAlpha(theme.vars.palette.background.defaultChannel, 0.35),
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      borderTop: '1px solid',
-      borderColor: varAlpha(theme.vars.palette.grey['500Channel'], 0.18),
-      ...sx,
-    }}
-  >
+      component="footer"
+      sx={{
+        position: 'relative',
+        bgcolor: varAlpha(theme.vars.palette.background.defaultChannel, 0.35),
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderTop: '1px solid',
+        borderColor: varAlpha(theme.vars.palette.grey['500Channel'], 0.18),
+        ...sx,
+      }}
+    >
       <Box
         sx={{
           height: 1,

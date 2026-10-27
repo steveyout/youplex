@@ -6,6 +6,7 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 
 import { AdBanner } from './ad-banner';
+import { isSitewideAdsEnabled } from './ad-config';
 
 // ----------------------------------------------------------------------
 
@@ -16,6 +17,11 @@ import { AdBanner } from './ad-banner';
 export function FloatingSideAds() {
   const [leftClosed, setLeftClosed] = useState(false);
   const [rightClosed, setRightClosed] = useState(false);
+
+  // Return null if sitewide ads are disabled via .env
+  if (!isSitewideAdsEnabled()) {
+    return null;
+  }
 
   return (
     <>

@@ -110,8 +110,10 @@ export function SyncAuthProvider({ children }) {
           console.warn('Sync session expired. Disconnecting.');
           saveAccount(null);
           toast.info('Sync session expired. Please sign in again.');
+        } else if (err?.isNetworkError || err?.message?.includes('Failed to fetch') || err?.name === 'TypeError') {
+          console.warn('Sync server offline or unreachable:', err?.message || 'Network error');
         } else {
-          console.warn('Sync server check warning:', err);
+          console.warn('Sync server check warning:', err?.message || err);
         }
         if (isMounted) setSyncStatus('error');
       }

@@ -9,6 +9,7 @@ import Typography from '@mui/material/Typography';
 import { alpha, useTheme } from '@mui/material/styles';
 
 import { Iconify } from '@/components/iconify';
+import { isSitewideAdsEnabled } from './ad-config';
 
 // ----------------------------------------------------------------------
 
@@ -46,6 +47,11 @@ export function AdBanner({
   const [dismissed, setDismissed] = useState(false);
   const iframeRef = useRef(null);
 
+  // Return null if sitewide ads are disabled via .env
+  if (!isSitewideAdsEnabled()) {
+    return null;
+  }
+
   const config = AD_CONFIGS[format] || AD_CONFIGS.skyscraper;
   const width = config.width;
   const height = config.height;
@@ -69,37 +75,33 @@ export function AdBanner({
       width: 100%;
       height: 100%;
     }
+    #ad-container {
+      width: ${width}px;
+      height: ${height}px;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
-  <script type="text/javascript">
-    atOptions = {
-      'key' : '${config.key}',
-      'format' : 'iframe',
-      'height' : ${height},
-      'width' : ${width},
-      'params' : {}
-    };
-  </script>
-  <script type="text/javascript" src="${config.src}"></script>
+  <div id="ad-container">
+    <script type="text/javascript">
+      atOptions = {
+        'key' : '${config.key}',
+        'format' : 'iframe',
+        'height' : ${height},
+        'width' : ${width},
+        'params' : {}
+      };
+    </script>
+    <script type="text/javascript" src="${config.src}"></script>
+  </div>
 </body>
 </html>`,
-    [config.key, config.src, height, width]
+    [config, width, height]
   );
-
-  useEffect(() => {
-    if (dismissed || !iframeRef.current) return;
-    try {
-      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
-      if (doc) {
-        doc.open();
-        doc.write(srcDocHtml);
-        doc.close();
-      }
-    } catch (e) {
-      // ignore cross-domain or sandbox restrictions
-    }
-  }, [srcDocHtml, dismissed]);
 
   if (dismissed) return null;
 
@@ -109,42 +111,53 @@ export function AdBanner({
         display: 'inline-flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: alpha(theme.palette.common.black, 0.4),
-        border: `1px solid ${alpha('#ffffff', 0.1)}`,
-        borderRadius: 2,
         p: 1,
-        backdropFilter: 'blur(8px)',
+        borderRadius: 1.5,
+        border: '1px solid',
+        borderColor: alpha('#ffffff', 0.1),
+        bgcolor: alpha('#111318', 0.85),
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         position: 'relative',
-        width: width + 20,
-        minWidth: width + 20,
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)',
+        transition: 'opacity 0.25s ease, transform 0.25s ease',
         ...sx,
       }}
       {...other}
     >
-      {/* Top Banner Header: Label & Dismiss Button */}
+      {/* Top Header with Label & Close */}
       <Stack
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        sx={{ width: '100%', mb: 0.75, px: 0.5 }}
+        sx={{
+          width: '100%',
+          mb: 0.75,
+          px: 0.5,
+        }}
       >
-        <Typography
-          variant="caption"
-          sx={{
-            fontSize: 9.5,
-            fontWeight: 800,
-            letterSpacing: 0.8,
-            textTransform: 'uppercase',
-            color: alpha('#ffffff', 0.5),
-            lineHeight: 1,
-          }}
-        >
-          {label}
-        </Typography>
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Box
+            sx={{
+              width: 5,
+              height: 5,
+              borderRadius: '50%',
+              bgcolor: 'primary.main',
+              opacity: 0.8,
+            }}
+          />
+          <Typography
+            variant="caption"
+            sx={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: 0.8,
+              textTransform: 'uppercase',
+              color: alpha('#ffffff', 0.55),
+            }}
+          >
+            {label}
+          </Typography>
+        </Stack>
 
         {closable && (
           <IconButton

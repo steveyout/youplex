@@ -3,8 +3,9 @@ import { isContentDmcaBlocked } from './lib/dmca';
 
 export function proxy(request) {
   const url = new URL(request.url);
-  const currentId = url.searchParams.get('id');
   const pathname = url.pathname;
+  const embedMatch = pathname.match(/^\/embed\/(?:movie|tv)\/([^/?#]+)/i);
+  const currentId = url.searchParams.get('id') || (embedMatch ? embedMatch[1] : null);
 
   const blocked = isContentDmcaBlocked({
     id: currentId,
@@ -26,10 +27,12 @@ export function proxy(request) {
 export const middleware = proxy;
 export default proxy;
 
-// Match all /watch routes and backend media API routes to enforce DMCA blocks dynamically
+// Match all /watch routes, embed player routes, and backend media API routes to enforce DMCA blocks dynamically
 export const config = {
   matcher: [
     '/watch/:path*',
+    '/embed/movie/:path*',
+    '/embed/tv/:path*',
     '/api/scrape',
     '/api/subtitles',
   ],

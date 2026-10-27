@@ -488,8 +488,14 @@ export async function getCredits(type, id) {
 // to avoid Cloudflare datacenter/server-side bot protection triggers in production.
 // ----------------------------------------------------------------------
 
-const INTRO_DB_BASE_URL = 'https://api.theintrodb.org/v3/media';
-const INTRO_DB_SUBMIT_URL = 'https://api.theintrodb.org/v3/submit';
+const TIDB_BASE_URL = (
+  process.env.NEXT_PUBLIC_TIDB_BASE_URL ||
+  process.env.TIDB_BASE_URL ||
+  'https://api.theintrodb.org/v4'
+).replace(/\/+$/, '');
+
+const INTRO_DB_BASE_URL = `${TIDB_BASE_URL}/media`;
+const INTRO_DB_SUBMIT_URL = `${TIDB_BASE_URL}/submit`;
 
 const INTRO_DB_SEGMENT_METADATA = {
   intro: {
@@ -659,10 +665,17 @@ export async function getIntroTimestamps({ tmdbId, imdbId, tvdbId, type = 'movie
       url.searchParams.set('duration_ms', String(Math.round(Number(durationMs))));
     }
 
-    // Direct client-side fetch to IntroDB API (bypasses server bot protection in production)
+    const tidbApiKey = (
+      process.env.NEXT_PUBLIC_TIDB_API_KEY ||
+      process.env.TIDB_API_KEY ||
+      ''
+    ).trim();
+
+    // Direct client-side fetch to TheIntroDB API v4 (bypasses server bot protection in production)
     const res = await fetch(url.toString(), {
       headers: {
         Accept: 'application/json',
+        ...(tidbApiKey ? { Authorization: `Bearer ${tidbApiKey}` } : {}),
       },
     });
 
@@ -736,12 +749,19 @@ export async function submitIntroTimestamp(payload) {
       ...(type === 'tv' || season ? { season: Number(season || 1), episode: Number(episode || 1) } : {}),
     };
 
-    // Direct client-side POST to IntroDB (bypasses server bot protection in production)
+    const tidbApiKey = (
+      process.env.NEXT_PUBLIC_TIDB_API_KEY ||
+      process.env.TIDB_API_KEY ||
+      ''
+    ).trim();
+
+    // Direct client-side POST to TheIntroDB API v4 (bypasses server bot protection in production)
     const res = await fetch(INTRO_DB_SUBMIT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        ...(tidbApiKey ? { Authorization: `Bearer ${tidbApiKey}` } : {}),
       },
       body: JSON.stringify(body),
     });

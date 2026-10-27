@@ -8,6 +8,11 @@ export const paths = {
   about: '/about-us',
   contact: '/contact-us',
   faqs: '/faqs',
+  embed: '/embed',
+  embedPlayer: {
+    movie: (id) => `/embed/movie/${id}`,
+    tv: (id, season = 1, episode = 1) => `/embed/tv/${id}/${season}/${episode}`,
+  },
   page403: '/error/403',
   page404: '/error/404',
   page500: '/error/500',

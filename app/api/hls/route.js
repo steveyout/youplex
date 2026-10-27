@@ -16,6 +16,7 @@
 
 import { gunzipSync, inflateSync } from 'zlib';
 import { DEFAULT_UA } from '@/lib/scrapers/utils';
+import { livetvDispatcher } from '@/lib/livetv/fetch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -209,8 +210,8 @@ function unwrapStegoTs(bytes) {
       const px = unwrapPixels(bytes);
       if (px) return px;
     } catch {
-    // ignore
-  }
+      // ignore
+    }
     return null;
   }
 
@@ -318,6 +319,7 @@ async function fetchUpstream(url, options, timeoutMs = 20000) {
     try {
       lastResponse = await fetch(url, {
         ...options,
+        dispatcher: livetvDispatcher,
         signal: controller.signal,
       });
     } catch (error) {
@@ -338,7 +340,7 @@ async function fetchUpstream(url, options, timeoutMs = 20000) {
 }
 
 /**
- * Best-effort: resolve a VidSrc / VSEmbed token URL to the signed CDN manifest URL.
+ * Best-effort: resolve a VidSrc / VSEmbed or DaddyLive token URL to the signed CDN manifest URL.
  * @param {string} target
  * @param {string} [tokenUrl]
  * @param {string} [referer]
@@ -357,6 +359,7 @@ async function resolveTokenTarget(target, tokenUrl, referer, origin, ua) {
 
   try {
     const res = await fetch(tokenUrl, {
+      dispatcher: livetvDispatcher,
       headers: {
         'User-Agent': ua || DEFAULT_UA,
         ...(referer ? { Referer: referer } : {}),
@@ -370,12 +373,28 @@ async function resolveTokenTarget(target, tokenUrl, referer, origin, ua) {
     const text = await res.text();
 
     let candidate = null;
+    let tokenTtl = 60000;
     try {
       const json = JSON.parse(text);
-      candidate =
-        (json && typeof json === 'object' && typeof json.url === 'string' && json.url.startsWith('http') && json.url) ||
-        (json && typeof json === 'object' && typeof json.playback_url === 'string' && json.playback_url.startsWith('http') && json.playback_url) ||
-        (json && typeof json === 'object' && typeof json.stream === 'string' && json.stream.startsWith('http') && json.stream);
+      if (json && typeof json === 'object') {
+        if (typeof json.token === 'string') {
+          // DaddyLive edge token format: { token: "...", ttl: 120 }
+          const tokenVal = encodeURIComponent(json.token);
+          if (target.includes('t=')) {
+            candidate = target.replace(/([?&]t=)[^&]+/, `$1${tokenVal}`);
+          } else {
+            candidate = `${target}${target.includes('?') ? '&' : '?'}t=${tokenVal}`;
+          }
+          if (json.ttl) {
+            tokenTtl = Math.max(15, Number(json.ttl) - 10) * 1000;
+          }
+        } else {
+          candidate =
+            (typeof json.url === 'string' && json.url.startsWith('http') && json.url) ||
+            (typeof json.playback_url === 'string' && json.playback_url.startsWith('http') && json.playback_url) ||
+            (typeof json.stream === 'string' && json.stream.startsWith('http') && json.stream);
+        }
+      }
     } catch {
       // not json
     }
@@ -389,7 +408,7 @@ async function resolveTokenTarget(target, tokenUrl, referer, origin, ua) {
     }
 
     const resolved = candidate || target;
-    tokenCache.set(cacheKey, { url: resolved, expiresAt: Date.now() + 60000 });
+    tokenCache.set(cacheKey, { url: resolved, expiresAt: Date.now() + tokenTtl });
     return resolved;
   } catch {
     return target;
