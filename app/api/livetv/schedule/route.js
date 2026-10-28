@@ -74,8 +74,16 @@ export async function GET() {
         signal: AbortSignal.timeout(12000),
       });
       if (res.ok) {
-        scheduleData = await res.json();
-        break;
+        const text = await res.text();
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed === 'object') {
+            scheduleData = parsed;
+            break;
+          }
+        } catch {
+          // Response was not JSON (e.g. HTML challenge/error page), try next mirror
+        }
       }
     } catch (e) {
       lastError = e;

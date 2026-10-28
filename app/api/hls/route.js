@@ -16,7 +16,7 @@
 
 import { gunzipSync, inflateSync } from 'zlib';
 import { DEFAULT_UA } from '@/lib/scrapers/utils';
-import { livetvDispatcher } from '@/lib/livetv/fetch';
+import { fetchWithDns } from '@/lib/livetv/fetch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -317,9 +317,8 @@ async function fetchUpstream(url, options, timeoutMs = 20000) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      lastResponse = await fetch(url, {
+      lastResponse = await fetchWithDns(url, {
         ...options,
-        dispatcher: livetvDispatcher,
         signal: controller.signal,
       });
     } catch (error) {
@@ -358,8 +357,7 @@ async function resolveTokenTarget(target, tokenUrl, referer, origin, ua) {
   }
 
   try {
-    const res = await fetch(tokenUrl, {
-      dispatcher: livetvDispatcher,
+    const res = await fetchWithDns(tokenUrl, {
       headers: {
         'User-Agent': ua || DEFAULT_UA,
         ...(referer ? { Referer: referer } : {}),

@@ -62,10 +62,31 @@ function extractorAlias(id) {
 }
 
 /**
- * Map direct stream objects into Vidstack source format.
- * If alreadyProxied is true, the URL is used directly.
+ * Unwrap external proxy URL wrappers (e.g. api.youplex.site/proxy, proxy.youplex.site)
+ * and extract the true target URL and its embedded headers.
  */
 function unwrapProxyUrl(rawUrl, existingHeaders = {}) {
+  if (!rawUrl || typeof rawUrl !== 'string') return { url: '', headers: existingHeaders };
+  if (
+    rawUrl.includes('api.youplex.site/proxy') ||
+    rawUrl.includes('proxy.youplex.site') ||
+    (rawUrl.startsWith('http') && (rawUrl.includes('/m3u8-proxy?') || rawUrl.includes('/proxy?')))
+  ) {
+    try {
+      const parsed = new URL(rawUrl);
+      const inner =
+        parsed.searchParams.get('url') ||
+        parsed.searchParams.get('destination') ||
+        parsed.searchParams.get('src');
+      if (inner) {
+        const headers = { ...existingHeaders };
+        if (parsed.searchParams.get('referer')) headers.referer = parsed.searchParams.get('referer');
+        if (parsed.searchParams.get('origin')) headers.origin = parsed.searchParams.get('origin');
+        if (parsed.searchParams.get('ua')) headers['user-agent'] = parsed.searchParams.get('ua');
+        return { url: inner, headers };
+      }
+    } catch {}
+  }
   return { url: rawUrl, headers: existingHeaders };
 }
 
@@ -73,18 +94,13 @@ function isUrlProxied(url) {
   if (!url || typeof url !== 'string') return false;
   return (
     url.startsWith('/api/hls') ||
-    url.startsWith('/api/subtitles') ||
-    url.includes('/m3u8-proxy?url=') ||
-    url.includes('/?destination=') ||
-    url.includes('api.youplex.site/proxy') ||
-    url.includes('proxy.youplex.site') ||
-    url.includes('simple-proxy')
+    url.startsWith('/api/subtitles')
   );
 }
 
 function toProxyUrl(source) {
   if (!source?.url) return '';
-  const rawUrl = source.url;
+  let rawUrl = source.url;
 
   // Subtitles always need CORS headers and proper VTT formatting
   if (
@@ -94,27 +110,41 @@ function toProxyUrl(source) {
     rawUrl.includes('.vtt?') ||
     rawUrl.includes('.srt?')
   ) {
-    if (rawUrl.startsWith('/api/subtitles') || isUrlProxied(rawUrl)) return rawUrl;
+    if (rawUrl.startsWith('/api/subtitles')) return rawUrl;
     return `/api/subtitles?url=${encodeURIComponent(rawUrl)}`;
   }
 
-  // If already proxied by m3u8 proxy / worker or marked alreadyProxied from scraper, use directly!
-  if (source.alreadyProxied || isUrlProxied(rawUrl)) {
+  // If already proxied by local /api/hls, return directly
+  if (rawUrl.startsWith('/api/hls')) {
     return rawUrl;
   }
 
-  // If the stream requires custom headers and is not already proxied, route through /api/hls
+  // Unwrap any broken / external proxy wrapping (e.g. api.youplex.site)
   const mergedHeaders = {
     ...(source.headers || {}),
     ...(source.preferredHeaders || {}),
   };
-  const hasHeaders = Object.keys(mergedHeaders).length > 0;
+  const { url: unwrappedUrl, headers: extractedHeaders } = unwrapProxyUrl(rawUrl, mergedHeaders);
+  rawUrl = unwrappedUrl;
 
-  if (hasHeaders) {
+  if (rawUrl.startsWith('/api/hls')) {
+    return rawUrl;
+  }
+
+  const isHls =
+    source.type === 'hls' ||
+    Boolean(source.isM3U8) ||
+    rawUrl.includes('.m3u8') ||
+    source.type === 'application/x-mpegurl';
+
+  const hasHeaders = Object.keys(extractedHeaders).length > 0;
+
+  // Always route HLS streams or streams requiring headers through local /api/hls
+  if (isHls || hasHeaders) {
     const params = new URLSearchParams({ url: rawUrl });
-    const referer = mergedHeaders.referer || mergedHeaders.Referer;
-    const origin = mergedHeaders.origin || mergedHeaders.Origin;
-    const ua = mergedHeaders['user-agent'] || mergedHeaders['User-Agent'];
+    const referer = extractedHeaders.referer || extractedHeaders.Referer;
+    const origin = extractedHeaders.origin || extractedHeaders.Origin;
+    const ua = extractedHeaders['user-agent'] || extractedHeaders['User-Agent'];
 
     if (referer) params.set('referer', referer);
     if (origin) params.set('origin', origin);
@@ -132,13 +162,12 @@ function toVidstackSrcs(sources) {
   return list
     .filter((s) => Boolean(s?.url))
     .map((s) => {
-      const srcUrl = isUrlProxied(s.url) ? s.url : toProxyUrl(s);
+      const srcUrl = toProxyUrl(s);
 
       if (
         s.type === 'hls' ||
         Boolean(s.isM3U8) ||
         srcUrl.includes('.m3u8') ||
-        srcUrl.includes('m3u8-proxy') ||
         srcUrl.includes('/api/hls') ||
         s.type === 'application/x-mpegurl'
       ) {

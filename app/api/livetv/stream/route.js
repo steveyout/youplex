@@ -93,7 +93,7 @@ export async function GET(request) {
       const channelSlug = channelMatch[1];
       tokenUrl = `${edge}/api/playlist-token?slug=${encodeURIComponent(channelSlug)}`;
 
-      // Fetch the initial token
+      // Fetch the initial token safely
       let token = '';
       try {
         const tokenRes = await fetchWithDns(tokenUrl, {
@@ -105,9 +105,14 @@ export async function GET(request) {
           signal: AbortSignal.timeout(8000),
         });
         if (tokenRes.ok) {
-          const tokenJson = await tokenRes.json();
-          if (tokenJson && tokenJson.token) {
-            token = tokenJson.token;
+          const text = await tokenRes.text();
+          try {
+            const tokenJson = JSON.parse(text);
+            if (tokenJson && tokenJson.token) {
+              token = tokenJson.token;
+            }
+          } catch {
+            // Not valid JSON
           }
         }
       } catch (e) {

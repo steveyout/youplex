@@ -112,13 +112,23 @@ export default function LiveTvView() {
 
   useEffect(() => {
     Promise.allSettled([
-      fetch('/api/livetv/channels').then((response) => {
+      fetch('/api/livetv/channels').then(async (response) => {
         if (!response.ok) throw new Error('Channels request failed');
-        return response.json();
+        const text = await response.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error('Invalid channels JSON');
+        }
       }),
-      fetch('/api/livetv/schedule').then((response) => {
+      fetch('/api/livetv/schedule').then(async (response) => {
         if (!response.ok) throw new Error('Schedule request failed');
-        return response.json();
+        const text = await response.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error('Invalid schedule JSON');
+        }
       }),
     ])
       .then(([channelsResult, scheduleResult]) => {
@@ -151,13 +161,22 @@ export default function LiveTvView() {
     setSource(null);
     setStreamLoading(true);
     fetch(`/api/livetv/stream?channel=${encodeURIComponent(selected.id)}`)
-      .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+      .then(async (response) => {
+        const text = await response.text();
+        let data = null;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          return { ok: false, data: { error: 'Live stream server returned an invalid response' } };
+        }
+        return { ok: response.ok, data };
+      })
       .then(({ ok, data }) => {
-        if (!ok || !data.source?.url) throw new Error(data.error || 'Stream unavailable');
+        if (!ok || !data?.source?.url) throw new Error(data?.error || 'Stream unavailable');
         if (!active) return;
         setSource(data.source);
       })
-      .catch((error) => active && setStreamError(error.message))
+      .catch((error) => active && setStreamError(error.message || 'Stream connection failed'))
       .finally(() => active && setStreamLoading(false));
     return () => {
       active = false;
