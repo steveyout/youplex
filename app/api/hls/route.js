@@ -631,12 +631,19 @@ export async function GET(req) {
 
   // ── Binary: decode steganographic TS segments or stream MP4/HLS segments ──
   const upstreamContentType = upstream.headers.get('content-type') || '';
+  const isKnownVideo =
+    upstreamContentType.startsWith('video/') ||
+    upstreamContentType.includes('mp4') ||
+    upstreamContentType.includes('webm');
+
   const isImageOrStego =
-    upstreamContentType.startsWith('image/') ||
-    upstreamContentType.includes('octet-stream') ||
-    !upstreamContentType ||
-    /\.(image|png|webp|bin)($|\?)/i.test(fetchTarget) ||
-    /tiktokcdn/i.test(fetchTarget);
+    !isKnownVideo &&
+    !range &&
+    (upstreamContentType.startsWith('image/') ||
+      upstreamContentType.includes('octet-stream') ||
+      !upstreamContentType ||
+      /\.(image|png|webp|bin)($|\?)/i.test(fetchTarget) ||
+      /tiktokcdn/i.test(fetchTarget));
 
   if (isImageOrStego) {
     try {
@@ -659,6 +666,7 @@ export async function GET(req) {
       const outHeaders = new Headers(CORS_HEADERS);
       if (upstreamContentType) outHeaders.set('Content-Type', upstreamContentType);
       outHeaders.set('Content-Length', String(bytes.byteLength));
+      outHeaders.set('Accept-Ranges', 'bytes');
       return new Response(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), {
         status: upstream.status,
         headers: outHeaders,

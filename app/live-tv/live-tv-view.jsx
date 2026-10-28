@@ -549,6 +549,30 @@ export default function LiveTvView() {
                 ) : streamError ? (
                   <LiveTvError message={streamError} onRetry={refreshSelectedStream} />
                 ) : source ? (
+                  source.type === 'iframe' || source.isIframe || source.iframeUrl ? (
+                    <Box
+                      sx={{
+                        width: '100%',
+                        height: { xs: 'auto', sm: '100%' },
+                        aspectRatio: '16/9',
+                        maxWidth: { sm: 'calc((100vh - 140px) * 16 / 9)' },
+                        bgcolor: '#000',
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <iframe
+                        key={`livetv-${selected.id}-${source.iframeUrl || source.url}`}
+                        src={source.iframeUrl || source.url}
+                        width="100%"
+                        height="100%"
+                        allowFullScreen
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        referrerPolicy="no-referrer"
+                        style={{ width: '100%', height: '100%', border: 0, bgcolor: '#000' }}
+                      />
+                    </Box>
+                  ) : (
                   <Player
                     id={selected.id}
                     tmdbId={selected.id}
@@ -576,6 +600,7 @@ export default function LiveTvView() {
                       boxShadow: 'none',
                     }}
                   />
+                  )
                 ) : null}
               </Box>
 

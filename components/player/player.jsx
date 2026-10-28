@@ -167,9 +167,9 @@ function toVidstackSrcs(sources) {
       if (
         s.type === 'hls' ||
         Boolean(s.isM3U8) ||
-        srcUrl.includes('.m3u8') ||
-        srcUrl.includes('/api/hls') ||
-        s.type === 'application/x-mpegurl'
+        s.type === 'application/x-mpegurl' ||
+        s.url?.includes('.m3u8') ||
+        (srcUrl.includes('.m3u8') && !srcUrl.includes('.mp4'))
       ) {
         return { src: srcUrl, type: 'application/x-mpegurl' };
       }
@@ -832,6 +832,17 @@ export default function Player({
    */
   const handlePlaybackFailure = useCallback(
     (errorDetail, source = 'media') => {
+      // Ignore autoplay policy rejections (e.g. browser requiring direct user click)
+      const errorMsg = String(errorDetail?.message || errorDetail?.detail?.message || '').toLowerCase();
+      const errorName = String(errorDetail?.name || errorDetail?.detail?.name || '');
+      if (
+        errorName === 'NotAllowedError' ||
+        errorMsg.includes('notallowederror') ||
+        errorMsg.includes('interact')
+      ) {
+        return;
+      }
+
       // Ignore subtitle track errors
       if (
         errorDetail?.target?.nodeName === 'TRACK' ||

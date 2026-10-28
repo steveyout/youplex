@@ -2,12 +2,6 @@
 
 export const providers = [
   {
-    id: 'cinemaos',
-    name: 'Server 1 (CinemaOS)',
-    baseUrl: 'https://cinemaos.tech',
-    enabled: true,
-  },
-  {
     id: 'vidking',
     name: 'Server 2 (VidKing Premium)',
     baseUrl: 'https://www.vidking.net',
@@ -67,9 +61,15 @@ export const providers = [
     baseUrl: 'https://vidcore.org',
     enabled: true,
   },
+  {
+    id: 'cinemaos',
+    name: 'Server 12 (CinemaOS)',
+    baseUrl: 'https://cinemaos.tech',
+    enabled: true,
+  },
 ];
 
-export const DEFAULT_PROVIDER_ID = 'cinemaos';
+export const DEFAULT_PROVIDER_ID = 'vidlink';
 
 /**
  * Helper to build the URL based on media type

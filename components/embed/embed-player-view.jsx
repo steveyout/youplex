@@ -640,10 +640,20 @@ export function EmbedPlayerView({
         onNextEpisode={autoNextEpisode ? handleNextEpisode : null}
         allowEmbedMode={true}
         onBack={null} // Embed player has no back button
+        height="100%"
+        aspectRatio="unset"
+        containerSx={{
+          width: '100%',
+          height: '100%',
+          maxWidth: '100%',
+          maxHeight: '100%',
+          borderRadius: 0,
+          border: 'none',
+          boxShadow: 'none',
+        }}
       />
     </Box>
   );
 }
 
 export default EmbedPlayerView;
-

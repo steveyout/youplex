@@ -20,10 +20,10 @@ export async function GET(request) {
     return Response.json({ success: false, error: 'Missing channel parameter' }, { status: 400 });
   }
 
+  const defaultDembedUrl = `https://dembed.st/premiumtv/daddy.php?id=${encodeURIComponent(channel)}`;
   const baseUrls = getBaseUrls();
   let streamHtml = '';
   let successfulBase = '';
-  let lastError = null;
 
   // 1. Fetch channel stream page across configured mirrors
   for (const base of baseUrls) {
@@ -34,119 +34,54 @@ export async function GET(request) {
           Referer: `${base}/`,
           Accept: 'text/html,*/*',
         },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(8000),
       });
       if (res.ok) {
-        streamHtml = await res.text();
-        successfulBase = base;
-        break;
-      }
-    } catch (e) {
-      lastError = e;
-    }
-  }
-
-  if (!streamHtml) {
-    return Response.json(
-      { success: false, error: lastError?.message || 'Channel stream page unavailable from any mirror' },
-      { status: 502 }
-    );
-  }
-
-  try {
-    // 2. Extract embedded player iframe
-    const iframeValue = streamHtml.match(/<iframe[^>]+src=['"]([^'"]+)['"]/i)?.[1];
-    const iframe = iframeValue
-      ? iframeValue.startsWith('http')
-        ? iframeValue
-        : new URL(iframeValue, successfulBase).href
-      : null;
-
-    let iframeHtml = '';
-    if (iframe) {
-      const iframeRes = await fetchWithDns(iframe, {
-        headers: {
-          Referer: `${successfulBase}/`,
-          Accept: 'text/html,*/*',
-        },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (iframeRes.ok) {
-        iframeHtml = await iframeRes.text();
-      }
-    }
-
-    // 3. Check for new edge token architecture (dembed.st / edge.*.sbs)
-    const content = iframeHtml || streamHtml;
-    const edgeMatch = content.match(/const\s+EDGE\s*=\s*["']([^"']+)["']/i);
-    const channelMatch = content.match(/const\s+CHANNEL\s*=\s*["']([^"']+)["']/i);
-    const srcMatch = content.match(/const\s+SRC\s*=\s*["']([^"']+)["']/i);
-
-    let playlistUrl = null;
-    let tokenUrl = null;
-    const iframeUrl = iframe || `${successfulBase}/`;
-    const origin = iframe ? new URL(iframe).origin : 'https://dembed.st';
-    const referer = iframe || `${origin}/`;
-
-    if (edgeMatch && channelMatch) {
-      const edge = edgeMatch[1].replace(/\/+$/, '');
-      const channelSlug = channelMatch[1];
-      tokenUrl = `${edge}/api/playlist-token?slug=${encodeURIComponent(channelSlug)}`;
-
-      // Fetch the initial token safely
-      let token = '';
-      try {
-        const tokenRes = await fetchWithDns(tokenUrl, {
-          headers: {
-            Referer: iframeUrl,
-            Origin: origin,
-            Accept: 'application/json, text/plain, */*',
-          },
-          signal: AbortSignal.timeout(8000),
-        });
-        if (tokenRes.ok) {
-          const text = await tokenRes.text();
-          try {
-            const tokenJson = JSON.parse(text);
-            if (tokenJson && tokenJson.token) {
-              token = tokenJson.token;
-            }
-          } catch {
-            // Not valid JSON
-          }
+        const text = await res.text();
+        if (text && text.length > 500) {
+          streamHtml = text;
+          successfulBase = base;
+          break;
         }
-      } catch (e) {
-        console.warn('[Live TV] Token pre-fetch failed, proxy will resolve on demand:', e.message);
       }
+    } catch {}
+  }
 
-      const rawSrc = srcMatch ? srcMatch[1] : `${edge}/${channelSlug}/index.m3u8`;
-      playlistUrl = token ? `${rawSrc}?t=${encodeURIComponent(token)}` : rawSrc;
-    } else {
-      // Legacy fallback
-      const legacyPlaylist = findLegacyPlaylist(iframeHtml) || findLegacyPlaylist(streamHtml);
-      if (legacyPlaylist) {
-        playlistUrl = new URL(legacyPlaylist, iframe || successfulBase).href;
-      }
+  // 2. Extract embedded player iframe if available
+  const iframeValue = streamHtml ? streamHtml.match(/<iframe[^>]+src=['"]([^'"]+)['"]/i)?.[1] : null;
+  const iframe = iframeValue
+    ? iframeValue.startsWith('http')
+      ? iframeValue
+      : new URL(iframeValue, successfulBase || 'https://thedaddy.pk').href
+    : defaultDembedUrl;
+
+  const targetIframeUrl = iframe || defaultDembedUrl;
+
+  // 3. Check if an explicit legacy HLS playlist (.m3u8) is directly available
+  let directPlaylistUrl = null;
+  if (streamHtml) {
+    const legacyPlaylist = findLegacyPlaylist(streamHtml);
+    if (legacyPlaylist) {
+      directPlaylistUrl = legacyPlaylist;
     }
+  }
 
-    if (!playlistUrl) {
-      throw new Error('No HLS playlist found for this channel');
-    }
-
+  // If a direct, standard m3u8 playlist is found (not stego dembed edge), route through proxy
+  if (directPlaylistUrl && !directPlaylistUrl.includes('.sbs') && !directPlaylistUrl.includes('dembed.st')) {
+    const origin = successfulBase || 'https://thedaddy.pk';
+    const referer = `${origin}/`;
     const q = new URLSearchParams({
-      url: playlistUrl,
+      url: directPlaylistUrl,
       origin,
       referer,
     });
-    if (tokenUrl) {
-      q.set('tokenUrl', tokenUrl);
-    }
     const proxyUrl = `/api/hls?${q.toString()}`;
 
     return Response.json({
       success: true,
       streamUrl: proxyUrl,
       channel,
+      isIframe: false,
       source: {
         url: proxyUrl,
         type: 'hls',
@@ -154,8 +89,21 @@ export async function GET(request) {
         origin,
       },
     });
-  } catch (error) {
-    console.error('[Live TV stream error]', error);
-    return Response.json({ success: false, error: error.message || 'Stream unavailable' }, { status: 502 });
   }
+
+  // 4. Default & primary DaddyLive path: deliver clean, direct iframe stream
+  // dembed.st contains custom JWPlayer + LiveLoader stego TS decoding that runs in browser
+  return Response.json({
+    success: true,
+    channel,
+    streamUrl: targetIframeUrl,
+    isIframe: true,
+    source: {
+      url: targetIframeUrl,
+      type: 'iframe',
+      iframeUrl: targetIframeUrl,
+      referer: successfulBase ? `${successfulBase}/` : 'https://thedaddy.pk/',
+      origin: 'https://dembed.st',
+    },
+  });
 }
