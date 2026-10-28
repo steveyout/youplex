@@ -263,8 +263,8 @@ export default function EmbedDocumentationPage() {
 
   const iframeSnippet =
     docMediaType === 'movie'
-      ? `<iframe\n  src="${baseUrl}/embed/movie/533535"\n  width="100%"\n  height="100%"\n  frameborder="0"\n  allowfullscreen\n  allow="autoplay; encrypted-media; fullscreen"\n></iframe>`
-      : `<iframe\n  src="${baseUrl}/embed/tv/1399/1/1"\n  width="100%"\n  height="100%"\n  frameborder="0"\n  allowfullscreen\n  allow="autoplay; encrypted-media; fullscreen"\n></iframe>`;
+      ? `<iframe\n  src="${baseUrl}/embed/movie/533535"\n  width="100%"\n  height="100%"\n  frameborder="0"\n  allowfullscreen\n  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"\n></iframe>`
+      : `<iframe\n  src="${baseUrl}/embed/tv/1399/1/1"\n  width="100%"\n  height="100%"\n  frameborder="0"\n  allowfullscreen\n  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"\n></iframe>`;
 
   const examplesList = useMemo(() => {
     if (docMediaType === 'movie') {
@@ -867,7 +867,7 @@ export default function EmbedDocumentationPage() {
               component="iframe"
               src={activeStreamUrl}
               allowFullScreen
-              allow="autoplay; encrypted-media; fullscreen"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
               sx={{
                 position: 'absolute',
                 top: 0,

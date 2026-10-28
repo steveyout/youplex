@@ -76,84 +76,70 @@ const extensionErrorSuppressor = `
   })();
 `;
 
+const enableDevToolsProtection = process.env.NEXT_PUBLIC_ENABLE_DEVTOOLS_PROTECTION === 'true';
+
 const antiInspectScript = `
   (function() {
-    var redirectTarget = 'about:blank';
-    var isDev = ${process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_ENABLE_DEVTOOLS_PROTECTION !== 'true'};
-    if (isDev) return;
+    try {
+      if (typeof window === 'undefined') return;
+      if (window.self !== window.top || window.location.pathname.indexOf('/embed') !== -1) return;
 
-    function triggerRedirect() {
-      try {
-        if (document && document.documentElement) {
-          document.documentElement.innerHTML = '';
+      var redirectTarget = 'about:blank';
+
+      function triggerRedirect() {
+        try {
+          if (document && document.documentElement) {
+            document.documentElement.innerHTML = '';
+          }
+        } catch (e) {}
+        try {
+          window.location.replace(redirectTarget);
+        } catch (e) {
+          window.location.href = redirectTarget;
         }
-      } catch (e) {}
-      try {
-        window.location.replace(redirectTarget);
-      } catch (e) {
-        window.location.href = redirectTarget;
       }
-    }
 
-    // Disable context menu to block right-click inspect element
-    window.addEventListener('contextmenu', function(e) {
-      e.preventDefault();
-      return false;
-    }, true);
+      // Disable context menu to block right-click inspect element
+      window.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+      }, true);
 
-    // Block keyboard inspection and scraping shortcuts
-    window.addEventListener('keydown', function(e) {
-      // F12
-      if (e.keyCode === 123 || e.key === 'F12') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        triggerRedirect();
-        return false;
-      }
-      // Ctrl+Shift+I / J / C or Cmd+Option+I / J / C
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (
-        e.key === 'I' || e.key === 'i' ||
-        e.key === 'J' || e.key === 'j' ||
-        e.key === 'C' || e.key === 'c' ||
-        e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67
-      )) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        triggerRedirect();
-        return false;
-      }
-      // Ctrl+U (View Source)
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'U' || e.key === 'u' || e.keyCode === 85)) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return false;
-      }
-      // Ctrl+S (Save Page)
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'S' || e.key === 's' || e.keyCode === 83)) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return false;
-      }
-    }, true);
-
-    // Suppress console outputs in production so secrets or API endpoints are never printed
-    if (typeof console !== 'undefined') {
-      var noop = function() {};
-      ['log', 'debug', 'info', 'warn', 'error', 'table', 'dir'].forEach(function(m) {
-        try { console[m] = noop; } catch(e) {}
-      });
-    }
-
-    // Early docked DevTools window threshold check
-    function checkWindowSize() {
-      var widthDiff = window.outerWidth - window.innerWidth;
-      var heightDiff = window.outerHeight - window.innerHeight;
-      if (widthDiff > 160 || heightDiff > 160) {
-        triggerRedirect();
-      }
-    }
-    window.addEventListener('resize', checkWindowSize, { passive: true });
-    setInterval(checkWindowSize, 500);
+      // Block keyboard inspection and scraping shortcuts
+      window.addEventListener('keydown', function(e) {
+        // F12
+        if (e.keyCode === 123 || e.key === 'F12') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          triggerRedirect();
+          return false;
+        }
+        // Ctrl+Shift+I / J / C or Cmd+Option+I / J / C
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (
+          e.key === 'I' || e.key === 'i' ||
+          e.key === 'J' || e.key === 'j' ||
+          e.key === 'C' || e.key === 'c' ||
+          e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67
+        )) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          triggerRedirect();
+          return false;
+        }
+        // Ctrl+U (View Source)
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'U' || e.key === 'u' || e.keyCode === 85)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return false;
+        }
+        // Ctrl+S (Save Page)
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'S' || e.key === 's' || e.keyCode === 83)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return false;
+        }
+      }, true);
+    } catch (err) {}
   })();
 `;
 
@@ -166,11 +152,13 @@ export default async function RootLayout({ children }) {
     <html lang={lang ?? 'en'} suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
         <script dangerouslySetInnerHTML={{ __html: extensionErrorSuppressor }} />
-        <script dangerouslySetInnerHTML={{ __html: antiInspectScript }} />
+        {enableDevToolsProtection && (
+          <script dangerouslySetInnerHTML={{ __html: antiInspectScript }} />
+        )}
       </head>
       <body className="halloween halloween-screen-left-top halloween-screen-right-bottom halloween-eyes halloween-witches halloween-spider-drop halloween-tombstones">
         {getInitColorSchemeScript}
-        <DevToolsGuard />
+        {enableDevToolsProtection && <DevToolsGuard />}
         <Halloween />
         <I18nProvider lang={CONFIG.isStaticExport ? undefined : lang}>
           <LocalizationProvider>

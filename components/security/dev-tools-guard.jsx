@@ -9,11 +9,16 @@ export function DevToolsGuard() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const isDev = process.env.NODE_ENV === 'development';
-    const forceEnable = process.env.NEXT_PUBLIC_ENABLE_DEVTOOLS_PROTECTION === 'true';
+    // DevTools protection is strictly opt-in and disabled by default
+    const isEnabled = process.env.NEXT_PUBLIC_ENABLE_DEVTOOLS_PROTECTION === 'true';
+    if (!isEnabled) {
+      return;
+    }
 
-    // Allow DevTools in development unless explicitly forced
-    if (isDev && !forceEnable) {
+    // Never activate inside an iframe or on embed player routes
+    const isIframe = window.self !== window.top;
+    const isEmbedRoute = window.location.pathname.startsWith('/embed');
+    if (isIframe || isEmbedRoute) {
       return;
     }
 
@@ -26,7 +31,7 @@ export function DevToolsGuard() {
         url: redirectUrl,
         timeOutUrl: redirectUrl,
         disableMenu: true,
-        clearLog: true,
+        clearLog: false,
         disableSelect: false,
         disableCopy: false,
         disableCut: false,
@@ -45,7 +50,6 @@ export function DevToolsGuard() {
         },
       });
     } catch (e) {
-      // Fallback redirection if initialization fails
       console.warn('Security guard initialized');
     }
   }, []);
