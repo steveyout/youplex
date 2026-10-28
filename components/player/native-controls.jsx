@@ -758,16 +758,23 @@ export default function NativeControls({
     ? `-${durationText(Math.max(0, maxSeek - active))}`
     : durationText(active);
 
+  // Controls are visible during user interaction OR whenever the video is paused
+  const controlsVisible = Boolean(uiVisible || store.paused);
+
   return (
     <Box
       onPointerMove={showUI}
+      onPointerDown={showUI}
+      onPointerEnter={showUI}
+      onTouchStart={showUI}
+      onClick={showUI}
       sx={{
         position: 'absolute',
         inset: 0,
         zIndex: 2,
         userSelect: 'none',
         overflow: 'hidden',
-        cursor: uiVisible ? 'default' : 'none',
+        cursor: controlsVisible ? 'default' : 'none',
       }}
     >
       {/* Clickable video area for Play/Pause and double-tap seeking */}
@@ -793,7 +800,7 @@ export default function NativeControls({
           height: 120,
           pointerEvents: 'none',
           background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0) 100%)',
-          opacity: uiVisible ? 1 : 0,
+          opacity: controlsVisible ? 1 : 0,
           transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           zIndex: 2,
         }}
@@ -809,7 +816,7 @@ export default function NativeControls({
           height: 160,
           pointerEvents: 'none',
           background: 'linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.65) 60%, rgba(0,0,0,0) 100%)',
-          opacity: uiVisible ? 1 : 0,
+          opacity: controlsVisible ? 1 : 0,
           transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           zIndex: 2,
         }}
@@ -828,12 +835,12 @@ export default function NativeControls({
           right: 0,
           p: { xs: 1.25, sm: 2 },
           zIndex: 3,
-          opacity: uiVisible ? 1 : 0,
-          transform: uiVisible ? 'translateY(0)' : 'translateY(-10px)',
+          opacity: controlsVisible ? 1 : 0,
+          transform: controlsVisible ? 'translateY(0)' : 'translateY(-10px)',
           transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           pointerEvents: 'none',
           '& > *': {
-            pointerEvents: uiVisible ? 'auto' : 'none',
+            pointerEvents: controlsVisible ? 'auto' : 'none',
           },
         }}
       >
@@ -1348,8 +1355,8 @@ export default function NativeControls({
               zIndex: 3,
               pointerEvents: 'none',
               display: { xs: 'none', sm: 'flex' },
-              opacity: uiVisible ? 1 : 0,
-              transform: uiVisible ? 'scale(1)' : 'scale(0.9)',
+              opacity: controlsVisible ? 1 : 0,
+              transform: controlsVisible ? 'scale(1)' : 'scale(0.9)',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
@@ -1479,6 +1486,8 @@ export default function NativeControls({
         spacing={1}
         onPointerEnter={showUI}
         onPointerMove={showUI}
+        onPointerDown={showUI}
+        onTouchStart={showUI}
         sx={{
           position: 'absolute',
           bottom: 0,
@@ -1488,10 +1497,10 @@ export default function NativeControls({
           pb: { xs: 1.25, sm: 2 },
           pt: { xs: 1.5, sm: 3 },
           zIndex: 10,
-          opacity: uiVisible ? 1 : 0,
-          transform: uiVisible ? 'translateY(0)' : 'translateY(10px)',
+          opacity: controlsVisible ? 1 : 0,
+          transform: controlsVisible ? 'translateY(0)' : 'translateY(10px)',
           transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          pointerEvents: uiVisible ? 'auto' : 'none',
+          pointerEvents: controlsVisible ? 'auto' : 'none',
         }}
       >
         {/* ================= SEEKBAR ROW ================= */}

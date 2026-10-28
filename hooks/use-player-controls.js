@@ -54,5 +54,9 @@ export function usePlayerControls(paused, isMenuOpen = false) {
     }
   }, [paused, isMenuOpen, show]);
 
-  return { visible, show, isTouch: isTouchRef.current };
+  // Controls are strictly guaranteed visible whenever paused, when a menu/drawer is open,
+  // or when active interaction is ongoing
+  const effectiveVisible = Boolean(visible || paused || isMenuOpen);
+
+  return { visible: effectiveVisible, show, isTouch: isTouchRef.current };
 }

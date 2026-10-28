@@ -895,6 +895,13 @@ export default function Player({
           // MEDIA_ERR_ABORTED - browser aborted fetch because of source switch/remount
           return;
         }
+
+        // Chromium and Firefox HTMLMediaElement does not natively support HLS (.m3u8),
+        // firing MEDIA_ERR_SRC_NOT_SUPPORTED (code 4) before Hls.js attaches MediaSource.
+        // Never treat code 4 as fatal on HLS streams so Hls.js can load normally!
+        if (code === 4 && (activeNativeSrc?.includes('.m3u8') || activeNativeSrc?.includes('/api/hls'))) {
+          return;
+        }
       }
 
       const rawStatus =
@@ -1533,7 +1540,7 @@ export default function Player({
         )}
 
         {/* Global Loading overlay (fade out when ready) */}
-        {isLoading && (
+        {isLoading && (!nativeReady || sourcesLoading || isAutoSwitching) && (
           <Box
             sx={{
               position: 'absolute',
