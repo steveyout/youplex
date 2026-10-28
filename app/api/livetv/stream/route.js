@@ -20,10 +20,10 @@ export async function GET(request) {
     return Response.json({ success: false, error: 'Missing channel parameter' }, { status: 400 });
   }
 
-  const defaultDembedUrl = `https://dembed.st/premiumtv/daddy.php?id=${encodeURIComponent(channel)}`;
   const baseUrls = getBaseUrls();
   let streamHtml = '';
   let successfulBase = '';
+  let officialStreamPage = '';
 
   // 1. Fetch channel stream page across configured mirrors
   for (const base of baseUrls) {
@@ -34,44 +34,75 @@ export async function GET(request) {
           Referer: `${base}/`,
           Accept: 'text/html,*/*',
         },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(6000),
       });
       if (res.ok) {
         const text = await res.text();
-        if (text && text.length > 500) {
+        const hasIframe = text.includes('<iframe');
+        const hasM3u8 = text.includes('.m3u8');
+        if (text && text.length > 500 && (hasIframe || hasM3u8)) {
           streamHtml = text;
           successfulBase = base;
+          officialStreamPage = streamPage;
           break;
         }
       }
     } catch {}
   }
 
-  // 2. Extract embedded player iframe if available
-  const iframeValue = streamHtml ? streamHtml.match(/<iframe[^>]+src=['"]([^'"]+)['"]/i)?.[1] : null;
-  const iframe = iframeValue
-    ? iframeValue.startsWith('http')
-      ? iframeValue
-      : new URL(iframeValue, successfulBase || 'https://thedaddy.pk').href
-    : defaultDembedUrl;
-
-  const targetIframeUrl = iframe || defaultDembedUrl;
-
-  // 3. Check if an explicit legacy HLS playlist (.m3u8) is directly available
-  let directPlaylistUrl = null;
-  if (streamHtml) {
-    const legacyPlaylist = findLegacyPlaylist(streamHtml);
-    if (legacyPlaylist) {
-      directPlaylistUrl = legacyPlaylist;
+  // 1b. Fallback: try watch.php endpoint if direct stream page was not found
+  if (!streamHtml) {
+    for (const base of baseUrls) {
+      try {
+        const watchPage = `${base}/watch.php?id=${encodeURIComponent(channel)}`;
+        const res = await fetchWithDns(watchPage, {
+          headers: {
+            Referer: `${base}/`,
+            Accept: 'text/html,*/*',
+          },
+          signal: AbortSignal.timeout(6000),
+        });
+        if (res.ok) {
+          const text = await res.text();
+          const hasIframe = text.includes('<iframe');
+          if (text && text.length > 500 && hasIframe) {
+            streamHtml = text;
+            successfulBase = base;
+            officialStreamPage = watchPage;
+            break;
+          }
+        }
+      } catch {}
     }
   }
 
-  // If a direct, standard m3u8 playlist is found (not stego dembed edge), route through proxy
-  if (directPlaylistUrl && !directPlaylistUrl.includes('.sbs') && !directPlaylistUrl.includes('dembed.st')) {
+  // 2. Extract embedded player iframe if available
+  const iframeValue = streamHtml ? streamHtml.match(/<iframe[^>]+src=['"]([^'"]+)['"]/i)?.[1] : null;
+
+  // If no working stream or iframe was found across any mirror, the event has ended or is offline
+  if (!streamHtml || (!iframeValue && !findLegacyPlaylist(streamHtml))) {
+    return Response.json(
+      {
+        success: false,
+        error: 'This live stream or event broadcast has ended or is currently offline.',
+      },
+      { status: 404 }
+    );
+  }
+
+  const targetIframeUrl = iframeValue
+    ? iframeValue.startsWith('http')
+      ? iframeValue
+      : new URL(iframeValue, successfulBase || 'https://thedaddy.pk').href
+    : officialStreamPage;
+
+  // 3. Check if an explicit legacy HLS playlist (.m3u8) is directly available
+  const legacyPlaylist = findLegacyPlaylist(streamHtml);
+  if (legacyPlaylist && !legacyPlaylist.includes('.sbs') && !legacyPlaylist.includes('dembed.st')) {
     const origin = successfulBase || 'https://thedaddy.pk';
     const referer = `${origin}/`;
     const q = new URLSearchParams({
-      url: directPlaylistUrl,
+      url: legacyPlaylist,
       origin,
       referer,
     });
@@ -92,7 +123,6 @@ export async function GET(request) {
   }
 
   // 4. Default & primary DaddyLive path: deliver clean, direct iframe stream
-  // dembed.st contains custom JWPlayer + LiveLoader stego TS decoding that runs in browser
   return Response.json({
     success: true,
     channel,
@@ -102,6 +132,7 @@ export async function GET(request) {
       url: targetIframeUrl,
       type: 'iframe',
       iframeUrl: targetIframeUrl,
+      officialUrl: officialStreamPage,
       referer: successfulBase ? `${successfulBase}/` : 'https://thedaddy.pk/',
       origin: 'https://dembed.st',
     },
