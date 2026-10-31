@@ -64,7 +64,7 @@ importers:
         version: 1.8.0
       '@p-stream/providers':
         specifier: github:steveyout/providers#production
-        version: https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf
+        version: https://codeload.github.com/steveyout/providers/tar.gz/ebaa95f0eb5e21592473ca555162121e53975830
       '@scure/bip39':
         specifier: ^1.6.0
         version: 1.6.0
@@ -1413,8 +1413,8 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf':
-    resolution: {gitHosted: true, integrity: sha512-Bf9HqpI6kIeVxUDjXcr6qMLDFM3lTdfgl2Hyd7hKdvY0X7hhAEiOiB6H5MNxoqEsttr4am0/Ie1MHluPzhk5nQ==, tarball: https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf}
+  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/ebaa95f0eb5e21592473ca555162121e53975830':
+    resolution: {gitHosted: true, integrity: sha512-TMRQiceidecHklmOihhCe+7UJRsqiTnTIpUHBVxEyQMAKjUgjmnMRsF+9J9qyqHTdT8T+vGiWvJGauN5kCJzcw==, tarball: https://codeload.github.com/steveyout/providers/tar.gz/ebaa95f0eb5e21592473ca555162121e53975830}
     version: 3.2.0
 
   '@pkgr/core@0.3.6':
@@ -5495,7 +5495,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.3
 
-  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf':
+  '@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/ebaa95f0eb5e21592473ca555162121e53975830':
     dependencies:
       abort-controller: 3.0.0
       cheerio: 1.0.0-rc.12

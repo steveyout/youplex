@@ -1,4 +1,5 @@
 allowBuilds:
+  "@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/ebaa95f0eb5e21592473ca555162121e53975830": true
   "@p-stream/providers": true
   "@p-stream/providers@github:steveyout/providers#production": true
   "@p-stream/providers@https://codeload.github.com/steveyout/providers/tar.gz/279d989150cdca3c032d17a506cdc320288dc3cf": true
