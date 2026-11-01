@@ -420,6 +420,26 @@ async function resolveTokenTarget(target, tokenUrl, referer, origin, ua) {
  * @param {{referer?:string,origin?:string,ua?:string,tokenUrl?:string}} params
  * @returns {string}
  */
+/**
+ * Resolves a child HLS URI (relative or absolute) against the base playlist URL,
+ * and preserves any token/query parameters from the base playlist (e.g. _rb, token, auth)
+ * onto the child URI so subsequent segment/variant fetches don't get rejected with 403.
+ */
+function resolveHlsUri(relativeOrAbs, baseUrl) {
+  try {
+    const baseObj = new URL(baseUrl);
+    const absObj = new URL(relativeOrAbs, baseObj);
+    baseObj.searchParams.forEach((val, key) => {
+      if (!absObj.searchParams.has(key)) {
+        absObj.searchParams.set(key, val);
+      }
+    });
+    return absObj.href;
+  } catch {
+    return relativeOrAbs;
+  }
+}
+
 function rewritePlaylist(body, baseUrl, params) {
   return body
     .split(/\r?\n/)
@@ -434,7 +454,7 @@ function rewritePlaylist(body, baseUrl, params) {
           // 1. Quoted URI="..."
           rewrittenLine = rewrittenLine.replace(URI_ATTR_QUOTED_RE, (match, p1, p2, p3) => {
             try {
-              const abs = new URL(p2, baseUrl).href;
+              const abs = resolveHlsUri(p2, baseUrl);
               return `${p1}${buildProxyUrl(abs, params)}${p3}`;
             } catch {
               return match;
@@ -461,7 +481,7 @@ function rewritePlaylist(body, baseUrl, params) {
       if (trimmed === '') return line;
 
       try {
-        const abs = new URL(trimmed, baseUrl).href;
+        const abs = resolveHlsUri(trimmed, baseUrl);
         return buildProxyUrl(abs, params);
       } catch {
         return line;
@@ -662,9 +682,20 @@ export async function GET(req) {
         });
       }
 
+      // Correct disguised MIME types (e.g. fMP4 or TS chunks returned as image/png)
+      let contentType = upstreamContentType;
+      if (bytes.length >= 8) {
+        const boxType = String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]);
+        if (boxType === 'styp' || boxType === 'ftyp' || boxType === 'moof' || boxType === 'moov' || boxType === 'sidx' || boxType === 'mdat') {
+          contentType = 'video/mp4';
+        } else if (bytes[0] === 0x47) {
+          contentType = 'video/mp2t';
+        }
+      }
+
       // If not stego TS, return the original buffer
       const outHeaders = new Headers(CORS_HEADERS);
-      if (upstreamContentType) outHeaders.set('Content-Type', upstreamContentType);
+      if (contentType) outHeaders.set('Content-Type', contentType);
       outHeaders.set('Content-Length', String(bytes.byteLength));
       outHeaders.set('Accept-Ranges', 'bytes');
       return new Response(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), {
