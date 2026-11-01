@@ -94,7 +94,11 @@ function isUrlProxied(url) {
   if (!url || typeof url !== 'string') return false;
   return (
     url.startsWith('/api/hls') ||
-    url.startsWith('/api/subtitles')
+    url.startsWith('/api/subtitles') ||
+    url.includes('api.youplex.site/proxy') ||
+    url.includes('proxy.youplex.site') ||
+    url.includes('/m3u8-proxy?') ||
+    url.includes('/proxy?url=')
   );
 }
 
@@ -110,16 +114,29 @@ function toProxyUrl(source) {
     rawUrl.includes('.vtt?') ||
     rawUrl.includes('.srt?')
   ) {
-    if (rawUrl.startsWith('/api/subtitles')) return rawUrl;
+    if (
+      rawUrl.startsWith('/api/subtitles') ||
+      rawUrl.includes('api.youplex.site/proxy') ||
+      rawUrl.includes('proxy.youplex.site')
+    ) {
+      return rawUrl;
+    }
     return `/api/subtitles?url=${encodeURIComponent(rawUrl)}`;
   }
 
-  // If already proxied by local /api/hls, return directly
-  if (rawUrl.startsWith('/api/hls')) {
+  // If already proxied by local /api/hls or dedicated api.youplex.site / proxy.youplex.site proxy, return directly
+  if (
+    rawUrl.startsWith('/api/hls') ||
+    rawUrl.includes('api.youplex.site/proxy') ||
+    rawUrl.includes('proxy.youplex.site') ||
+    rawUrl.includes('/m3u8-proxy?') ||
+    rawUrl.includes('/proxy?url=') ||
+    source.alreadyProxied
+  ) {
     return rawUrl;
   }
 
-  // Unwrap any broken / external proxy wrapping (e.g. api.youplex.site)
+  // Unwrap any broken / external proxy wrapping (e.g. legacy wrappers)
   const mergedHeaders = {
     ...(source.headers || {}),
     ...(source.preferredHeaders || {}),
@@ -127,7 +144,13 @@ function toProxyUrl(source) {
   const { url: unwrappedUrl, headers: extractedHeaders } = unwrapProxyUrl(rawUrl, mergedHeaders);
   rawUrl = unwrappedUrl;
 
-  if (rawUrl.startsWith('/api/hls')) {
+  if (
+    rawUrl.startsWith('/api/hls') ||
+    rawUrl.includes('api.youplex.site/proxy') ||
+    rawUrl.includes('proxy.youplex.site') ||
+    rawUrl.includes('/m3u8-proxy?') ||
+    rawUrl.includes('/proxy?url=')
+  ) {
     return rawUrl;
   }
 
