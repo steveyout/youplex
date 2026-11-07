@@ -567,8 +567,7 @@ export default function LiveTvView() {
                         width="100%"
                         height="100%"
                         allowFullScreen
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        referrerPolicy="no-referrer"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                         style={{ width: '100%', height: '100%', border: 0, bgcolor: '#000' }}
                       />
                     </Box>

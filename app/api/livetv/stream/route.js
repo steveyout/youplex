@@ -90,11 +90,17 @@ export async function GET(request) {
     );
   }
 
-  const targetIframeUrl = iframeValue
-    ? iframeValue.startsWith('http')
-      ? iframeValue
-      : new URL(iframeValue, successfulBase || 'https://thedaddy.pk').href
-    : officialStreamPage;
+  // NOTE: dembed.st inspects Referer headers and Sec-Fetch-Dest: iframe.
+  // Direct client embedding of dembed.st returns HTTP 403 Forbidden ("Not allowed to stream").
+  // Framing the mirror stream page (e.g. thedaddy.pk or thedaddy.li) allows it to frame dembed.st
+  // with its own authorized domain Referer, playing the live stream seamlessly.
+  const targetIframeUrl = officialStreamPage || (
+    iframeValue
+      ? iframeValue.startsWith('http')
+        ? iframeValue
+        : new URL(iframeValue, successfulBase || 'https://thedaddy.pk').href
+      : `${successfulBase || 'https://thedaddy.pk'}/stream/stream-${encodeURIComponent(channel)}.php`
+  );
 
   // 3. Check if an explicit legacy HLS playlist (.m3u8) is directly available
   const legacyPlaylist = findLegacyPlaylist(streamHtml);
@@ -134,7 +140,7 @@ export async function GET(request) {
       iframeUrl: targetIframeUrl,
       officialUrl: officialStreamPage,
       referer: successfulBase ? `${successfulBase}/` : 'https://thedaddy.pk/',
-      origin: 'https://dembed.st',
+      origin: successfulBase || 'https://thedaddy.pk',
     },
   });
 }
