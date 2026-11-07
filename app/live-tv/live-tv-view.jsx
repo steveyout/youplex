@@ -54,6 +54,21 @@ export default function LiveTvView() {
   const [streamLoading, setStreamLoading] = useState(false);
   const [source, setSource] = useState(null);
 
+  const [selectedServer, setSelectedServer] = useState('');
+
+  const handleSwitchServer = useCallback((mirror) => {
+    setSelectedServer(mirror.id);
+    setSource((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        iframeUrl: mirror.url,
+        url: mirror.url,
+        currentMirror: mirror.id,
+      };
+    });
+  }, []);
+
   const refreshSelectedStream = useCallback(() => {
     setSelected((current) => (current ? { ...current } : current));
   }, []);
@@ -160,7 +175,8 @@ export default function LiveTvView() {
     setStreamError('');
     setSource(null);
     setStreamLoading(true);
-    fetch(`/api/livetv/stream?channel=${encodeURIComponent(selected.id)}`)
+    const mirrorParam = selectedServer ? `&mirror=${encodeURIComponent(selectedServer)}` : '';
+    fetch(`/api/livetv/stream?channel=${encodeURIComponent(selected.id)}${mirrorParam}`)
       .then(async (response) => {
         const text = await response.text();
         let data = null;
@@ -181,7 +197,7 @@ export default function LiveTvView() {
     return () => {
       active = false;
     };
-  }, [selected]);
+  }, [selected, selectedServer]);
 
   const filteredChannels = useMemo(() => channels.filter((channel) => (
     (category === 'all' || channel.category === category)
@@ -350,6 +366,51 @@ export default function LiveTvView() {
                   >
                     <Iconify icon="eva:arrow-ios-back-fill" width={20} />
                   </IconButton>
+                )}
+
+                {/* Desktop Server Dropdown Selector */}
+                {!isMobile && source?.mirrors && source.mirrors.length > 1 && (
+                  <Select
+                    size="small"
+                    value={source.currentMirror || (source.iframeUrl ? new URL(source.iframeUrl).hostname : '')}
+                    onChange={(event) => {
+                      const targetMirror = source.mirrors.find((m) => m.id === event.target.value);
+                      if (targetMirror) handleSwitchServer(targetMirror);
+                    }}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: {
+                          maxHeight: 300,
+                          bgcolor: '#0a0e14',
+                          color: 'common.white',
+                          border: `1px solid ${alpha('#ffffff', 0.12)}`,
+                          '& .MuiMenuItem-root': {
+                            fontSize: 12.5,
+                            '&:hover': { bgcolor: alpha('#ffffff', 0.08) },
+                            '&.Mui-selected': { bgcolor: alpha('#FF3030', 0.16) },
+                          },
+                        },
+                      },
+                    }}
+                    sx={{
+                      minWidth: 160,
+                      maxWidth: 220,
+                      color: 'common.white',
+                      height: 34,
+                      fontSize: 12,
+                      bgcolor: alpha('#ffffff', 0.05),
+                      borderRadius: 1.5,
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha('#ffffff', 0.15) },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: alpha('#ffffff', 0.3) },
+                      '& .MuiSvgIcon-root': { color: 'common.white' },
+                    }}
+                  >
+                    {source.mirrors.map((m) => (
+                      <MenuItem key={`server-opt-${m.id}`} value={m.id} sx={{ fontSize: 12.5 }}>
+                        {m.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
                 )}
 
                 <Box
@@ -547,7 +608,13 @@ export default function LiveTvView() {
                 {streamLoading ? (
                   <LiveTvLoading channel={selected} />
                 ) : streamError ? (
-                  <LiveTvError message={streamError} onRetry={refreshSelectedStream} />
+                  <LiveTvError
+                    message={streamError}
+                    onRetry={refreshSelectedStream}
+                    mirrors={source?.mirrors}
+                    currentMirror={source?.currentMirror}
+                    onSwitchServer={handleSwitchServer}
+                  />
                 ) : source ? (
                   source.type === 'iframe' || source.isIframe || source.iframeUrl ? (
                     <Box
@@ -665,6 +732,30 @@ export default function LiveTvView() {
                       Reload Feed
                     </Button>
                   </Stack>
+
+                  {/* Server Switcher on Mobile */}
+                  {source?.mirrors && source.mirrors.length > 1 && (
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ overflowX: 'auto', py: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, flexShrink: 0 }}>
+                        Server:
+                      </Typography>
+                      {source.mirrors.map((m) => {
+                        const active = (source.currentMirror === m.id) || (source.iframeUrl && source.iframeUrl.includes(m.id));
+                        return (
+                          <Chip
+                            key={`mobile-server-${m.id}`}
+                            label={m.name}
+                            size="small"
+                            clickable
+                            color={active ? 'primary' : 'default'}
+                            variant={active ? 'filled' : 'outlined'}
+                            onClick={() => handleSwitchServer(m)}
+                            sx={{ fontSize: 11, fontWeight: active ? 700 : 500, flexShrink: 0 }}
+                          />
+                        );
+                      })}
+                    </Stack>
+                  )}
 
                   {/* Channel Switcher Header */}
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -929,7 +1020,7 @@ function ChannelSkeleton() {
   );
 }
 
-function LiveTvError({ message, onRetry }) {
+function LiveTvError({ message, onRetry, mirrors, onSwitchServer, currentMirror }) {
   return (
     <Stack
       alignItems="center"
@@ -952,6 +1043,23 @@ function LiveTvError({ message, onRetry }) {
       <Button variant="contained" startIcon={<Iconify icon="solar:refresh-bold" />} onClick={onRetry}>
         Try again
       </Button>
+      {mirrors && mirrors.length > 1 && onSwitchServer && (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', mr: 0.5 }}>Try other server:</Typography>
+          {mirrors.map((m) => (
+            <Chip
+              key={`err-server-${m.id}`}
+              label={m.name}
+              size="small"
+              clickable
+              color={currentMirror === m.id ? 'primary' : 'default'}
+              variant={currentMirror === m.id ? 'filled' : 'outlined'}
+              onClick={() => onSwitchServer(m)}
+              sx={{ fontSize: 11 }}
+            />
+          ))}
+        </Stack>
+      )}
     </Stack>
   );
 }

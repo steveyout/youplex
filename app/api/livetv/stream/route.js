@@ -15,12 +15,20 @@ function findLegacyPlaylist(html) {
 }
 
 export async function GET(request) {
-  const channel = new URL(request.url).searchParams.get('channel');
+  const url = new URL(request.url);
+  const channel = url.searchParams.get('channel');
+  const requestedMirror = url.searchParams.get('mirror');
   if (!channel) {
     return Response.json({ success: false, error: 'Missing channel parameter' }, { status: 400 });
   }
 
-  const baseUrls = getBaseUrls();
+  const allBases = getBaseUrls();
+  const baseUrls = requestedMirror
+    ? [
+        ...allBases.filter((b) => b.includes(requestedMirror)),
+        ...allBases.filter((b) => !b.includes(requestedMirror)),
+      ]
+    : allBases;
   let streamHtml = '';
   let successfulBase = '';
   let officialStreamPage = '';
@@ -98,14 +106,14 @@ export async function GET(request) {
     iframeValue
       ? iframeValue.startsWith('http')
         ? iframeValue
-        : new URL(iframeValue, successfulBase || 'https://thedaddy.pk').href
-      : `${successfulBase || 'https://thedaddy.pk'}/stream/stream-${encodeURIComponent(channel)}.php`
+        : new URL(iframeValue, successfulBase || 'https://thedaddy.li').href
+      : `${successfulBase || 'https://thedaddy.li'}/stream/stream-${encodeURIComponent(channel)}.php`
   );
 
   // 3. Check if an explicit legacy HLS playlist (.m3u8) is directly available
   const legacyPlaylist = findLegacyPlaylist(streamHtml);
   if (legacyPlaylist && !legacyPlaylist.includes('.sbs') && !legacyPlaylist.includes('dembed.st')) {
-    const origin = successfulBase || 'https://thedaddy.pk';
+    const origin = successfulBase || 'https://thedaddy.li';
     const referer = `${origin}/`;
     const q = new URLSearchParams({
       url: legacyPlaylist,
@@ -128,6 +136,13 @@ export async function GET(request) {
     });
   }
 
+  const mirrors = allBases.map((base, idx) => ({
+    id: new URL(base).hostname,
+    name: `Server ${idx + 1} (${new URL(base).hostname})`,
+    url: `${base}/stream/stream-${encodeURIComponent(channel)}.php`,
+    isCurrent: base === successfulBase,
+  }));
+
   // 4. Default & primary DaddyLive path: deliver clean, direct iframe stream
   return Response.json({
     success: true,
@@ -139,8 +154,10 @@ export async function GET(request) {
       type: 'iframe',
       iframeUrl: targetIframeUrl,
       officialUrl: officialStreamPage,
-      referer: successfulBase ? `${successfulBase}/` : 'https://thedaddy.pk/',
-      origin: successfulBase || 'https://thedaddy.pk',
+      mirrors,
+      currentMirror: successfulBase ? new URL(successfulBase).hostname : null,
+      referer: successfulBase ? `${successfulBase}/` : 'https://thedaddy.li/',
+      origin: successfulBase || 'https://thedaddy.li',
     },
   });
 }
