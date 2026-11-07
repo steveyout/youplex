@@ -81,6 +81,7 @@ function unwrapProxyUrl(rawUrl, existingHeaders = {}) {
       if (inner) {
         const headers = { ...existingHeaders };
         if (parsed.searchParams.get('referer')) headers.referer = parsed.searchParams.get('referer');
+        if (parsed.searchParams.get('ref')) headers.referer = parsed.searchParams.get('ref');
         if (parsed.searchParams.get('origin')) headers.origin = parsed.searchParams.get('origin');
         if (parsed.searchParams.get('ua')) headers['user-agent'] = parsed.searchParams.get('ua');
         return { url: inner, headers };
@@ -106,6 +107,11 @@ function toProxyUrl(source) {
   if (!source?.url) return '';
   let rawUrl = source.url;
 
+  const isCrossSiteProxy =
+    typeof window !== 'undefined' &&
+    !window.location.hostname.includes('youplex.site') &&
+    (rawUrl.includes('api.youplex.site/proxy') || rawUrl.includes('proxy.youplex.site'));
+
   // Subtitles always need CORS headers and proper VTT formatting
   if (
     source.isSubtitle ||
@@ -115,23 +121,28 @@ function toProxyUrl(source) {
     rawUrl.includes('.srt?')
   ) {
     if (
-      rawUrl.startsWith('/api/subtitles') ||
-      rawUrl.includes('api.youplex.site/proxy') ||
-      rawUrl.includes('proxy.youplex.site')
+      !isCrossSiteProxy &&
+      (rawUrl.startsWith('/api/subtitles') ||
+       rawUrl.includes('api.youplex.site/proxy') ||
+       rawUrl.includes('proxy.youplex.site'))
     ) {
       return rawUrl;
     }
-    return `/api/subtitles?url=${encodeURIComponent(rawUrl)}`;
+    const unwrappedSub = unwrapProxyUrl(rawUrl);
+    return `/api/subtitles?url=${encodeURIComponent(unwrappedSub.url || rawUrl)}`;
   }
 
-  // If already proxied by local /api/hls or dedicated api.youplex.site / proxy.youplex.site proxy, return directly
+  // If already proxied by local /api/hls, return directly
+  if (rawUrl.startsWith('/api/hls')) {
+    return rawUrl;
+  }
+
+  // If already proxied by dedicated api.youplex.site / proxy.youplex.site proxy AND on youplex.site, return directly
   if (
-    rawUrl.startsWith('/api/hls') ||
-    rawUrl.includes('api.youplex.site/proxy') ||
-    rawUrl.includes('proxy.youplex.site') ||
-    rawUrl.includes('/m3u8-proxy?') ||
-    rawUrl.includes('/proxy?url=') ||
-    source.alreadyProxied
+    !isCrossSiteProxy &&
+    (rawUrl.includes('api.youplex.site/proxy') ||
+     rawUrl.includes('proxy.youplex.site') ||
+     source.alreadyProxied)
   ) {
     return rawUrl;
   }
@@ -144,13 +155,7 @@ function toProxyUrl(source) {
   const { url: unwrappedUrl, headers: extractedHeaders } = unwrapProxyUrl(rawUrl, mergedHeaders);
   rawUrl = unwrappedUrl;
 
-  if (
-    rawUrl.startsWith('/api/hls') ||
-    rawUrl.includes('api.youplex.site/proxy') ||
-    rawUrl.includes('proxy.youplex.site') ||
-    rawUrl.includes('/m3u8-proxy?') ||
-    rawUrl.includes('/proxy?url=')
-  ) {
+  if (rawUrl.startsWith('/api/hls')) {
     return rawUrl;
   }
 
@@ -162,8 +167,8 @@ function toProxyUrl(source) {
 
   const hasHeaders = Object.keys(extractedHeaders).length > 0;
 
-  // Always route HLS streams or streams requiring headers through local /api/hls
-  if (isHls || hasHeaders) {
+  // Always route HLS streams, streams requiring headers, or cross-site host streams through local /api/hls
+  if (isHls || hasHeaders || isCrossSiteProxy) {
     const params = new URLSearchParams({ url: rawUrl });
     const referer = extractedHeaders.referer || extractedHeaders.Referer;
     const origin = extractedHeaders.origin || extractedHeaders.Origin;

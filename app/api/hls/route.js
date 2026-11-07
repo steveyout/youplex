@@ -501,7 +501,7 @@ export async function GET(req) {
   }
 
   let effectiveTarget = target;
-  let rawReferer = searchParams.get('referer');
+  let rawReferer = searchParams.get('referer') || searchParams.get('ref');
   let rawOrigin = searchParams.get('origin');
   let ua = searchParams.get('ua') || DEFAULT_UA;
   const tokenUrl = searchParams.get('tokenUrl') || undefined;
@@ -520,7 +520,7 @@ export async function GET(req) {
         parsed.searchParams.get('src');
       if (inner) {
         effectiveTarget = inner;
-        if (!rawReferer) rawReferer = parsed.searchParams.get('referer');
+        if (!rawReferer) rawReferer = parsed.searchParams.get('referer') || parsed.searchParams.get('ref');
         if (!rawOrigin) rawOrigin = parsed.searchParams.get('origin');
         if (!searchParams.get('ua') && parsed.searchParams.get('ua')) ua = parsed.searchParams.get('ua');
       }

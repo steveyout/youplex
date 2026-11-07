@@ -146,13 +146,24 @@ const ERROR_CODES = [
 // ----------------------------------------------------------------------
 
 export default function EmbedDocumentationPage() {
-  const [origin, setOrigin] = useState('');
-  const [isVidSrc, setIsVidSrc] = useState(false);
+  const [origin, setOrigin] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return '';
+  });
+  const [isVidSrc, setIsVidSrc] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.hostname.includes('vidsrc');
+    }
+    return false;
+  });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setOrigin(window.location.origin);
+      const currentOrigin = window.location.origin;
       const isVid = window.location.hostname.includes('vidsrc');
+      setOrigin(currentOrigin);
       setIsVidSrc(isVid);
       document.title = isVid
         ? 'VidSrc — Free HD Movie & TV Show Streaming API and Player'
@@ -258,8 +269,19 @@ export default function EmbedDocumentationPage() {
     return `${baseUrl}/embed/tv/${cleanId}/${s}/${e}`;
   }, [baseUrl, mediaType, tmdbInput, seasonInput, episodeInput]);
 
+  // Relative path for local in-page live player preview iframe
+  const localEmbedPath = useMemo(() => {
+    const cleanId = tmdbInput.trim() || (mediaType === 'movie' ? '533535' : '1399');
+    if (mediaType === 'movie') {
+      return `/embed/movie/${cleanId}`;
+    }
+    const s = seasonInput.trim() || '1';
+    const e = episodeInput.trim() || '1';
+    return `/embed/tv/${cleanId}/${s}/${e}`;
+  }, [mediaType, tmdbInput, seasonInput, episodeInput]);
+
   const handlePlayStream = () => {
-    setActiveStreamUrl(currentEmbedUrl);
+    setActiveStreamUrl(localEmbedPath);
     setHasLoadedStream(true);
   };
 
