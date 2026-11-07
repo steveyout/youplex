@@ -1,7 +1,4 @@
-'use client';
-
 import { Suspense } from 'react';
-import { useParams } from 'next/navigation';
 
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -10,16 +7,13 @@ import { EmbedPlayerView } from '@/components/embed/embed-player-view';
 
 // ----------------------------------------------------------------------
 
-function TvEpisodeEmbedContent() {
-  const params = useParams();
-  const id = params?.id;
-  const season = params?.season || 1;
-  const episode = params?.episode || 1;
+export default async function TvEpisodeEmbedPage({ params }) {
+  const resolvedParams = await params;
 
-  return <EmbedPlayerView type="tv" id={id} season={season} episode={episode} />;
-}
+  const id = resolvedParams?.id;
+  const season = resolvedParams?.season || 1;
+  const episode = resolvedParams?.episode || 1;
 
-export default function TvEpisodeEmbedPage() {
   return (
     <Suspense
       fallback={
@@ -37,8 +31,7 @@ export default function TvEpisodeEmbedPage() {
         </Box>
       }
     >
-      <TvEpisodeEmbedContent />
+      <EmbedPlayerView type="tv" id={id} season={season} episode={episode} />
     </Suspense>
   );
 }
-

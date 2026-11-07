@@ -651,7 +651,7 @@ export function EmbedPlayerView({
         onRetrySources={retrySources}
         hasNextEpisode={hasNextEpisode}
         onNextEpisode={autoNextEpisode ? handleNextEpisode : null}
-        allowEmbedMode={false}
+        allowEmbedMode={true}
         onBack={null} // Embed player has no back button
         height="100%"
         aspectRatio="unset"

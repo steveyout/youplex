@@ -1,7 +1,4 @@
-'use client';
-
 import { Suspense } from 'react';
-import { useParams } from 'next/navigation';
 
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -10,14 +7,10 @@ import { EmbedPlayerView } from '@/components/embed/embed-player-view';
 
 // ----------------------------------------------------------------------
 
-function MovieEmbedContent() {
-  const params = useParams();
-  const id = params?.id;
+export default async function MovieEmbedPage({ params }) {
+  const resolvedParams = await params;
+  const id = resolvedParams?.id;
 
-  return <EmbedPlayerView type="movie" id={id} />;
-}
-
-export default function MovieEmbedPage() {
   return (
     <Suspense
       fallback={
@@ -35,8 +28,7 @@ export default function MovieEmbedPage() {
         </Box>
       }
     >
-      <MovieEmbedContent />
+      <EmbedPlayerView type="movie" id={id} />
     </Suspense>
   );
 }
-
