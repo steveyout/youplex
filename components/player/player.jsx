@@ -107,11 +107,6 @@ function toProxyUrl(source) {
   if (!source?.url) return '';
   let rawUrl = source.url;
 
-  const isCrossSiteProxy =
-    typeof window !== 'undefined' &&
-    !window.location.hostname.includes('youplex.site') &&
-    (rawUrl.includes('api.youplex.site/proxy') || rawUrl.includes('proxy.youplex.site'));
-
   // Subtitles always need CORS headers and proper VTT formatting
   if (
     source.isSubtitle ||
@@ -121,10 +116,9 @@ function toProxyUrl(source) {
     rawUrl.includes('.srt?')
   ) {
     if (
-      !isCrossSiteProxy &&
-      (rawUrl.startsWith('/api/subtitles') ||
-       rawUrl.includes('api.youplex.site/proxy') ||
-       rawUrl.includes('proxy.youplex.site'))
+      rawUrl.startsWith('/api/subtitles') ||
+      rawUrl.includes('api.youplex.site/proxy') ||
+      rawUrl.includes('proxy.youplex.site')
     ) {
       return rawUrl;
     }
@@ -137,12 +131,11 @@ function toProxyUrl(source) {
     return rawUrl;
   }
 
-  // If already proxied by dedicated api.youplex.site / proxy.youplex.site proxy AND on youplex.site, return directly
+  // If already proxied by dedicated api.youplex.site / proxy.youplex.site proxy, return directly
   if (
-    !isCrossSiteProxy &&
-    (rawUrl.includes('api.youplex.site/proxy') ||
-     rawUrl.includes('proxy.youplex.site') ||
-     source.alreadyProxied)
+    rawUrl.includes('api.youplex.site/proxy') ||
+    rawUrl.includes('proxy.youplex.site') ||
+    source.alreadyProxied
   ) {
     return rawUrl;
   }
@@ -167,8 +160,8 @@ function toProxyUrl(source) {
 
   const hasHeaders = Object.keys(extractedHeaders).length > 0;
 
-  // Always route HLS streams, streams requiring headers, or cross-site host streams through local /api/hls
-  if (isHls || hasHeaders || isCrossSiteProxy) {
+  // Route HLS streams or streams requiring custom headers through /api/hls
+  if (isHls || hasHeaders) {
     const params = new URLSearchParams({ url: rawUrl });
     const referer = extractedHeaders.referer || extractedHeaders.Referer;
     const origin = extractedHeaders.origin || extractedHeaders.Origin;
