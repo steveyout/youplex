@@ -143,68 +143,82 @@ const ERROR_CODES = [
   },
 ];
 
-const EVENTS = [
-  {
-    name: 'youplex:play',
-    desc: 'Triggered immediately when the viewer starts or resumes stream playback.',
-  },
-  {
-    name: 'youplex:pause',
-    desc: 'Triggered when the stream playback is paused by the viewer.',
-  },
-  {
-    name: 'youplex:ended',
-    desc: 'Triggered when the media stream reaches completion.',
-  },
-];
-
-const FAQS = [
-  {
-    q: 'Is the Youplex Video Streaming API free?',
-    a: 'Yes, our embed API is free to use for developers and webmasters. No API keys or credit cards are required to start embedding.',
-  },
-  {
-    q: 'Do I need a TMDB ID or IMDB ID?',
-    a: 'You can use either! The API supports standard TMDB numeric IDs (e.g., 533535) as well as external IMDB IDs (e.g., tt1234567). IMDB IDs are automatically resolved to TMDB behind the scenes.',
-  },
-  {
-    q: 'How do I embed TV shows with seasons and episodes?',
-    a: 'Switch the endpoint from /movie/ to /tv/ and pass the season and episode number in the URL path: /embed/tv/{id}/{season}/{episode}. Example: /embed/tv/1399/1/1',
-  },
-  {
-    q: 'How are ads handled on the embedded player?',
-    a: 'The embedded player is supported by lightweight sponsor popunders on play, keeping high-speed CDN delivery and the streaming service 100% free for all webmasters without disruptive banner spam.',
-  },
-  {
-    q: 'What video resolution and formats are supported?',
-    a: 'Our player uses adaptive HLS (HTTP Live Streaming) resolution scaling from 480p up to crisp 4K HDR depending on source availability and viewer network speed.',
-  },
-  {
-    q: 'Can I use Youplex in React, Next.js, Vue, or WordPress?',
-    a: 'Yes. Because Youplex provides standard HTML5 iframe endpoints, it can be embedded anywhere: React, Next.js, Vue, Nuxt, Angular, WordPress custom HTML blocks, or plain static HTML websites.',
-  },
-  {
-    q: 'Are subtitles and multiple audio tracks available?',
-    a: 'Yes, the player automatically extracts and synchronizes subtitles in 30+ languages along with available dubbed audio streams.',
-  },
-  {
-    q: 'What happens if a stream provider goes offline?',
-    a: 'Our player features intelligent sequential failover: if an upstream provider fails or returns a dead link, it automatically switches to the next available stream source seamlessly.',
-  },
-];
-
 // ----------------------------------------------------------------------
 
 export default function EmbedDocumentationPage() {
   const [origin, setOrigin] = useState('');
+  const [isVidSrc, setIsVidSrc] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setOrigin(window.location.origin);
+      const isVid = window.location.hostname.includes('vidsrc');
+      setIsVidSrc(isVid);
+      document.title = isVid
+        ? 'VidSrc — Free HD Movie & TV Show Streaming API and Player'
+        : 'Youplex Embed API — Next-Gen Video Embedding & Streaming API';
     }
   }, []);
 
-  const baseUrl = origin || 'https://youplex.site';
+  const brand = isVidSrc ? 'VidSrc' : 'Youplex';
+  const brandSource = isVidSrc ? 'vidsrc' : 'youplex';
+  const baseUrl = origin || (isVidSrc ? 'https://vidsrc.work' : 'https://youplex.site');
+
+  const eventsList = useMemo(
+    () => [
+      {
+        name: `${brandSource}:play`,
+        desc: 'Triggered immediately when the viewer starts or resumes stream playback.',
+      },
+      {
+        name: `${brandSource}:pause`,
+        desc: 'Triggered when the stream playback is paused by the viewer.',
+      },
+      {
+        name: `${brandSource}:ended`,
+        desc: 'Triggered when the media stream reaches completion.',
+      },
+    ],
+    [brandSource]
+  );
+
+  const faqsList = useMemo(
+    () => [
+      {
+        q: `Is the ${brand} Video Streaming API free?`,
+        a: 'Yes, our embed API is free to use for developers and webmasters. No API keys or credit cards are required to start embedding.',
+      },
+      {
+        q: 'Do I need a TMDB ID or IMDB ID?',
+        a: 'You can use either! The API supports standard TMDB numeric IDs (e.g., 533535) as well as external IMDB IDs (e.g., tt1234567). IMDB IDs are automatically resolved to TMDB behind the scenes.',
+      },
+      {
+        q: 'How do I embed TV shows with seasons and episodes?',
+        a: 'Switch the endpoint from /movie/ to /tv/ and pass the season and episode number in the URL path: /embed/tv/{id}/{season}/{episode}. Example: /embed/tv/1399/1/1',
+      },
+      {
+        q: 'How are ads handled on the embedded player?',
+        a: 'The embedded player is supported by lightweight sponsor popunders on play, keeping high-speed CDN delivery and the streaming service 100% free for all webmasters without disruptive banner spam.',
+      },
+      {
+        q: 'What video resolution and formats are supported?',
+        a: 'Our player uses adaptive HLS (HTTP Live Streaming) resolution scaling from 480p up to crisp 4K HDR depending on source availability and viewer network speed.',
+      },
+      {
+        q: `Can I use ${brand} in React, Next.js, Vue, or WordPress?`,
+        a: `Yes. Because ${brand} provides standard HTML5 iframe endpoints, it can be embedded anywhere: React, Next.js, Vue, Nuxt, Angular, WordPress custom HTML blocks, or plain static HTML websites.`,
+      },
+      {
+        q: 'Are subtitles and multiple audio tracks available?',
+        a: 'Yes, the player automatically extracts and synchronizes subtitles in 30+ languages along with available dubbed audio streams.',
+      },
+      {
+        q: 'What happens if a stream provider goes offline?',
+        a: 'Our player features intelligent sequential failover: if an upstream provider fails or returns a dead link, it automatically switches to the next available stream source seamlessly.',
+      },
+    ],
+    [brand]
+  );
 
   // Live Player State
   const [mediaType, setMediaType] = useState('movie'); // 'movie' | 'tv'
@@ -363,7 +377,7 @@ export default function EmbedDocumentationPage() {
                   <Iconify icon="solar:play-bold" width={18} sx={{ color: 'common.white', ml: 0.3 }} />
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: 'common.white', letterSpacing: -0.5 }}>
-                  Youplex <Box component="span" sx={{ color: BRAND_RED }}>Embed</Box>
+                  {brand} <Box component="span" sx={{ color: BRAND_RED }}>Embed</Box>
                 </Typography>
               </Link>
 
@@ -426,27 +440,29 @@ export default function EmbedDocumentationPage() {
               >
                 FAQs
               </Link>
-              <Button
-                component={Link}
-                href="/"
-                size="small"
-                variant="outlined"
-                sx={{
-                  color: 'common.white',
-                  borderColor: BORDER_HIGHLIGHT,
-                  bgcolor: BG_SURFACE,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  borderRadius: 1.25,
-                  px: 1.75,
-                  '&:hover': {
-                    bgcolor: BG_SURFACE_ELEVATED,
-                    borderColor: alpha('#ffffff', 0.3),
-                  },
-                }}
-              >
-                Main App →
-              </Button>
+              {!isVidSrc && (
+                <Button
+                  component={Link}
+                  href="/"
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    color: 'common.white',
+                    borderColor: BORDER_HIGHLIGHT,
+                    bgcolor: BG_SURFACE,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    borderRadius: 1.25,
+                    px: 1.75,
+                    '&:hover': {
+                      bgcolor: BG_SURFACE_ELEVATED,
+                      borderColor: alpha('#ffffff', 0.3),
+                    },
+                  }}
+                >
+                  Main App →
+                </Button>
+              )}
             </Stack>
           </Stack>
         </Container>
@@ -475,7 +491,7 @@ export default function EmbedDocumentationPage() {
             '&:hover': { bgcolor: BG_SURFACE_ELEVATED },
           }}
         >
-          <span>What&apos;s new on Youplex Embed API - v2.4</span>
+          <span>What&apos;s new on {brand} Embed API - v2.4</span>
           <span>→</span>
         </Box>
 
@@ -936,7 +952,7 @@ export default function EmbedDocumentationPage() {
           Documentation
         </Typography>
         <Typography variant="body2" sx={{ color: TEXT_MUTED, mb: 5, textAlign: 'center', maxWidth: 540 }}>
-          Get started with integrating Youplex into your product using our native player API.
+          Get started with integrating {brand} into your product using our native player API.
         </Typography>
 
         {/* Documentation Outer Card */}
@@ -1352,7 +1368,7 @@ export default function EmbedDocumentationPage() {
                 PLAYER POSTMESSAGE EVENTS
               </Typography>
               <Stack spacing={2} sx={{ mb: 4 }}>
-                {EVENTS.map((ev, idx) => (
+                {eventsList.map((ev, idx) => (
                   <Box
                     key={idx}
                     sx={{
@@ -1398,7 +1414,7 @@ export default function EmbedDocumentationPage() {
                   lineHeight: 1.7,
                 }}
               >
-                <code>{`window.addEventListener('message', (event) => {\n  if (event.data?.source === 'youplex') {\n    console.log('Youplex Event:', event.data.event, event.data);\n    if (event.data.event === 'play') {\n      // Video started\n    } else if (event.data.event === 'ended') {\n      // Video finished\n    }\n  }\n});`}</code>
+                <code>{`window.addEventListener('message', (event) => {\n  if (event.data?.source === '${brandSource}') {\n    console.log('${brand} Event:', event.data.event, event.data);\n    if (event.data.event === 'play') {\n      // Video started\n    } else if (event.data.event === 'ended') {\n      // Video finished\n    }\n  }\n});`}</code>
               </Box>
             </Box>
           )}
@@ -1418,11 +1434,11 @@ export default function EmbedDocumentationPage() {
           Frequently Asked Questions
         </Typography>
         <Typography variant="body2" sx={{ color: TEXT_MUTED, mb: 5, textAlign: 'center' }}>
-          Everything you need to know about the Youplex API integration.
+          Everything you need to know about the {brand} API integration.
         </Typography>
 
         <Stack spacing={2}>
-          {FAQS.map((faq, idx) => {
+          {faqsList.map((faq, idx) => {
             const isOpen = openFaq === idx;
             return (
               <Box
@@ -1493,10 +1509,10 @@ export default function EmbedDocumentationPage() {
       >
         <Container maxWidth="md">
           <Typography variant="caption" sx={{ display: 'block', mb: 2, color: TEXT_MUTED }}>
-            © {new Date().getFullYear()} Youplex Embed API. All Rights Reserved.
+            © {new Date().getFullYear()} {brand} Embed API. All Rights Reserved.
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', maxWidth: 650, mx: 'auto', lineHeight: 1.6 }}>
-            Youplex Embed is a video aggregator and indexing service. We do not host, transcode, or store any
+            {brand} Embed is a video aggregator and indexing service. We do not host, transcode, or store any
             copyright-protected video media on our servers. All media streams are dynamically scraped and
             indexed from public community links.
           </Typography>

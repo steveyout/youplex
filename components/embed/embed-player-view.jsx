@@ -128,8 +128,9 @@ export function EmbedPlayerView({
     (eventName, payload = {}) => {
       if (typeof window === 'undefined') return;
       try {
+        const isVidSrcHost = window.location.hostname.includes('vidsrc');
         const message = {
-          source: 'youplex',
+          source: isVidSrcHost ? 'vidsrc' : 'youplex',
           event: eventName,
           type,
           id: resolvedId || initialId,
@@ -252,6 +253,18 @@ export function EmbedPlayerView({
 
         setMovieOrShow(data);
         setIsLoading(false);
+
+        if (typeof document !== 'undefined') {
+          const isVidSrcHost = window.location.hostname.includes('vidsrc');
+          const brandName = isVidSrcHost ? 'VidSrc' : 'Youplex';
+          const mediaTitle = data.title || data.name || (type === 'tv' ? 'TV Show' : 'Movie');
+          if (type === 'tv') {
+            document.title = `${mediaTitle} S${resolvedSeasonNum}:E${resolvedEpisodeNum} - Watch Free on ${brandName}`;
+          } else {
+            const yr = (data.release_date || data.first_air_date)?.slice(0, 4);
+            document.title = yr ? `${mediaTitle} (${yr}) - Watch Free on ${brandName}` : `${mediaTitle} - Watch Free on ${brandName}`;
+          }
+        }
 
         const releaseYear = (data.release_date || data.first_air_date)?.slice(0, 4);
         const currentSeasonObj = data.seasons?.find(
