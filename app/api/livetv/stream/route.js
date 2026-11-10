@@ -1,4 +1,5 @@
 import { fetchWithDns, getBaseUrls } from '@/lib/livetv/fetch';
+import fastChannelsData from '@/lib/data/fast-channels.json';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,35 @@ export async function GET(request) {
   const requestedMirror = url.searchParams.get('mirror');
   if (!channel) {
     return Response.json({ success: false, error: 'Missing channel parameter' }, { status: 400 });
+  }
+
+  // Check if channel is from our FAST (Pluto TV) or IPTV-org native catalog
+  const fastChannel = (fastChannelsData?.channels || []).find(
+    (c) => String(c.id) === String(channel) || String(c.originalId) === String(channel)
+  );
+
+  if (fastChannel && fastChannel.streamUrl) {
+    const q = new URLSearchParams({
+      url: fastChannel.streamUrl,
+    });
+    const proxyUrl = `/api/hls?${q.toString()}`;
+
+    return Response.json({
+      success: true,
+      channel,
+      streamUrl: proxyUrl,
+      isIframe: false,
+      source: {
+        url: proxyUrl,
+        type: 'hls',
+        isIframe: false,
+        name: fastChannel.name,
+        logo: fastChannel.logo,
+        category: fastChannel.category,
+        provider: fastChannel.provider,
+        isLive: true,
+      },
+    });
   }
 
   const allBases = getBaseUrls();

@@ -48,6 +48,7 @@ export default function LiveTvView() {
   const [events, setEvents] = useState([]);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
+  const [provider, setProvider] = useState('all');
   const [selected, setSelected] = useState(null);
   const [streamError, setStreamError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -199,16 +200,51 @@ export default function LiveTvView() {
     };
   }, [selected, selectedServer]);
 
-  const filteredChannels = useMemo(() => channels.filter((channel) => (
-    (category === 'all' || channel.category === category)
-    && (!query || channel.name.toLowerCase().includes(query.toLowerCase()))
-  )), [channels, category, query]);
+  const filteredChannels = useMemo(() => channels.filter((channel) => {
+    const matchesCategory = category === 'all' || channel.category === category;
+    const matchesProvider =
+      provider === 'all' ||
+      (provider === 'fast' && channel.isNative) ||
+      (provider === 'dlhd' && !channel.isNative);
+    const matchesQuery = !query || channel.name.toLowerCase().includes(query.toLowerCase());
+    return matchesCategory && matchesProvider && matchesQuery;
+  }), [channels, category, provider, query]);
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 3, md: 6 }, pb: 12 }}>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h2" sx={{ fontWeight: 800, mb: 1 }}>Live TV</Typography>
-        <Typography color="text.secondary">Live channels, sports and events from Flyx&apos;s DLHD catalog.</Typography>
+        <Typography color="text.secondary">
+          Stream live FAST channels, 24/7 series &amp; movies, global news, and sports.
+        </Typography>
+      </Box>
+
+      {/* Provider Switcher */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+        <Chip
+          icon={<Iconify icon="solar:tv-bold" width={16} />}
+          label={`All Channels (${channels.length})`}
+          color={provider === 'all' ? 'primary' : 'default'}
+          variant={provider === 'all' ? 'filled' : 'outlined'}
+          onClick={() => setProvider('all')}
+          sx={{ fontWeight: 700 }}
+        />
+        <Chip
+          icon={<Iconify icon="solar:bolt-bold" width={16} />}
+          label="FAST & Open (No Ads • Native Player)"
+          color={provider === 'fast' ? 'success' : 'default'}
+          variant={provider === 'fast' ? 'filled' : 'outlined'}
+          onClick={() => setProvider('fast')}
+          sx={{ fontWeight: 700 }}
+        />
+        <Chip
+          icon={<Iconify icon="solar:transmission-bold" width={16} />}
+          label="DaddyLive (Sports/Cable)"
+          color={provider === 'dlhd' ? 'primary' : 'default'}
+          variant={provider === 'dlhd' ? 'filled' : 'outlined'}
+          onClick={() => setProvider('dlhd')}
+          sx={{ fontWeight: 700 }}
+        />
       </Box>
       {events.length > 0 && (
         <Box sx={{ mb: 4 }}>
@@ -280,7 +316,8 @@ export default function LiveTvView() {
               <Card
                 sx={{
                   width: 1,
-                  minHeight: 112,
+                  minHeight: 116,
+                  height: '100%',
                   textAlign: 'left',
                   color: 'inherit',
                   borderRadius: 2,
@@ -291,11 +328,39 @@ export default function LiveTvView() {
               >
                 <CardActionArea
                   onClick={() => setSelected(channel)}
-                  sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
+                  sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between' }}
                 >
-                  <Typography variant="h4" sx={{ color: 'primary.main', fontWeight: 800 }}>{channel.firstLetter || channel.name[0]}</Typography>
-                  <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 700 }} noWrap>{channel.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">{channel.country || 'Live'}</Typography>
+                  <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, minHeight: 32 }}>
+                    {channel.logo ? (
+                      <Box
+                        component="img"
+                        src={channel.logo}
+                        alt={channel.name}
+                        loading="lazy"
+                        sx={{ maxHeight: 32, maxWidth: 90, objectFit: 'contain' }}
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <Typography variant="h5" sx={{ color: 'primary.main', fontWeight: 800 }}>
+                        {channel.firstLetter || channel.name[0]}
+                      </Typography>
+                    )}
+                    {channel.isNative && (
+                      <Chip
+                        size="small"
+                        label="0 Ads"
+                        color="success"
+                        variant="filled"
+                        sx={{ height: 18, fontSize: 9.5, fontWeight: 800, px: 0.2 }}
+                      />
+                    )}
+                  </Box>
+                  <Box sx={{ width: '100%' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>{channel.name}</Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap display="block">
+                      {channel.group || channel.country || 'Live'}
+                    </Typography>
+                  </Box>
                 </CardActionArea>
               </Card>
             </Grid>
@@ -413,24 +478,33 @@ export default function LiveTvView() {
                   </Select>
                 )}
 
-                <Box
-                  sx={{
-                    width: { xs: 32, sm: 38 },
-                    height: { xs: 32, sm: 38 },
-                    borderRadius: 1.5,
-                    bgcolor: alpha('#FF3030', 0.15),
-                    border: `1px solid ${alpha('#FF3030', 0.35)}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 800,
-                    color: '#FF7A7A',
-                    fontSize: { xs: 14, sm: 17 },
-                    flexShrink: 0,
-                  }}
-                >
-                  {selected.firstLetter || selected.name[0]}
-                </Box>
+                {selected.logo ? (
+                  <Box
+                    component="img"
+                    src={selected.logo}
+                    alt={selected.name}
+                    sx={{ width: { xs: 32, sm: 38 }, height: { xs: 32, sm: 38 }, objectFit: 'contain', flexShrink: 0 }}
+                  />
+                ) : (
+                  <Box
+                    sx={{
+                      width: { xs: 32, sm: 38 },
+                      height: { xs: 32, sm: 38 },
+                      borderRadius: 1.5,
+                      bgcolor: alpha('#FF3030', 0.15),
+                      border: `1px solid ${alpha('#FF3030', 0.35)}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 800,
+                      color: '#FF7A7A',
+                      fontSize: { xs: 14, sm: 17 },
+                      flexShrink: 0,
+                    }}
+                  >
+                    {selected.firstLetter || selected.name[0]}
+                  </Box>
+                )}
 
                 <Stack spacing={0.2} sx={{ minWidth: 0 }}>
                   <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
@@ -464,7 +538,7 @@ export default function LiveTvView() {
                     noWrap
                     sx={{ color: 'text.secondary', fontSize: { xs: 10.5, sm: 11.5 }, maxWidth: { xs: 160, sm: 320 } }}
                   >
-                    {selected.country ? `${selected.country} \u2022 ` : ''}DLHD High-Speed Stream
+                    {selected.country ? `${selected.country} \u2022 ` : ''}{selected.isNative ? 'Native 1080p Stream (No Ads)' : 'DLHD Stream'}
                   </Typography>
                 </Stack>
               </Stack>

@@ -613,7 +613,8 @@ export async function GET(req) {
   }
 
   // ── Playlists: rewrite HLS URIs so segments and keys go through the proxy too. ──
-  const upstreamUrl = new URL(fetchTarget);
+  const effectiveBaseUrl = upstream.url || fetchTarget;
+  const upstreamUrl = new URL(effectiveBaseUrl);
   const isM3u8 =
     /\.m3u8?$/i.test(upstreamUrl.pathname) ||
     /mpegurl/i.test(upstream.headers.get('content-type') || '');
@@ -629,7 +630,7 @@ export async function GET(req) {
       return new Response(`Playlist read failed: ${e.message}`, { status: 502, headers: CORS_HEADERS });
     }
 
-    const rewritten = rewritePlaylist(body, fetchTarget, {
+    const rewritten = rewritePlaylist(body, effectiveBaseUrl, {
       referer: derivedReferer,
       origin: derivedOrigin,
       ua,
