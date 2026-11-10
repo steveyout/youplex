@@ -1,10 +1,37 @@
+import { headers } from 'next/headers';
 import { CONFIG } from '@/config-global';
 
-export default function robots() {
+export default async function robots() {
+  let host = '';
+  try {
+    const headerList = await headers();
+    host = (headerList.get('x-forwarded-host') || headerList.get('host') || '').toLowerCase();
+  } catch {
+    // fallback
+  }
+
+  const isVidSrc = host.includes('vidsrc');
+  const baseUrl = isVidSrc
+    ? 'https://vidsrc.work'
+    : host
+      ? `https://${host}`
+      : CONFIG.site.serverUrl || 'https://youplex.site';
+
   return {
     rules: [
       {
         userAgent: '*',
+        allow: '/',
+        disallow: ['/api/', '/admin/'],
+      },
+      {
+        userAgent: [
+          'Googlebot',
+          'Bingbot',
+          'Applebot',
+          'YandexBot',
+          'DuckDuckBot',
+        ],
         allow: '/',
         disallow: ['/api/', '/admin/'],
       },
@@ -19,12 +46,11 @@ export default function robots() {
           'Bytespider',
           'PerplexityBot',
           'Scrapy',
-          'curl',
-          'Wget',
         ],
-        disallow: '/',
+        disallow: isVidSrc ? ['/api/'] : '/',
       },
     ],
-    sitemap: `${CONFIG.site.serverUrl}/sitemap.xml`,
+    sitemap: `${baseUrl}/sitemap.xml`,
+    host: baseUrl,
   };
 }

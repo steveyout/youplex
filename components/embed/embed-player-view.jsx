@@ -73,13 +73,16 @@ export function EmbedPlayerView({
   const autoNextEpisode = nextEpisodeParam === 'true' || nextEpisodeParam === '1';
 
   // Read season/episode from URL query if not passed via path params
-  const seasonQuery = searchParams.get('season');
-  const episodeQuery = searchParams.get('episode');
+  const seasonQuery = searchParams.get('season') || searchParams.get('s');
+  const episodeQuery = searchParams.get('episode') || searchParams.get('e');
 
   const resolvedSeasonNum = Number(initialSeason || seasonQuery || 1);
   const resolvedEpisodeNum = Number(initialEpisode || episodeQuery || 1);
 
-  const [resolvedId, setResolvedId] = useState(initialId);
+  const queryMediaId = searchParams.get('tmdb') || searchParams.get('imdb') || searchParams.get('id');
+  const effectiveId = initialId || queryMediaId;
+
+  const [resolvedId, setResolvedId] = useState(effectiveId);
   const [movieOrShow, setMovieOrShow] = useState(null);
   const [directSources, setDirectSources] = useState({ sources: [], subtitles: [] });
   const [isLoading, setIsLoading] = useState(true);
@@ -229,7 +232,7 @@ export function EmbedPlayerView({
 
     const init = async () => {
       try {
-        const numericId = await resolveMediaId(initialId, type);
+        const numericId = await resolveMediaId(effectiveId, type);
         if (!active) return;
         setResolvedId(numericId);
 
@@ -342,7 +345,7 @@ export function EmbedPlayerView({
     return () => {
       active = false;
     };
-  }, [type, initialId, resolvedSeasonNum, resolvedEpisodeNum, isBlocked, handleScrapeProgress]);
+  }, [type, effectiveId, resolvedSeasonNum, resolvedEpisodeNum, isBlocked, handleScrapeProgress]);
 
   // Fetch season episode list for TV
   useEffect(() => {

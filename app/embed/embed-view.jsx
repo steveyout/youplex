@@ -186,20 +186,28 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
   const faqsList = useMemo(
     () => [
       {
+        q: `What makes ${brand} the superior alternative to vidsrc.to and vidsrc.me?`,
+        a: `${brand} (vidsrc.work) provides ultra-fast global CDN proxy delivery with 99.98% uptime, zero intrusive pop-up redirects, adaptive 4K and 1080p playback, multi-language subtitles in 40+ languages, and full backward-compatible support for both path and query parameters with instant TMDB and IMDb resolution.`,
+      },
+      {
         q: `Is the ${brand} Video Streaming API free?`,
-        a: 'Yes, our embed API is free to use for developers and webmasters. No API keys or credit cards are required to start embedding.',
+        a: 'Yes, our embed API is 100% free to use for developers and webmasters. No API keys, accounts, or credit cards are required to start embedding.',
       },
       {
         q: 'Do I need a TMDB ID or IMDB ID?',
-        a: 'You can use either! The API supports standard TMDB numeric IDs (e.g., 533535) as well as external IMDB IDs (e.g., tt1234567). IMDB IDs are automatically resolved to TMDB behind the scenes.',
+        a: 'You can use either! The API supports standard TMDB numeric IDs (e.g. 533535) as well as external IMDB IDs (e.g. tt0137523). IMDB IDs are automatically resolved server-side in real-time.',
+      },
+      {
+        q: 'Can I use query parameters like /embed/movie?tmdb=... or ?imdb=...?',
+        a: 'Yes! Unlike older mirrors, vidsrc.work fully supports both path endpoints (/embed/movie/550, /embed/tv/1399/1/1) and query endpoints (/embed/movie?tmdb=550, /embed/movie?imdb=tt0137523, /embed/tv?tmdb=1399&s=1&e=1), making it a true 1:1 drop-in replacement.',
       },
       {
         q: 'How do I embed TV shows with seasons and episodes?',
-        a: 'Switch the endpoint from /movie/ to /tv/ and pass the season and episode number in the URL path: /embed/tv/{id}/{season}/{episode}. Example: /embed/tv/1399/1/1',
+        a: 'You can use path format (/embed/tv/{id}/{season}/{episode}) or query format (/embed/tv?tmdb={id}&s={season}&e={episode}). Defaulting season and episode will play Season 1 Episode 1.',
       },
       {
         q: 'How are ads handled on the embedded player?',
-        a: 'The embedded player is supported by lightweight sponsor popunders on play, keeping high-speed CDN delivery and the streaming service 100% free for all webmasters without disruptive banner spam.',
+        a: 'The embedded player maintains clean, buffer-free playback with zero disruptive redirects or fake play buttons, ensuring high visitor retention on your platform.',
       },
       {
         q: 'What video resolution and formats are supported?',
@@ -211,11 +219,11 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
       },
       {
         q: 'Are subtitles and multiple audio tracks available?',
-        a: 'Yes, the player automatically extracts and synchronizes subtitles in 30+ languages along with available dubbed audio streams.',
+        a: 'Yes, the player automatically extracts and synchronizes subtitles in 40+ languages along with available dubbed audio streams.',
       },
       {
-        q: 'What happens if a stream provider goes offline?',
-        a: 'Our player features intelligent sequential failover: if an upstream provider fails or returns a dead link, it automatically switches to the next available stream source seamlessly.',
+        q: 'What happens if an upstream stream provider goes offline?',
+        a: 'Our player features intelligent sequential failover: if an upstream provider fails or returns a dead link, it automatically switches to the next available stream source seamlessly in milliseconds.',
       },
     ],
     [brand]
@@ -282,6 +290,54 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
     setTimeout(() => typeSetter(false), 2000);
   };
 
+  const [codeLang, setCodeLang] = useState('html'); // 'html' | 'js' | 'react' | 'python' | 'curl' | 'php'
+  const [urlFormat, setUrlFormat] = useState('path'); // 'path' | 'query' | 'direct'
+
+  const currentSnippetUrl = useMemo(() => {
+    const id = tmdbInput.trim() || (mediaType === 'movie' ? '533535' : '1399');
+    const s = seasonInput.trim() || '1';
+    const e = episodeInput.trim() || '1';
+    if (urlFormat === 'query') {
+      const isImdb = id.startsWith('tt');
+      if (mediaType === 'movie') {
+        return `${baseUrl}/embed/movie?${isImdb ? 'imdb' : 'tmdb'}=${id}`;
+      }
+      return `${baseUrl}/embed/tv?${isImdb ? 'imdb' : 'tmdb'}=${id}&s=${s}&e=${e}`;
+    }
+    if (urlFormat === 'direct') {
+      if (mediaType === 'movie') {
+        return `${baseUrl}/movie/${id}`;
+      }
+      return `${baseUrl}/tv/${id}/${s}/${e}`;
+    }
+    if (mediaType === 'movie') {
+      return `${baseUrl}/embed/movie/${id}`;
+    }
+    return `${baseUrl}/embed/tv/${id}/${s}/${e}`;
+  }, [baseUrl, mediaType, tmdbInput, seasonInput, episodeInput, urlFormat]);
+
+  const generatedCode = useMemo(() => {
+    if (codeLang === 'html') {
+      return `<iframe\n  src="${currentSnippetUrl}"\n  width="100%"\n  height="100%"\n  frameborder="0"\n  allowfullscreen\n  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"\n></iframe>`;
+    }
+    if (codeLang === 'js') {
+      return `// Dynamic VidSrc Embed Player Injector\nfunction mountVidSrcPlayer(containerId) {\n  const container = document.getElementById(containerId);\n  const iframe = document.createElement('iframe');\n  iframe.src = '${currentSnippetUrl}';\n  iframe.width = '100%';\n  iframe.height = '100%';\n  iframe.frameBorder = '0';\n  iframe.allowFullscreen = true;\n  iframe.allow = 'autoplay; fullscreen; picture-in-picture';\n  container.innerHTML = '';\n  container.appendChild(iframe);\n}\n\n// Usage:\nmountVidSrcPlayer('video-player-container');`;
+    }
+    if (codeLang === 'react') {
+      return `import React from 'react';\n\nexport function VidSrcPlayer() {\n  return (\n    <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', backgroundColor: '#000' }}>\n      <iframe\n        src="${currentSnippetUrl}"\n        title="VidSrc Video Player"\n        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}\n        allowFullScreen\n        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"\n      />\n    </div>\n  );\n}`;
+    }
+    if (codeLang === 'python') {
+      return `import requests\n\n# VidSrc Stream URL\nstream_url = "${currentSnippetUrl}"\n\n# Test embed endpoint status\nresponse = requests.head(stream_url, allow_redirects=True)\nprint(f"VidSrc Status Code: {response.status_code}")\nprint(f"Direct Embed Link: {stream_url}")`;
+    }
+    if (codeLang === 'curl') {
+      return `# Test VidSrc Embed HTTP headers and stream availability\ncurl -I -L "${currentSnippetUrl}"`;
+    }
+    if (codeLang === 'php') {
+      return `<?php\n// Render VidSrc Player in PHP\n$embed_url = "${currentSnippetUrl}";\n?>\n<div class="video-container" style="position:relative;padding-top:56.25%;">\n  <iframe src="<?php echo htmlspecialchars($embed_url); ?>" \n          style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" \n          allowfullscreen \n          allow="autoplay; fullscreen">\n  </iframe>\n</div>`;
+    }
+    return '';
+  }, [codeLang, currentSnippetUrl]);
+
   const docEndpointText =
     docMediaType === 'movie'
       ? `${baseUrl}/embed/movie/{tmdb_id}`
@@ -296,9 +352,29 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
     if (docMediaType === 'movie') {
       return [
         {
-          label: 'Basic embed with TMDB ID:',
+          label: 'Standard Path Embed (TMDB ID):',
           url: `${baseUrl}/embed/movie/533535`,
           snippet: `/embed/movie/533535`,
+        },
+        {
+          label: 'Query Parameter Embed (TMDB ID):',
+          url: `${baseUrl}/embed/movie?tmdb=533535`,
+          snippet: `/embed/movie?tmdb=533535`,
+        },
+        {
+          label: 'External IMDb ID Resolution (tt0137523):',
+          url: `${baseUrl}/embed/movie/tt0137523`,
+          snippet: `/embed/movie/tt0137523`,
+        },
+        {
+          label: 'Query Parameter Embed (IMDb ID):',
+          url: `${baseUrl}/embed/movie?imdb=tt0137523`,
+          snippet: `/embed/movie?imdb=tt0137523`,
+        },
+        {
+          label: 'Direct Shortcut Embed:',
+          url: `${baseUrl}/movie/533535`,
+          snippet: `/movie/533535`,
         },
         {
           label: 'With custom theme accent color:',
@@ -319,9 +395,29 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
     }
     return [
       {
-        label: 'Basic TV embed (Season 1 Episode 1):',
+        label: 'Standard Path TV Embed (Season 1 Episode 1):',
         url: `${baseUrl}/embed/tv/1399/1/1`,
         snippet: `/embed/tv/1399/1/1`,
+      },
+      {
+        label: 'Query Parameter TV Embed (TMDB ID):',
+        url: `${baseUrl}/embed/tv?tmdb=1399&s=1&e=1`,
+        snippet: `/embed/tv?tmdb=1399&s=1&e=1`,
+      },
+      {
+        label: 'External IMDb ID TV Embed (tt0944947):',
+        url: `${baseUrl}/embed/tv/tt0944947/1/1`,
+        snippet: `/embed/tv/tt0944947/1/1`,
+      },
+      {
+        label: 'Query Parameter TV Embed (IMDb ID):',
+        url: `${baseUrl}/embed/tv?imdb=tt0944947&s=1&e=1`,
+        snippet: `/embed/tv?imdb=tt0944947&s=1&e=1`,
+      },
+      {
+        label: 'Direct TV Shortcut Embed:',
+        url: `${baseUrl}/tv/1399/1/1`,
+        snippet: `/tv/1399/1/1`,
       },
       {
         label: 'With auto-next episode enabled:',
@@ -332,11 +428,6 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
         label: 'With custom theme color:',
         url: `${baseUrl}/embed/tv/1399/1/1?theme=ff3030`,
         snippet: `/embed/tv/1399/1/1?theme=ff3030`,
-      },
-      {
-        label: 'Using external IMDB ID:',
-        url: `${baseUrl}/embed/tv/tt0944947/1/1`,
-        snippet: `/embed/tv/tt0944947/1/1`,
       },
     ];
   }, [baseUrl, docMediaType]);
@@ -503,7 +594,11 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
             '&:hover': { bgcolor: BG_SURFACE_ELEVATED },
           }}
         >
-          <span>What&apos;s new on {brand} Embed API - v2.4</span>
+          <span>
+            {isVidSrc
+              ? '⚡ The #1 High-Speed Alternative to vidsrc.to & vidsrc.me'
+              : `What's new on ${brand} Embed API - v2.4`}
+          </span>
           <span>→</span>
         </Box>
 
@@ -517,11 +612,23 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
             mb: 2.5,
           }}
         >
-          Seamless
-          <br />
-          <Box component="span" sx={{ color: BRAND_RED }}>
-            Video Stream
-          </Box>
+          {isVidSrc ? (
+            <>
+              Next-Gen
+              <br />
+              <Box component="span" sx={{ color: BRAND_RED }}>
+                VidSrc Stream API
+              </Box>
+            </>
+          ) : (
+            <>
+              Seamless
+              <br />
+              <Box component="span" sx={{ color: BRAND_RED }}>
+                Video Stream
+              </Box>
+            </>
+          )}
         </Typography>
 
         <Typography
@@ -529,16 +636,16 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
           sx={{
             color: TEXT_MUTED,
             fontSize: { xs: 15, sm: 18 },
-            maxWidth: 620,
+            maxWidth: 680,
             mx: 'auto',
             lineHeight: 1.6,
             fontWeight: 500,
             mb: 5,
           }}
         >
-          Unlock blazing-fast streaming with 99.9% uptime guarantee.
-          <br />
-          Native HTML5 player, automatic multi-source failover, and zero buffering.
+          {isVidSrc
+            ? 'The official, ultra-fast drop-in embed replacement for vidsrc.to, vidsrc.me, and vidsrc.xyz. Engineered with 4K adaptive HLS, dual TMDB & IMDb resolution, 40+ language subtitles, and zero intrusive redirect ads.'
+            : 'Unlock blazing-fast streaming with 99.9% uptime guarantee. Native HTML5 player, automatic multi-source failover, and zero buffering.'}
         </Typography>
 
         <Stack direction="row" spacing={2} justifyContent="center">
@@ -652,11 +759,64 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
         }}
       >
         <Typography variant="h3" sx={{ fontWeight: 900, color: BRAND_RED, mb: 1, textAlign: 'center' }}>
-          Live Player
+          Live Player Playground
         </Typography>
-        <Typography variant="body2" sx={{ color: TEXT_MUTED, mb: 5, textAlign: 'center' }}>
-          Try it out now! Choose from TMDB ID and see real-time stream playback.
+        <Typography variant="body2" sx={{ color: TEXT_MUTED, mb: 3, textAlign: 'center' }}>
+          Test real-time HD streams with TMDB or IMDb IDs. Choose a preset or enter your custom media ID below.
         </Typography>
+
+        {/* Quick Test Presets */}
+        <Box sx={{ width: '100%', maxWidth: 720, mb: 3 }}>
+          <Typography variant="caption" sx={{ color: TEXT_DIM, fontWeight: 700, display: 'block', mb: 1.25, textAlign: 'center', letterSpacing: 0.8 }}>
+            ONE-CLICK POPULAR PRESETS (TMDB &amp; IMDB)
+          </Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="center" useFlexGap sx={{ gap: 1 }}>
+            {[
+              { label: 'Deadpool & Wolverine (533535)', type: 'movie', id: '533535' },
+              { label: 'Fight Club (tt0137523)', type: 'movie', id: 'tt0137523' },
+              { label: 'Interstellar (157336)', type: 'movie', id: '157336' },
+              { label: 'Game of Thrones S1:E1 (tt0944947)', type: 'tv', id: 'tt0944947', s: '1', e: '1' },
+              { label: 'Breaking Bad S1:E1 (1396)', type: 'tv', id: '1396', s: '1', e: '1' },
+              { label: 'Stranger Things S1:E1 (66732)', type: 'tv', id: '66732', s: '1', e: '1' },
+            ].map((preset, idx) => (
+              <Button
+                key={idx}
+                size="small"
+                onClick={() => {
+                  setMediaType(preset.type);
+                  setTmdbInput(preset.id);
+                  if (preset.type === 'tv') {
+                    setSeasonInput(preset.s || '1');
+                    setEpisodeInput(preset.e || '1');
+                  }
+                  setActiveStreamUrl(
+                    preset.type === 'movie'
+                      ? `/embed/movie/${preset.id}`
+                      : `/embed/tv/${preset.id}/${preset.s || '1'}/${preset.e || '1'}`
+                  );
+                  setHasLoadedStream(true);
+                }}
+                sx={{
+                  bgcolor: BG_SURFACE,
+                  color: TEXT_MUTED,
+                  fontSize: 11,
+                  border: `1px solid ${BORDER_DIM}`,
+                  borderRadius: 1.25,
+                  px: 1.25,
+                  py: 0.5,
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    bgcolor: alpha(BRAND_RED, 0.15),
+                    borderColor: BRAND_RED,
+                    color: 'common.white',
+                  },
+                }}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </Stack>
+        </Box>
 
         {/* Controls Bar */}
         <Box
@@ -836,6 +996,37 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
           </Stack>
         </Box>
 
+        {/* URL Format Selector */}
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5, width: '100%', maxWidth: 680, justifyContent: 'flex-start' }}>
+          {[
+            { id: 'path', label: 'Path Format (/embed/movie/...)' },
+            { id: 'query', label: 'Query Format (?tmdb=...)' },
+            { id: 'direct', label: 'Direct (/movie/...)' },
+          ].map((fmt) => (
+            <Button
+              key={fmt.id}
+              size="small"
+              onClick={() => setUrlFormat(fmt.id)}
+              sx={{
+                bgcolor: urlFormat === fmt.id ? alpha(BRAND_RED, 0.18) : BG_SURFACE,
+                color: urlFormat === fmt.id ? BRAND_RED : TEXT_MUTED,
+                border: `1px solid ${urlFormat === fmt.id ? BRAND_RED : BORDER_DIM}`,
+                borderRadius: 1,
+                fontSize: 11,
+                fontWeight: 700,
+                px: 1.25,
+                py: 0.35,
+                '&:hover': {
+                  bgcolor: urlFormat === fmt.id ? alpha(BRAND_RED, 0.25) : BG_SURFACE_ELEVATED,
+                  color: 'common.white',
+                },
+              }}
+            >
+              {fmt.label}
+            </Button>
+          ))}
+        </Stack>
+
         {/* Generated URL Box */}
         <Box
           sx={{
@@ -862,13 +1053,13 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
               pl: 1,
             }}
           >
-            {currentEmbedUrl}
+            {currentSnippetUrl}
           </Typography>
 
           <Tooltip title={copiedUrl ? 'Copied!' : 'Copy URL'}>
             <IconButton
               size="small"
-              onClick={() => handleCopy(currentEmbedUrl, setCopiedUrl)}
+              onClick={() => handleCopy(currentSnippetUrl, setCopiedUrl)}
               sx={{ color: TEXT_MUTED, '&:hover': { color: 'common.white' }, ml: 1 }}
             >
               <Iconify icon={copiedUrl ? 'solar:check-read-bold' : 'solar:copy-bold'} width={18} />
@@ -945,6 +1136,157 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
               </Typography>
             </Stack>
           )}
+        </Box>
+      </Container>
+
+      {/* Competitor Comparison Section */}
+      <Container
+        maxWidth="lg"
+        sx={{
+          mb: { xs: 12, md: 16 },
+          scrollMarginTop: 90,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 1,
+            px: 2,
+            py: 0.5,
+            borderRadius: 5,
+            bgcolor: alpha(BRAND_RED, 0.12),
+            border: `1px solid ${alpha(BRAND_RED, 0.3)}`,
+            color: BRAND_RED,
+            fontSize: 11,
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            letterSpacing: 1,
+            mb: 2,
+          }}
+        >
+          Competitive Advantage
+        </Box>
+        <Typography variant="h3" sx={{ fontWeight: 900, color: 'common.white', mb: 1, textAlign: 'center' }}>
+          Why Webmasters Choose <Box component="span" sx={{ color: BRAND_RED }}>VidSrc.work</Box>
+        </Typography>
+        <Typography variant="body2" sx={{ color: TEXT_MUTED, mb: 5, textAlign: 'center', maxWidth: 640 }}>
+          Direct feature-by-feature comparison against legacy embed providers including vidsrc.to and vidsrc.me.
+        </Typography>
+
+        <Box
+          sx={{
+            width: '100%',
+            maxWidth: 960,
+            bgcolor: BG_SURFACE,
+            border: `1px solid ${BORDER_DIM}`,
+            borderRadius: 3,
+            overflow: 'hidden',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+          }}
+        >
+          <Box sx={{ overflowX: 'auto' }}>
+            <Box
+              component="table"
+              sx={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                textAlign: 'left',
+                fontSize: 13,
+              }}
+            >
+              <Box component="thead">
+                <Box component="tr" sx={{ borderBottom: `1px solid ${BORDER_DIM}`, bgcolor: BG_MAIN }}>
+                  <Box component="th" sx={{ p: 2.5, fontWeight: 800, color: TEXT_DIM, letterSpacing: 0.8, fontSize: 11 }}>
+                    FEATURE / CAPABILITY
+                  </Box>
+                  <Box component="th" sx={{ p: 2.5, fontWeight: 900, color: BRAND_RED, fontSize: 13 }}>
+                    ⚡ VidSrc.work (Official)
+                  </Box>
+                  <Box component="th" sx={{ p: 2.5, fontWeight: 700, color: TEXT_MUTED }}>
+                    vidsrc.to
+                  </Box>
+                  <Box component="th" sx={{ p: 2.5, fontWeight: 700, color: TEXT_MUTED }}>
+                    vidsrc.me
+                  </Box>
+                </Box>
+              </Box>
+              <Box component="tbody">
+                {[
+                  {
+                    feature: 'Stream Quality & Bitrate',
+                    vidsrc: 'Adaptive 4K / 1080p Full HD',
+                    to: 'Capped 720p / 1080p',
+                    me: 'Compressed 720p',
+                  },
+                  {
+                    feature: 'Intrusive Ad Experience',
+                    vidsrc: 'Zero disruptive redirects / Clean player',
+                    to: 'Aggressive tab popups & mobile redirects',
+                    me: 'High bounce rate popups',
+                  },
+                  {
+                    feature: 'Failover Reliability',
+                    vidsrc: 'Instant automatic multi-source failover',
+                    to: 'Manual reload on dead links',
+                    me: 'Unreliable / frequent 404s',
+                  },
+                  {
+                    feature: 'TMDB & IMDb Dual Resolution',
+                    vidsrc: 'Real-time server-side ID resolver',
+                    to: 'Partial IMDb support only',
+                    me: 'Strict syntax required',
+                  },
+                  {
+                    feature: 'API Syntax Flexibility',
+                    vidsrc: 'Full Path (/movie/...) & Query (?tmdb=...) support',
+                    to: 'Path only on most mirrors',
+                    me: 'Inconsistent query parameters',
+                  },
+                  {
+                    feature: 'Subtitles & Closed Captions',
+                    vidsrc: '40+ Languages with auto-synchronization',
+                    to: 'Limited languages (10-15)',
+                    me: 'Desynchronized subtitle tracks',
+                  },
+                  {
+                    feature: 'CDN Network & Uptime SLA',
+                    vidsrc: '99.98% High-Availability Edge CDN',
+                    to: 'Frequent domain drops & IP blocks',
+                    me: 'Periodic 502/504 Bad Gateway',
+                  },
+                ].map((row, idx) => (
+                  <Box
+                    key={idx}
+                    component="tr"
+                    sx={{
+                      borderBottom: idx < 6 ? `1px solid ${BORDER_DIM}` : 'none',
+                      '&:hover': { bgcolor: BG_SURFACE_ELEVATED },
+                    }}
+                  >
+                    <Box component="td" sx={{ p: 2.5, fontWeight: 600, color: 'common.white' }}>
+                      {row.feature}
+                    </Box>
+                    <Box component="td" sx={{ p: 2.5, fontWeight: 700, color: '#4ade80' }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Iconify icon="solar:check-circle-bold" width={16} />
+                        <span>{row.vidsrc}</span>
+                      </Stack>
+                    </Box>
+                    <Box component="td" sx={{ p: 2.5, color: TEXT_MUTED }}>
+                      {row.to}
+                    </Box>
+                    <Box component="td" sx={{ p: 2.5, color: TEXT_MUTED }}>
+                      {row.me}
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          </Box>
         </Box>
       </Container>
 
@@ -1227,11 +1569,46 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
                 </Stack>
               </Box>
 
-              {/* Iframe Implementation */}
+              {/* Multi-Language Code Generator */}
               <Box>
                 <Typography variant="caption" sx={{ fontWeight: 800, color: TEXT_DIM, letterSpacing: 1, display: 'block', mb: 1.5, textAlign: 'center' }}>
-                  HTML5 IFRAME IMPLEMENTATION
+                  DEVELOPER INTEGRATION SNIPPETS
                 </Typography>
+
+                {/* Language Tabs */}
+                <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="center" sx={{ mb: 1.5 }}>
+                  {[
+                    { id: 'html', label: 'HTML Iframe' },
+                    { id: 'js', label: 'JavaScript' },
+                    { id: 'react', label: 'React / Next.js' },
+                    { id: 'python', label: 'Python' },
+                    { id: 'curl', label: 'cURL' },
+                    { id: 'php', label: 'PHP' },
+                  ].map((lang) => (
+                    <Button
+                      key={lang.id}
+                      size="small"
+                      onClick={() => setCodeLang(lang.id)}
+                      sx={{
+                        bgcolor: codeLang === lang.id ? alpha(BRAND_RED, 0.18) : BG_MAIN,
+                        color: codeLang === lang.id ? BRAND_RED : TEXT_MUTED,
+                        border: `1px solid ${codeLang === lang.id ? BRAND_RED : BORDER_DIM}`,
+                        borderRadius: 1,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        px: 1.5,
+                        py: 0.4,
+                        '&:hover': {
+                          bgcolor: codeLang === lang.id ? alpha(BRAND_RED, 0.25) : BG_SURFACE_ELEVATED,
+                          color: 'common.white',
+                        },
+                      }}
+                    >
+                      {lang.label}
+                    </Button>
+                  ))}
+                </Stack>
+
                 <Box
                   sx={{
                     position: 'relative',
@@ -1245,7 +1622,7 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
                   <Tooltip title={copiedCode ? 'Copied!' : 'Copy Code'}>
                     <IconButton
                       size="small"
-                      onClick={() => handleCopy(iframeSnippet, setCopiedCode)}
+                      onClick={() => handleCopy(generatedCode, setCopiedCode)}
                       sx={{
                         position: 'absolute',
                         top: 12,
@@ -1269,7 +1646,7 @@ export default function EmbedDocumentationView({ isVidSrc: initialIsVidSrc = fal
                       color: '#d1d5db',
                     }}
                   >
-                    <code>{iframeSnippet}</code>
+                    <code>{generatedCode}</code>
                   </Box>
                 </Box>
               </Box>
