@@ -9,3 +9,4 @@ allowBuilds:
   browser-tabs-lock: true
   protobufjs: true
   sharp: true
+  koffi: true

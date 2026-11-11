@@ -40,6 +40,7 @@
     "@p-stream/providers": "github:steveyout/providers#production",
     "@scure/bip39": "^1.6.0",
     "@vidstack/react": "1.15.6",
+    "@vyla-entertainment/sdk": "^1.28.0",
     "autosuggest-highlight": "^3.3.4",
     "axios": "^1.7.2",
     "dayjs": "^1.11.11",
