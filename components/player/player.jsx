@@ -685,7 +685,7 @@ export default function Player({
   const currentServerLabel = useMemo(() => {
     if (resolvedMode === 'native') {
       const active = extractorProviders.find((e) => e.id === effectiveSelectedExtractor);
-      return active ? (active.label || extractorAlias(active.id)) : 'Native Player';
+      return active ? (active.label || extractorAlias(active.id)) : (directSources?.providerLabel || 'Native Player');
     }
     const embedServer = serverList.find((s) => s.id === selectedEmbedId);
     return embedServer?.name || serverList[0]?.name || (servers[0]?.name ?? 'Embed Server');
