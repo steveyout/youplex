@@ -6,6 +6,7 @@ import { Iconify } from '@/components/iconify';
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
 import { useTheme } from '@mui/material/styles';
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Unstable_Grid2';
@@ -27,6 +28,21 @@ const LINKS = [
     ],
   },
   {
+    headline: 'Apps & Releases',
+    children: [
+      { name: 'Android App (APK)', href: paths.app },
+      { name: 'Android TV App', href: paths.app },
+      { name: 'Torrents', href: paths.torrents },
+    ],
+  },
+  {
+    headline: 'Community',
+    children: [
+      { name: 'Telegram Channel', href: paths.telegram },
+      { name: 'Discord Server', href: paths.discord },
+    ],
+  },
+  {
     headline: 'Legal',
     children: [
       { name: 'Terms and condition', href: '#' },
@@ -35,8 +51,16 @@ const LINKS = [
   },
   { headline: 'Contact', children: [{ name: 'support@youplex.site', href: '#' }] },
 ];
+
 /// ----------------------------socials-----------------------------------
 export const _socials = [
+  {
+    name: 'Android App',
+    value: 'android',
+    icon: 'ant-design:android-filled',
+    path: paths.app,
+    color: '#3DDC84',
+  },
   {
     name: 'Telegram',
     value: 'telegram',
@@ -52,6 +76,7 @@ export const _socials = [
     color: '#5865F2',
   },
 ];
+
 // ----------------------------------------------------------------------
 
 export function Footer({ layoutQuery, sx }) {
@@ -157,7 +182,7 @@ export function Footer({ layoutQuery, sx }) {
             </Stack>
           </Grid>
 
-          <Grid {...{ xs: 12, [layoutQuery]: 6 }}>
+          <Grid {...{ xs: 12, [layoutQuery]: 8 }}>
             <Stack
               spacing={5}
               sx={{
@@ -179,17 +204,26 @@ export function Footer({ layoutQuery, sx }) {
                     {list.headline}
                   </Typography>
 
-                  {list.children.map((link) => (
-                    <Link
-                      key={link.name}
-                      component={RouterLink}
-                      href={link.href}
-                      color="inherit"
-                      variant="body2"
-                    >
-                      {link.name}
-                    </Link>
-                  ))}
+                  {list.children.map((link) => {
+                    const isExternal = link.href.startsWith('http');
+                    return (
+                      <Link
+                        key={link.name}
+                        component={isExternal ? 'a' : RouterLink}
+                        href={link.href}
+                        target={isExternal ? '_blank' : undefined}
+                        rel={isExternal ? 'noopener noreferrer' : undefined}
+                        color="inherit"
+                        variant="body2"
+                        sx={{
+                          transition: 'color 0.2s',
+                          '&:hover': { color: 'primary.main' },
+                        }}
+                      >
+                        {link.name}
+                      </Link>
+                    );
+                  })}
                 </Stack>
               ))}
             </Stack>
@@ -226,6 +260,20 @@ export function HomeFooter({ sx }) {
     >
       <Container>
         <Logo />
+        <Stack direction="row" spacing={1.5} justifyContent="center" sx={{ mt: 2, mb: 1.5 }}>
+          <Button
+            size="small"
+            variant="soft"
+            color="primary"
+            component="a"
+            href={paths.app}
+            target="_blank"
+            rel="noopener noreferrer"
+            startIcon={<Iconify icon="ant-design:android-filled" />}
+          >
+            Download Android App (APK)
+          </Button>
+        </Stack>
         <Box sx={{ mt: 1, typography: 'caption' }}>
           © All rights reserved.
           <br /> made by

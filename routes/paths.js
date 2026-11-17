@@ -28,6 +28,8 @@ export const paths = {
     signUp: '/auth/sign-up',
     account: '/auth/account',
   },
+  app: process.env.NEXT_PUBLIC_APP_APK_URL || 'https://github.com/steveyout/youplex-apk/releases',
+  apk: process.env.NEXT_PUBLIC_APP_APK_URL || 'https://github.com/steveyout/youplex-apk/releases',
   torrents: 'https://torrents.youplex.site/',
   discord: 'https://discord.gg/5eWu9Vz6tQ',
   telegram: 'https://t.me/youplexannouncments',

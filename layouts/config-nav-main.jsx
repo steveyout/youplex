@@ -35,6 +35,11 @@ export const navData = [
     icon: <Iconify width={22} icon="solar:code-square-bold-duotone" />,
   },
   {
+    title: 'App',
+    path: paths.app,
+    icon: <Iconify width={22} icon="ant-design:android-filled" />,
+  },
+  {
     title: 'Library',
     path: paths.bookmarks,
     icon: <Iconify width={22} icon="solar:bookmark-square-minimalistic-bold-duotone" />,
@@ -65,14 +70,24 @@ export const navData = [
         subheader: '',
         items: [
           {
-            title: 'Torrents',
-            path: paths.torrents,
-            icon: <Iconify width={20} icon="arcticons:torrents-csv-android" />,
+            title: 'Android App (APK)',
+            path: paths.app,
+            icon: <Iconify width={20} icon="ant-design:android-filled" />,
+          },
+          {
+            title: 'Telegram',
+            path: paths.telegram,
+            icon: <Iconify width={20} icon="logos:telegram" />,
           },
           {
             title: 'Discord',
             path: paths.discord,
             icon: <Iconify width={20} icon="ic:round-discord" />,
+          },
+          {
+            title: 'Torrents',
+            path: paths.torrents,
+            icon: <Iconify width={20} icon="arcticons:torrents-csv-android" />,
           },
           {
             title: 'Embed API',

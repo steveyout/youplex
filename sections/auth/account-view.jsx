@@ -14,6 +14,7 @@ import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
 import CircularProgress from '@mui/material/CircularProgress';
+import { alpha } from '@mui/material/styles';
 
 import { paths } from '@/routes/paths';
 import { useRouter } from '@/routes/hooks';
@@ -28,34 +29,40 @@ export function AccountView() {
   const {
     account,
     isLoggedIn,
-    backendUrl,
-    syncStatus,
+    syncProgress,
+    syncBookmarks,
+    syncSettings,
+    updateProfile,
+    deleteAccount,
     logout,
     disconnect,
-    syncNow,
+    backendUrl,
     updateBackendUrl,
-    updateProfile,
   } = useSyncAuth();
 
-  const [customUrl, setCustomUrl] = useState(backendUrl);
-  const [showPassphrase, setShowPassphrase] = useState(false);
-  const [syncingManual, setSyncingManual] = useState(false);
   const [editingNick, setEditingNick] = useState(false);
-  const [nickVal, setNickVal] = useState(account?.nickname || '');
+  const [nickVal, setNickVal] = useState('');
+  const [showSeed, setShowSeed] = useState(false);
+  const [customUrl, setCustomUrl] = useState('');
+  const [syncingManual, setSyncingManual] = useState(false);
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      router.replace(paths.auth.signIn);
-    } else {
-      setCustomUrl(backendUrl);
-      setNickVal(account?.nickname || '');
+    if (account?.profile?.nickname) {
+      setNickVal(account.profile.nickname);
     }
-  }, [isLoggedIn, router, backendUrl, account]);
+  }, [account]);
 
-  const handleSyncClick = async () => {
+  useEffect(() => {
+    setCustomUrl(backendUrl || DEFAULT_BACKEND_URL);
+  }, [backendUrl]);
+
+  const handleManualSync = async () => {
     setSyncingManual(true);
     try {
-      await syncNow();
+      await Promise.all([syncProgress(), syncBookmarks(), syncSettings()]);
+      toast.success('Sync complete! All devices updated.');
+    } catch (e) {
+      toast.error('Sync failed: ' + (e?.message || 'Network error'));
     } finally {
       setSyncingManual(false);
     }
@@ -125,9 +132,9 @@ export function AccountView() {
                 </Button>
               </Stack>
             ) : (
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography variant="h6" sx={{ fontWeight: 700 }} noWrap>
-                  {account?.nickname || 'Movie Fan'}
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                <Typography variant="h6" noWrap sx={{ fontWeight: 700 }}>
+                  {account?.profile?.nickname || 'Anonymous Streamer'}
                 </Typography>
                 <IconButton size="small" onClick={() => setEditingNick(true)}>
                   <Iconify icon="solar:pen-bold" width={16} />
@@ -135,129 +142,207 @@ export function AccountView() {
               </Stack>
             )}
 
-            <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               Device: {account?.deviceName || 'Web Client'}
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace' }} noWrap>
-              User ID: {account?.userId}
             </Typography>
           </Box>
 
-          <Chip
-            variant="soft"
-            color={syncStatus === 'synced' ? 'success' : syncStatus === 'syncing' ? 'warning' : 'default'}
-            icon={
-              syncStatus === 'syncing' ? (
-                <CircularProgress size={12} color="inherit" />
-              ) : (
-                <Iconify icon="solar:check-circle-bold" width={16} />
-              )
-            }
-            label={syncStatus === 'syncing' ? 'Syncing...' : 'Connected'}
-            sx={{ fontWeight: 600 }}
-          />
+          <LoadingButton
+            variant="contained"
+            color="primary"
+            startIcon={<Iconify icon="solar:refresh-bold" />}
+            loading={syncingManual}
+            onClick={handleManualSync}
+          >
+            Sync Now
+          </LoadingButton>
         </Stack>
       </Box>
 
-      {/* Sync Status & Backend Info */}
+      {/* Passphrase Card */}
       <Box
         sx={{
-          p: 2.5,
+          p: 3,
           borderRadius: 2,
+          bgcolor: 'background.neutral',
           border: (t) => `1px solid ${t.palette.divider}`,
         }}
       >
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Iconify icon="solar:cloud-upload-bold" width={22} sx={{ color: 'primary.main' }} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Cloud Backend
-            </Typography>
-          </Stack>
-          <Chip
-            size="small"
-            label={backendUrl === DEFAULT_BACKEND_URL ? 'Default Server (pstream.site)' : 'Custom Server'}
-            color="primary"
-            variant="outlined"
-            sx={{ height: 22, fontSize: 11 }}
-          />
-        </Stack>
-
-        <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 2, wordBreak: 'break-all' }}>
-          {backendUrl}
-        </Typography>
-
-        <LoadingButton
-          variant="contained"
-          color="primary"
-          fullWidth
-          size="large"
-          loading={syncingManual}
-          loadingIndicator="Syncing with cloud..."
-          startIcon={<Iconify icon="solar:refresh-bold" />}
-          onClick={handleSyncClick}
-          sx={{ fontWeight: 700 }}
-        >
-          Force Sync Now
-        </LoadingButton>
-      </Box>
-
-      {/* Passphrase Section */}
-      {account?.mnemonic && (
-        <Box
-          sx={{
-            p: 2.5,
-            borderRadius: 2,
-            bgcolor: 'background.neutral',
-            border: (t) => `1px dashed ${t.palette.divider}`,
-          }}
-        >
+        <Stack spacing={1.5}>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Iconify icon="solar:key-bold" color="warning.main" width={20} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                Secret Recovery Passphrase
-              </Typography>
-            </Stack>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Device Link Passphrase (12 words)
+            </Typography>
             <Button
               size="small"
               variant="text"
-              onClick={() => setShowPassphrase(!showPassphrase)}
-              startIcon={<Iconify icon={showPassphrase ? 'solar:eye-closed-bold' : 'solar:eye-bold'} />}
+              onClick={() => setShowSeed((prev) => !prev)}
+              startIcon={<Iconify icon={showSeed ? 'solar:eye-closed-bold' : 'solar:eye-bold'} />}
             >
-              {showPassphrase ? 'Hide' : 'Reveal'}
+              {showSeed ? 'Hide' : 'Reveal'}
             </Button>
           </Stack>
 
-          {showPassphrase && (
-            <Box sx={{ mt: 2 }}>
-              <Box
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Enter these 12 secret words on your TV or another browser to link and automatically sync your watch history & bookmarks.
+          </Typography>
+
+          {showSeed && account?.seed ? (
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 1.5,
+                bgcolor: 'background.paper',
+                border: (t) => `1px dashed ${t.palette.divider}`,
+                position: 'relative',
+              }}
+            >
+              <Typography
+                variant="body2"
                 sx={{
-                  p: 2,
-                  borderRadius: 1.5,
-                  bgcolor: 'background.paper',
                   fontFamily: 'monospace',
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                  border: (t) => `1px solid ${t.palette.divider}`,
-                  wordBreak: 'break-word',
+                  letterSpacing: 0.5,
+                  userSelect: 'all',
+                  wordBreak: 'break-all',
                 }}
               >
-                {account.mnemonic}
-              </Box>
+                {account.seed}
+              </Typography>
               <Button
                 size="small"
                 variant="outlined"
-                sx={{ mt: 1.5 }}
                 startIcon={<Iconify icon="solar:copy-bold" />}
-                onClick={() => handleCopyPassphrase(account.mnemonic)}
+                onClick={() => handleCopyPassphrase(account.seed)}
+                sx={{ mt: 1.5 }}
               >
                 Copy Passphrase
               </Button>
             </Box>
+          ) : (
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 1.5,
+                bgcolor: 'background.paper',
+                border: (t) => `1px dashed ${t.palette.divider}`,
+                filter: 'blur(4px)',
+                userSelect: 'none',
+              }}
+            >
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                apple banana cherry diamond elephant flamingo galaxy horizon island jungle kangaroo lagoon
+              </Typography>
+            </Box>
           )}
+        </Stack>
+      </Box>
+
+      {/* Connected Devices */}
+      {Array.isArray(account?.devices) && account.devices.length > 0 && (
+        <Box
+          sx={{
+            p: 3,
+            borderRadius: 2,
+            bgcolor: 'background.neutral',
+            border: (t) => `1px solid ${t.palette.divider}`,
+          }}
+        >
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+            Connected Devices ({account.devices.length})
+          </Typography>
+          <Stack spacing={1}>
+            {account.devices.map((dev) => (
+              <Stack
+                key={dev.id}
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{
+                  p: 1.5,
+                  borderRadius: 1,
+                  bgcolor: 'background.paper',
+                  border: (t) => `1px solid ${t.palette.divider}`,
+                }}
+              >
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Iconify
+                    icon={
+                      dev.os === 'Android'
+                        ? 'solar:smartphone-bold'
+                        : dev.os === 'iOS'
+                        ? 'solar:smartphone-2-bold'
+                        : 'solar:laptop-bold'
+                    }
+                    width={22}
+                  />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {dev.name || 'Unnamed Device'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {dev.browser} on {dev.os}
+                    </Typography>
+                  </Box>
+                </Stack>
+                {dev.id === account.deviceId && (
+                  <Chip size="small" color="success" label="This Device" />
+                )}
+              </Stack>
+            ))}
+          </Stack>
         </Box>
       )}
+
+      {/* Android App Download Banner */}
+      <Box
+        sx={{
+          p: 2.5,
+          borderRadius: 2,
+          bgcolor: (t) => alpha(t.palette.primary.main, 0.08),
+          border: (t) => `1px dashed ${alpha(t.palette.primary.main, 0.3)}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              borderRadius: 1.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: (t) => alpha(t.palette.primary.main, 0.16),
+              color: 'primary.main',
+            }}
+          >
+            <Iconify icon="ant-design:android-filled" width={26} />
+          </Box>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              Youplex for Android & Android TV
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              Download our official native APK release to stream on phones, tablets, and Smart TVs.
+            </Typography>
+          </Box>
+        </Stack>
+        <Button
+          variant="contained"
+          color="primary"
+          component="a"
+          href={paths.app}
+          target="_blank"
+          rel="noopener noreferrer"
+          startIcon={<Iconify icon="solar:download-square-bold" />}
+        >
+          Download APK
+        </Button>
+      </Box>
 
       {/* Backend URL Configuration */}
       <Box>

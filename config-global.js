@@ -11,6 +11,7 @@ export const CONFIG = {
     basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? '',
     version: packageJson.version,
     syncBackendUrl: process.env.NEXT_PUBLIC_BACKEND_URL ?? 'https://backend.pstream.site',
+    appApkUrl: process.env.NEXT_PUBLIC_APP_APK_URL ?? 'https://github.com/steveyout/youplex-apk/releases',
   },
   ads: {
     enabled: isAdsEnabled,

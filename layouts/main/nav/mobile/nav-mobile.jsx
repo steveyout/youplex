@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { paths } from '@/routes/paths';
 import { Logo } from '@/components/logo';
 import { usePathname } from '@/routes/hooks';
-import {Iconify} from "@/components/iconify";
+import { Iconify } from '@/components/iconify';
 import { NavUl } from '@/components/nav-section';
 import { Scrollbar } from '@/components/scrollbar';
 import { SignInButton } from '@/layouts/components/sign-in-button';
@@ -10,6 +10,7 @@ import { SignInButton } from '@/layouts/components/sign-in-button';
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 import Button from '@mui/material/Button';
+import { alpha } from '@mui/material/styles';
 
 import { NavList } from './nav-mobile-list';
 
@@ -55,19 +56,43 @@ export function NavMobile({ data, open, onClose, slots, sx }) {
       </Scrollbar>
 
       {slots?.bottomArea ?? (
-        <Box gap={1.5} display="flex" sx={{ px: 2.5, py: 3 }}>
-          <SignInButton fullWidth />
-
+        <Box gap={1.5} display="flex" flexDirection="column" sx={{ px: 2.5, py: 2.5 }}>
           <Button
             fullWidth
             variant="contained"
-            rel="noopener"
+            color="primary"
+            component="a"
+            rel="noopener noreferrer"
             target="_blank"
-            href={paths.discord}
-            startIcon={<Iconify icon="line-md:discord" width={24} />}
+            href={paths.app}
+            startIcon={<Iconify icon="ant-design:android-filled" width={20} />}
+            sx={{
+              background: (theme) =>
+                `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+              boxShadow: (theme) =>
+                `0 6px 16px -2px ${alpha(theme.palette.primary.main, 0.4)}`,
+              fontWeight: 600,
+            }}
           >
-            Discord
+            Download Android App
           </Button>
+
+          <Box gap={1.5} display="flex">
+            <SignInButton fullWidth />
+
+            <Button
+              fullWidth
+              variant="outlined"
+              color="inherit"
+              component="a"
+              rel="noopener noreferrer"
+              target="_blank"
+              href={paths.discord}
+              startIcon={<Iconify icon="line-md:discord" width={22} />}
+            >
+              Discord
+            </Button>
+          </Box>
         </Box>
       )}
     </Drawer>

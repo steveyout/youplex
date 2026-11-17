@@ -1,10 +1,13 @@
 import { paths } from '@/routes/paths';
 import { Logo } from '@/components/logo';
 import { RouterLink } from '@/routes/components';
+import { Iconify } from '@/components/iconify';
 
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
-import { styled, useTheme } from '@mui/material/styles';
+import Tooltip from '@mui/material/Tooltip';
+import IconButton from '@mui/material/IconButton';
+import { alpha, styled, useTheme } from '@mui/material/styles';
 
 import { HeaderSection } from './header-section';
 import { Searchbar } from '../components/searchbar';
@@ -63,6 +66,7 @@ export function HeaderBase({
     localization = false,
     notifications = true,
     library = false,
+    app = true,
   } = {},
 
   ...other
@@ -129,6 +133,32 @@ export function HeaderBase({
 
               {/* -- Searchbar -- */}
               {searchbar && <Searchbar data-slot="searchbar" data={data?.nav} />}
+
+              {/* -- Android App Download button -- */}
+              {app && (
+                <Tooltip title="Download Android App (APK)" arrow>
+                  <IconButton
+                    component="a"
+                    href={paths.app}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Download Android App"
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      color: 'text.secondary',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        color: '#3DDC84',
+                        bgcolor: alpha('#3DDC84', 0.12),
+                        transform: 'translateY(-1px)',
+                      },
+                    }}
+                  >
+                    <Iconify icon="ant-design:android-filled" width={22} />
+                  </IconButton>
+                </Tooltip>
+              )}
 
               {/* -- Library popover (Grouped Bookmarks & History) -- */}
               {library && <LibraryPopover data-slot="library" />}

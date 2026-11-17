@@ -2,7 +2,9 @@ import Accordion from '@mui/material/Accordion';
 import Typography from '@mui/material/Typography';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
+import Link from '@mui/material/Link';
 
+import { paths } from '@/routes/paths';
 import { Iconify } from '@/components/iconify';
 
 // ----------------------------------------------------------------------
@@ -26,7 +28,15 @@ const FAQS = [
   {
     id: 'faq-4',
     heading: 'Can I watch on my mobile device or Smart TV?',
-    detail: 'Absolutely! Our site is fully responsive and works on mobile browsers. Since we are a PWA, you can also "Install" the app on your Android or iOS home screen for a better experience.',
+    detail: (
+      <>
+        Absolutely! Our site is fully responsive and works on mobile browsers. You can also download our official native{' '}
+        <Link href={paths.app} target="_blank" rel="noopener noreferrer" sx={{ fontWeight: 600 }}>
+          Android App (APK)
+        </Link>{' '}
+        for mobile devices and Android TV, or install the PWA for the best mobile streaming experience.
+      </>
+    ),
   },
   {
     id: 'faq-5',

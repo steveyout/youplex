@@ -3,6 +3,7 @@
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Badge from '@mui/material/Badge';
+import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
@@ -14,6 +15,7 @@ import { paper, varAlpha } from 'theme/styles';
 import { defaultFont } from 'theme/core/typography';
 import PRIMARY_COLOR from 'theme/with-settings/primary-color.json';
 
+import { paths } from '@/routes/paths';
 import { Iconify } from '../../iconify';
 import { BaseOption } from './base-option';
 import { NavOptions } from './nav-options';
@@ -178,7 +180,7 @@ export function SettingsDrawer({
       {renderHead}
 
       <Scrollbar>
-        <Stack spacing={6} sx={{ px: 2.5, pb: 5 }}>
+        <Stack spacing={4} sx={{ px: 2.5, pb: 5 }}>
           <Box gap={2} display="grid" gridTemplateColumns="repeat(2, 1fr)">
             {!hideColorScheme && renderMode}
             {!hideContrast && renderContrast}
@@ -188,6 +190,53 @@ export function SettingsDrawer({
           {!(hideNavLayout && hideNavColor) && renderNav}
           {!hidePresets && renderPresets}
           {!hideFont && renderFont}
+
+          {/* Android App Download Banner */}
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: (t) => varAlpha(t.vars.palette.primary.mainChannel, 0.08),
+              border: (t) => `1px dashed ${varAlpha(t.vars.palette.primary.mainChannel, 0.3)}`,
+              textAlign: 'center',
+            }}
+          >
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                mx: 'auto',
+                mb: 1,
+                borderRadius: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: (t) => varAlpha(t.vars.palette.primary.mainChannel, 0.16),
+                color: 'primary.main',
+              }}
+            >
+              <Iconify icon="ant-design:android-filled" width={26} sx={{ color: '#3DDC84' }} />
+            </Box>
+            <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 700 }}>
+              Youplex for Android
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1.5 }}>
+              Download the official APK for Android TV and mobile devices
+            </Typography>
+            <Button
+              fullWidth
+              size="small"
+              variant="contained"
+              color="primary"
+              component="a"
+              href={paths.app}
+              target="_blank"
+              rel="noopener noreferrer"
+              startIcon={<Iconify icon="solar:download-square-bold" />}
+            >
+              Download APK
+            </Button>
+          </Box>
         </Stack>
       </Scrollbar>
     </Drawer>

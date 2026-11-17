@@ -21,6 +21,8 @@ import DialogContent from '@mui/material/DialogContent';
 import CircularProgress from '@mui/material/CircularProgress';
 import InputAdornment from '@mui/material/InputAdornment';
 
+import { paths } from '@/routes/paths';
+import { alpha } from '@mui/material/styles';
 import { Iconify } from '@/components/iconify';
 import { useSyncAuth } from '@/hooks/use-sync-auth';
 import { DEFAULT_BACKEND_URL } from '@/lib/sync/config';
@@ -700,6 +702,44 @@ export function AccountDialog({ open, onClose }) {
             )}
           </Stack>
         )}
+        {/* Android App download callout */}
+        <Box
+          sx={{
+            mt: 2.5,
+            p: 1.5,
+            borderRadius: 1.5,
+            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+            border: (theme) => `1px dashed ${alpha(theme.palette.primary.main, 0.3)}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
+          }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Iconify icon="ant-design:android-filled" width={24} sx={{ color: '#3DDC84' }} />
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontSize: 13, fontWeight: 600 }}>
+                Youplex for Android & Android TV
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: 11 }}>
+                Download official APK for Smart TVs & phones
+              </Typography>
+            </Box>
+          </Stack>
+          <Button
+            size="small"
+            variant="soft"
+            color="primary"
+            component="a"
+            href={paths.app}
+            target="_blank"
+            rel="noopener noreferrer"
+            endIcon={<Iconify icon="solar:download-minimalistic-bold" width={16} />}
+          >
+            Get APK
+          </Button>
+        </Box>
       </DialogContent>
     </Dialog>
   );
