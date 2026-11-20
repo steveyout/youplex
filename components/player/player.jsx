@@ -597,17 +597,49 @@ export default function Player({
   const activeNativeSrc = nativeSrc[0]?.src;
   const resolvedMode = playbackMode;
 
+  const resolvedActiveExtractorId =
+    selectedExtractorId ||
+    activeExtractorId ||
+    directSources?.provider ||
+    directSources?.sourceId ||
+    directSources?.sources?.[0]?.provider ||
+    null;
+  const effectiveSelectedExtractor = resolvedActiveExtractorId
+    ? String(resolvedActiveExtractorId).trim().toLowerCase()
+    : null;
+
   // Build server list based on mode with completely anonymous extractor names
   const serverList = useMemo(() => {
     if (resolvedMode === 'native') {
       const mediaType = type === 'tv' ? 'tv' : 'movie';
-      return extractorProviders
+      const mapped = extractorProviders
         .filter((ep) => !ep.supportedContent || ep.supportedContent.includes(mediaType))
         .map((ep) => ({
           id: ep.id,
           name: (ep.label || extractorAlias(ep.id)).replace(/\s*\([^)]*\)/g, '').trim(),
           kind: 'extractor',
         }));
+
+      if (
+        effectiveSelectedExtractor &&
+        !mapped.some((item) => String(item.id).trim().toLowerCase() === effectiveSelectedExtractor)
+      ) {
+        const fallbackLabel = (
+          directSources?.providerLabel ||
+          directSources?.label ||
+          directSources?.providerName ||
+          extractorAlias(effectiveSelectedExtractor)
+        )
+          .replace(/\s*\([^)]*\)/g, '')
+          .trim();
+        mapped.unshift({
+          id: effectiveSelectedExtractor,
+          name: fallbackLabel,
+          kind: 'extractor',
+        });
+      }
+
+      return mapped;
     }
     const baseProviders = servers && servers.length > 0 ? servers : defaultProviders.filter((p) => p.enabled);
     return baseProviders.map((s) => ({
@@ -618,7 +650,20 @@ export default function Player({
         ? getEmbedUrl(s.id, type, resolvedTmdbId, resolvedSeasonNum, resolvedEpisodeNum)
         : s.url || src,
     }));
-  }, [resolvedMode, extractorProviders, servers, resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum, src]);
+  }, [
+    resolvedMode,
+    extractorProviders,
+    servers,
+    resolvedTmdbId,
+    type,
+    resolvedSeasonNum,
+    resolvedEpisodeNum,
+    src,
+    effectiveSelectedExtractor,
+    directSources?.providerLabel,
+    directSources?.label,
+    directSources?.providerName,
+  ]);
 
   // Determine active embed URL
   const activeEmbedUrl = useMemo(() => {
@@ -635,7 +680,6 @@ export default function Player({
     return src;
   }, [playbackMode, selectedEmbedId, servers, serverList, resolvedTmdbId, type, resolvedSeasonNum, resolvedEpisodeNum, src]);
 
-  const effectiveSelectedExtractor = selectedExtractorId ?? activeExtractorId;
   const embedAvailable = allowEmbedMode && (Boolean(activeEmbedUrl) || Boolean(src) || servers.length > 0);
 
   // Auto-clear embed loading indicator after 1500ms max so player is never stuck behind a loader
@@ -740,12 +784,34 @@ export default function Player({
   // Current server label
   const currentServerLabel = useMemo(() => {
     if (resolvedMode === 'native') {
-      const active = extractorProviders.find((e) => e.id === effectiveSelectedExtractor);
-      return active ? (active.label || extractorAlias(active.id)) : (directSources?.providerLabel || 'Native Player');
+      const active =
+        serverList.find(
+          (e) => String(e.id).trim().toLowerCase() === effectiveSelectedExtractor
+        ) ||
+        extractorProviders.find(
+          (e) => String(e.id).trim().toLowerCase() === effectiveSelectedExtractor
+        );
+      if (active) {
+        return (active.name || active.label || extractorAlias(active.id))
+          .replace(/\s*\([^)]*\)/g, '')
+          .trim();
+      }
+      return (directSources?.providerLabel || directSources?.providerName || 'Native Player')
+        .replace(/\s*\([^)]*\)/g, '')
+        .trim();
     }
     const embedServer = serverList.find((s) => s.id === selectedEmbedId);
     return embedServer?.name || serverList[0]?.name || (servers[0]?.name ?? 'Embed Server');
-  }, [resolvedMode, serverList, selectedEmbedId, extractorProviders, effectiveSelectedExtractor, servers]);
+  }, [
+    resolvedMode,
+    serverList,
+    selectedEmbedId,
+    extractorProviders,
+    effectiveSelectedExtractor,
+    servers,
+    directSources?.providerLabel,
+    directSources?.providerName,
+  ]);
 
   // Storyboard / Thumbnail VTT track if provided by extractor
   const thumbnailsUrl = useMemo(() => {
@@ -1415,11 +1481,65 @@ export default function Player({
                       }}
                       sx={{
                         fontSize: 13,
-                        color: isSelected ? 'primary.main' : 'common.white',
-                        fontWeight: isSelected ? 600 : 400,
+                        borderRadius: 1.25,
+                        mx: 0.75,
+                        my: 0.25,
+                        px: 1.25,
+                        py: 0.85,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 1.5,
+                        color: isSelected ? 'common.white' : 'text.secondary',
+                        fontWeight: isSelected ? 700 : 400,
+                        borderLeft: isSelected ? '3px solid #FF3030' : '3px solid transparent',
+                        '&.Mui-selected': {
+                          bgcolor: alpha('#FF3030', 0.18),
+                          '&:hover': { bgcolor: alpha('#FF3030', 0.26) },
+                        },
                       }}
                     >
-                      {srv.name}
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+                        <Box
+                          sx={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: '50%',
+                            flexShrink: 0,
+                            bgcolor: isSelected ? '#22C55E' : alpha('#ffffff', 0.25),
+                            boxShadow: isSelected ? '0 0 8px #22C55E' : 'none',
+                          }}
+                        />
+                        <Typography variant="body2" noWrap sx={{ fontSize: 13, fontWeight: isSelected ? 700 : 400 }}>
+                          {srv.name}
+                        </Typography>
+                        {isSelected && (
+                          <Box
+                            sx={{
+                              px: 0.65,
+                              py: 0.1,
+                              borderRadius: 0.75,
+                              fontSize: 9.5,
+                              fontWeight: 800,
+                              letterSpacing: 0.4,
+                              textTransform: 'uppercase',
+                              bgcolor: alpha('#22C55E', 0.18),
+                              color: '#4ADE80',
+                              border: `1px solid ${alpha('#22C55E', 0.4)}`,
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            Active
+                          </Box>
+                        )}
+                      </Stack>
+                      {isSelected && (
+                        <Iconify
+                          icon="solar:check-circle-bold"
+                          width={17}
+                          sx={{ color: '#4ADE80', flexShrink: 0 }}
+                        />
+                      )}
                     </MenuItem>
                   );
                 })}

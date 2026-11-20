@@ -1117,13 +1117,22 @@ export default function NativeControls({
                 {serverList.map((server) => {
                   const isSelected =
                     resolvedMode === 'native'
-                      ? effectiveSelectedExtractor === server.id
-                      : selectedEmbedId === server.id;
-                  const isFailed = failedExtractorId === server.id;
+                      ? Boolean(
+                          effectiveSelectedExtractor &&
+                            String(effectiveSelectedExtractor).trim().toLowerCase() ===
+                              String(server.id).trim().toLowerCase()
+                        )
+                      : (selectedEmbedId || serverList[0]?.id) === server.id;
+                  const isFailed =
+                    Boolean(failedExtractorId) &&
+                    String(failedExtractorId).trim().toLowerCase() ===
+                      String(server.id).trim().toLowerCase();
                   const isExtracting =
                     resolvedMode === 'native' &&
                     sourcesLoading &&
-                    effectiveSelectedExtractor === server.id;
+                    Boolean(effectiveSelectedExtractor) &&
+                    String(effectiveSelectedExtractor).trim().toLowerCase() ===
+                      String(server.id).trim().toLowerCase();
 
                   return (
                     <Box key={server.id}>
@@ -1141,40 +1150,67 @@ export default function NativeControls({
                           my: 0.25,
                           justifyContent: 'space-between',
                           gap: 1.5,
+                          borderLeft: isSelected
+                            ? `3px solid ${primaryColor}`
+                            : '3px solid transparent',
                           '&.Mui-selected': {
-                            bgcolor: alpha(primaryColor, 0.18),
-                            '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
+                            bgcolor: alpha(primaryColor, 0.2),
+                            '&:hover': { bgcolor: alpha(primaryColor, 0.3) },
                           },
                         }}
                       >
-                        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-                          <Iconify
-                            icon={
-                              server.kind === 'extractor'
-                                ? 'solar:link-bold'
-                                : 'solar:server-square-bold'
-                            }
-                            width={18}
+                        <Stack direction="row" alignItems="center" spacing={1.25} sx={{ minWidth: 0 }}>
+                          <Box
                             sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
                               flexShrink: 0,
-                              color: isFailed
+                              bgcolor: isFailed
                                 ? 'error.main'
                                 : isSelected
-                                ? 'primary.light'
-                                : 'text.secondary',
+                                ? '#22C55E'
+                                : alpha('#ffffff', 0.22),
+                              boxShadow: isFailed
+                                ? '0 0 8px #FF5630'
+                                : isSelected
+                                ? '0 0 8px #22C55E'
+                                : 'none',
                             }}
                           />
                           <Stack spacing={0.2} sx={{ minWidth: 0 }}>
-                            <Typography
-                              variant="subtitle2"
-                              noWrap
-                              sx={{
-                                fontWeight: isSelected ? 600 : 500,
-                                color: isFailed ? 'error.main' : 'common.white',
-                              }}
-                            >
-                              {server.name}
-                            </Typography>
+                            <Stack direction="row" alignItems="center" spacing={0.85} sx={{ minWidth: 0 }}>
+                              <Typography
+                                variant="subtitle2"
+                                noWrap
+                                sx={{
+                                  fontWeight: isSelected ? 700 : 500,
+                                  color: isFailed ? 'error.main' : 'common.white',
+                                }}
+                              >
+                                {server.name}
+                              </Typography>
+                              {isSelected && !isFailed && (
+                                <Box
+                                  sx={{
+                                    px: 0.7,
+                                    py: 0.1,
+                                    borderRadius: 0.75,
+                                    fontSize: 9.5,
+                                    fontWeight: 800,
+                                    letterSpacing: 0.4,
+                                    textTransform: 'uppercase',
+                                    bgcolor: alpha('#22C55E', 0.18),
+                                    color: '#4ADE80',
+                                    border: `1px solid ${alpha('#22C55E', 0.45)}`,
+                                    lineHeight: 1.3,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  Active
+                                </Box>
+                              )}
+                            </Stack>
                             {isFailed && (
                               <Typography
                                 variant="caption"
@@ -1200,7 +1236,7 @@ export default function NativeControls({
                             icon={isFailed ? 'solar:close-circle-bold' : 'solar:check-circle-bold'}
                             width={20}
                             sx={{
-                              color: isFailed ? 'error.main' : 'primary.light',
+                              color: isFailed ? 'error.main' : '#4ADE80',
                               flexShrink: 0,
                             }}
                           />
@@ -1257,6 +1293,16 @@ export default function NativeControls({
                                 <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
                                   <Box
                                     sx={{
+                                      width: 6,
+                                      height: 6,
+                                      borderRadius: '50%',
+                                      flexShrink: 0,
+                                      bgcolor: isChildActive ? '#22C55E' : alpha('#ffffff', 0.2),
+                                      boxShadow: isChildActive ? '0 0 6px #22C55E' : 'none',
+                                    }}
+                                  />
+                                  <Box
+                                    sx={{
                                       px: 0.65,
                                       py: 0.15,
                                       borderRadius: 0.75,
@@ -1274,7 +1320,7 @@ export default function NativeControls({
                                     noWrap
                                     sx={{
                                       color: isChildActive ? 'common.white' : 'text.secondary',
-                                      fontWeight: isChildActive ? 600 : 400,
+                                      fontWeight: isChildActive ? 700 : 400,
                                       fontSize: 12,
                                     }}
                                   >
@@ -1285,7 +1331,7 @@ export default function NativeControls({
                                   <Iconify
                                     icon="solar:check-circle-bold"
                                     width={15}
-                                    sx={{ color: 'primary.light', flexShrink: 0 }}
+                                    sx={{ color: '#4ADE80', flexShrink: 0 }}
                                   />
                                 )}
                               </MenuItem>
@@ -3543,6 +3589,16 @@ export default function NativeControls({
                   <Stack direction="row" alignItems="center" spacing={0.85} sx={{ minWidth: 0 }}>
                     <Box
                       sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        bgcolor: isChildActive ? '#22C55E' : alpha('#ffffff', 0.2),
+                        boxShadow: isChildActive ? '0 0 6px #22C55E' : 'none',
+                      }}
+                    />
+                    <Box
+                      sx={{
                         px: 0.7,
                         py: 0.15,
                         borderRadius: 0.75,
@@ -3558,7 +3614,7 @@ export default function NativeControls({
                     <Typography
                       variant="subtitle2"
                       noWrap
-                      sx={{ fontWeight: isChildActive ? 600 : 400, fontSize: 12.5 }}
+                      sx={{ fontWeight: isChildActive ? 700 : 400, fontSize: 12.5 }}
                     >
                       {child.optionLabel}
                     </Typography>
@@ -3567,7 +3623,7 @@ export default function NativeControls({
                     <Iconify
                       icon="solar:check-circle-bold"
                       width={18}
-                      sx={{ color: 'primary.light', flexShrink: 0 }}
+                      sx={{ color: '#4ADE80', flexShrink: 0 }}
                     />
                   )}
                 </MenuItem>
