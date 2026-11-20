@@ -177,31 +177,71 @@ function toProxyUrl(source) {
   return rawUrl;
 }
 
-function toVidstackSrcs(sources) {
+function parseSourceQualityRank(s) {
+  if (typeof s?.qualityRank === 'number' && Number.isFinite(s.qualityRank)) {
+    return s.qualityRank;
+  }
+  const combined = `${s?.quality || ''} ${s?.name || ''}`.toLowerCase();
+  if (/2160|4k|uhd/.test(combined)) return 2160;
+  if (/1440|2k|qhd/.test(combined)) return 1440;
+  if (/1080|fhd/.test(combined)) return 1080;
+  if (/720|\bhd\b/.test(combined)) return 720;
+  if (/480|\bsd\b/.test(combined)) return 480;
+  if (/360/.test(combined)) return 360;
+  if (/\b(auto|master|default)\b/.test(combined)) return 1050;
+  return 900;
+}
+
+function buildChildSources(sources) {
   const list = Array.isArray(sources) ? sources : sources?.sources;
   if (!list || !Array.isArray(list) || list.length === 0) return [];
 
   return [...list]
     .filter((s) => Boolean(s?.url))
+    .map((s) => ({
+      ...s,
+      qualityRank: parseSourceQualityRank(s),
+    }))
     .sort((a, b) => {
       const scoreA = (a.directClient ? 2 : 0) + (a.client ? 1 : 0);
       const scoreB = (b.directClient ? 2 : 0) + (b.client ? 1 : 0);
-      return scoreB - scoreA;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return (b.qualityRank || 0) - (a.qualityRank || 0);
     })
-    .map((s) => {
+    .map((s, index) => {
       const srcUrl = toProxyUrl(s);
-
-      if (
+      const isHls =
         s.type === 'hls' ||
         Boolean(s.isM3U8) ||
         s.type === 'application/x-mpegurl' ||
         s.url?.includes('.m3u8') ||
-        (srcUrl.includes('.m3u8') && !srcUrl.includes('.mp4'))
-      ) {
-        return { src: srcUrl, type: 'application/x-mpegurl' };
-      }
-      return { src: srcUrl, type: 'video/mp4' };
+        (srcUrl.includes('.m3u8') && !srcUrl.includes('.mp4'));
+      const streamType = isHls ? 'hls' : 'mp4';
+      const qualityLabel = s.quality || (isHls ? 'Auto' : '1080p');
+      const serverLabel = s.server || s.name || `Server ${index + 1}`;
+      const optionLabel = s.optionLabel || `${serverLabel} • ${qualityLabel} (${streamType.toUpperCase()})`;
+
+      return {
+        id: s.id || `child_${index}`,
+        index,
+        src: srcUrl,
+        type: isHls ? 'application/x-mpegurl' : 'video/mp4',
+        streamType,
+        quality: qualityLabel,
+        qualityKey: s.qualityKey || (isHls ? 'auto' : '1080'),
+        qualityRank: s.qualityRank,
+        server: s.server || serverLabel,
+        name: s.name || serverLabel,
+        optionLabel,
+        client: Boolean(s.client),
+        directClient: Boolean(s.directClient),
+        rawSource: s,
+      };
     });
+}
+
+function toVidstackSrcs(sources) {
+  return buildChildSources(sources).map((c) => ({ src: c.src, type: c.type }));
 }
 
 const EMPTY_ARRAY = Object.freeze([]);
@@ -402,6 +442,7 @@ export default function Player({
   const [selectedEmbedId, setSelectedEmbedId] = useState(null);
   const normalizedSubtitles = useMemo(() => normalizeSubtitles(subtitles), [subtitles]);
   const [selectedExtractorId, setSelectedExtractorId] = useState(null);
+  const [selectedChildIdx, setSelectedChildIdx] = useState(0);
   const [failedExtractorId, setFailedExtractorId] = useState(null);
   const [playbackError, setPlaybackError] = useState(null);
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
@@ -417,6 +458,8 @@ export default function Player({
   const hasStartedPlayingRef = useRef(false);
   const retryTimerRef = useRef(null);
   const triedExtractorsRef = useRef(new Set());
+  const triedChildIndicesRef = useRef(new Set());
+  const pendingResumeTimeRef = useRef(null);
   const isSwitchingRef = useRef(false);
   const embedFallbackRetryRef = useRef(0);
 
@@ -467,6 +510,8 @@ export default function Player({
   useEffect(() => {
     autoRetryCountRef.current = 0;
     hasStartedPlayingRef.current = false;
+    setSelectedChildIdx(0);
+    triedChildIndicesRef.current.clear();
     setIsAutoRetrying(false);
     setPlaybackError(null);
   }, [src, directSources, activeExtractorId, selectedExtractorId]);
@@ -532,8 +577,13 @@ export default function Player({
     }
   }, [videoDurationMs]);
 
-  // All native sources mapped to the Vidstack src array
-  const nativeSrc = useMemo(() => toVidstackSrcs(directSources), [directSources]);
+  // Child stream options and active Vidstack src array
+  const childSources = useMemo(() => buildChildSources(directSources), [directSources]);
+  const activeChildSource = childSources[selectedChildIdx] || childSources[0] || null;
+  const nativeSrc = useMemo(
+    () => (activeChildSource ? [{ src: activeChildSource.src, type: activeChildSource.type }] : []),
+    [activeChildSource]
+  );
   const nativeReady = nativeSrc.length > 0;
 
   // Once native stream is mapped and ready, dismiss loading and ensure native mode is active
@@ -1027,9 +1077,38 @@ export default function Player({
       // If fatal error before playback started (e.g. dead link 404/403) or retries exhausted:
       autoRetryCountRef.current = 0;
       setIsAutoRetrying(false);
+
+      // Try remaining child stream/quality options inside the active provider before switching providers
+      if (childSources.length > 1) {
+        triedChildIndicesRef.current.add(selectedChildIdx);
+        const nextChildIdx = childSources.findIndex((_, idx) => !triedChildIndicesRef.current.has(idx));
+        if (nextChildIdx !== -1) {
+          const nextChild = childSources[nextChildIdx];
+          setAutoSwitchNotice(`Stream unavailable (${statusLabel}). Switching to ${nextChild.optionLabel}...`);
+          setSelectedChildIdx(nextChildIdx);
+          setPlaybackAttempt((prev) => prev + 1);
+          setTimeout(() => setAutoSwitchNotice(null), 3000);
+          return;
+        }
+      }
+
       switchToNextExtractor(effectiveSelectedExtractor, statusLabel);
     },
-    [effectiveSelectedExtractor, switchToNextExtractor]
+    [effectiveSelectedExtractor, switchToNextExtractor, childSources, selectedChildIdx]
+  );
+
+  const handleSelectChildSource = useCallback(
+    (idx, currentMediaTime = 0) => {
+      if (idx < 0 || idx >= childSources.length) return;
+      if (typeof currentMediaTime === 'number' && Number.isFinite(currentMediaTime) && currentMediaTime > 1) {
+        pendingResumeTimeRef.current = currentMediaTime;
+      }
+      setSelectedChildIdx(idx);
+      setPlaybackError(null);
+      setIsLoading(true);
+      setPlaybackAttempt((attempt) => attempt + 1);
+    },
+    [childSources.length]
   );
 
   const handleSelectServer = useCallback(
@@ -1200,6 +1279,10 @@ export default function Player({
                 onSelectServer={handleSelectServer}
                 handleSelectServer={handleSelectServer}
                 currentServerLabel={currentServerLabel}
+                childSources={childSources}
+                selectedChildIdx={selectedChildIdx}
+                onSelectChildSource={handleSelectChildSource}
+                pendingResumeTimeRef={pendingResumeTimeRef}
                 sourcesLoading={sourcesLoading}
                 videoSrc={activeNativeSrc}
                 thumbnailsUrl={thumbnailsUrl}

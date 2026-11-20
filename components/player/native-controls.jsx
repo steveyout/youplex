@@ -197,6 +197,10 @@ export default function NativeControls({
   handleSelectServer,
   onSelectServer,
   currentServerLabel = 'Native Player',
+  childSources = EMPTY_ARRAY,
+  selectedChildIdx = 0,
+  onSelectChildSource = null,
+  pendingResumeTimeRef = null,
   videoSrc = null,
   thumbnailsUrl = null,
   timelineSegments = [],
@@ -483,6 +487,16 @@ export default function NativeControls({
       return () => clearTimeout(timer);
     }
   }, [isLive, canSeek, mediaId, type, season, episode, maxSeek, remote]);
+
+  // Resume exact timestamp after switching child quality / stream option
+  useEffect(() => {
+    if (!canSeek || !pendingResumeTimeRef?.current) return;
+    const target = pendingResumeTimeRef.current;
+    if (typeof target === 'number' && Number.isFinite(target) && target > 1 && target < maxSeek) {
+      Object.assign(pendingResumeTimeRef, { current: null });
+      remote.seek(target);
+    }
+  }, [canSeek, maxSeek, videoSrc, remote, pendingResumeTimeRef]);
 
   // Persist progress function
   const persistProgress = useCallback(
@@ -1112,86 +1126,174 @@ export default function NativeControls({
                     effectiveSelectedExtractor === server.id;
 
                   return (
-                    <MenuItem
-                      key={server.id}
-                      onClick={() => {
-                        selectServer?.(server);
-                        setSrvAnchor(null);
-                      }}
-                      selected={isSelected}
-                      disabled={sourcesLoading}
-                      sx={{
-                        borderRadius: 1.5,
-                        px: 1.5,
-                        py: 1,
-                        my: 0.25,
-                        justifyContent: 'space-between',
-                        gap: 1.5,
-                        '&.Mui-selected': {
-                          bgcolor: alpha(primaryColor, 0.18),
-                          '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
-                        },
-                      }}
-                    >
-                      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-                        <Iconify
-                          icon={
-                            server.kind === 'extractor'
-                              ? 'solar:link-bold'
-                              : 'solar:server-square-bold'
-                          }
-                          width={18}
-                          sx={{
-                            flexShrink: 0,
-                            color: isFailed
-                              ? 'error.main'
-                              : isSelected
-                              ? 'primary.light'
-                              : 'text.secondary',
-                          }}
-                        />
-                        <Stack spacing={0.2} sx={{ minWidth: 0 }}>
-                          <Typography
-                            variant="subtitle2"
-                            noWrap
+                    <Box key={server.id}>
+                      <MenuItem
+                        onClick={() => {
+                          selectServer?.(server);
+                          setSrvAnchor(null);
+                        }}
+                        selected={isSelected}
+                        disabled={sourcesLoading}
+                        sx={{
+                          borderRadius: 1.5,
+                          px: 1.5,
+                          py: 1,
+                          my: 0.25,
+                          justifyContent: 'space-between',
+                          gap: 1.5,
+                          '&.Mui-selected': {
+                            bgcolor: alpha(primaryColor, 0.18),
+                            '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
+                          },
+                        }}
+                      >
+                        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
+                          <Iconify
+                            icon={
+                              server.kind === 'extractor'
+                                ? 'solar:link-bold'
+                                : 'solar:server-square-bold'
+                            }
+                            width={18}
                             sx={{
-                              fontWeight: isSelected ? 600 : 500,
-                              color: isFailed ? 'error.main' : 'common.white',
+                              flexShrink: 0,
+                              color: isFailed
+                                ? 'error.main'
+                                : isSelected
+                                ? 'primary.light'
+                                : 'text.secondary',
                             }}
-                          >
-                            {server.name}
-                          </Typography>
-                          {isFailed && (
+                          />
+                          <Stack spacing={0.2} sx={{ minWidth: 0 }}>
                             <Typography
-                              variant="caption"
+                              variant="subtitle2"
+                              noWrap
                               sx={{
-                                color: 'error.light',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 0.5,
-                                fontSize: 11,
+                                fontWeight: isSelected ? 600 : 500,
+                                color: isFailed ? 'error.main' : 'common.white',
                               }}
                             >
-                              <Iconify icon="solar:refresh-bold" width={12} />
-                              Failed — tap to retry
+                              {server.name}
                             </Typography>
-                          )}
+                            {isFailed && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: 'error.light',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 0.5,
+                                  fontSize: 11,
+                                }}
+                              >
+                                <Iconify icon="solar:refresh-bold" width={12} />
+                                Failed — tap to retry
+                              </Typography>
+                            )}
+                          </Stack>
                         </Stack>
-                      </Stack>
 
-                      {isExtracting ? (
-                        <CircularProgress size={18} sx={{ color: 'primary.light', flexShrink: 0 }} />
-                      ) : isSelected ? (
-                        <Iconify
-                          icon={isFailed ? 'solar:close-circle-bold' : 'solar:check-circle-bold'}
-                          width={20}
+                        {isExtracting ? (
+                          <CircularProgress size={18} sx={{ color: 'primary.light', flexShrink: 0 }} />
+                        ) : isSelected ? (
+                          <Iconify
+                            icon={isFailed ? 'solar:close-circle-bold' : 'solar:check-circle-bold'}
+                            width={20}
+                            sx={{
+                              color: isFailed ? 'error.main' : 'primary.light',
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : null}
+                      </MenuItem>
+
+                      {isSelected && resolvedMode === 'native' && childSources.length > 1 && onSelectChildSource && (
+                        <Box
                           sx={{
-                            color: isFailed ? 'error.main' : 'primary.light',
-                            flexShrink: 0,
+                            ml: 2.5,
+                            pl: 1.25,
+                            my: 0.5,
+                            borderLeft: `2px solid ${alpha(primaryColor, 0.45)}`,
                           }}
-                        />
-                      ) : null}
-                    </MenuItem>
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              px: 1,
+                              py: 0.25,
+                              display: 'block',
+                              color: 'text.disabled',
+                              fontWeight: 700,
+                              fontSize: 10,
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.5,
+                            }}
+                          >
+                            Stream & Quality Options ({childSources.length})
+                          </Typography>
+                          {childSources.map((child, childIdx) => {
+                            const isChildActive = childIdx === selectedChildIdx;
+                            return (
+                              <MenuItem
+                                key={`${child.id}-${childIdx}`}
+                                selected={isChildActive}
+                                onClick={() => {
+                                  onSelectChildSource(childIdx, currentTime);
+                                  setSrvAnchor(null);
+                                }}
+                                sx={{
+                                  borderRadius: 1.25,
+                                  px: 1,
+                                  py: 0.6,
+                                  my: 0.2,
+                                  justifyContent: 'space-between',
+                                  gap: 1,
+                                  '&.Mui-selected': {
+                                    bgcolor: alpha(primaryColor, 0.16),
+                                    '&:hover': { bgcolor: alpha(primaryColor, 0.24) },
+                                  },
+                                }}
+                              >
+                                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
+                                  <Box
+                                    sx={{
+                                      px: 0.65,
+                                      py: 0.15,
+                                      borderRadius: 0.75,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      bgcolor: alpha(primaryColor, isChildActive ? 0.28 : 0.14),
+                                      color: 'primary.light',
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {child.quality}
+                                  </Box>
+                                  <Typography
+                                    variant="caption"
+                                    noWrap
+                                    sx={{
+                                      color: isChildActive ? 'common.white' : 'text.secondary',
+                                      fontWeight: isChildActive ? 600 : 400,
+                                      fontSize: 12,
+                                    }}
+                                  >
+                                    {child.optionLabel}
+                                  </Typography>
+                                </Stack>
+                                {isChildActive && (
+                                  <Iconify
+                                    icon="solar:check-circle-bold"
+                                    width={15}
+                                    sx={{ color: 'primary.light', flexShrink: 0 }}
+                                  />
+                                )}
+                              </MenuItem>
+                            );
+                          })}
+                        </Box>
+                      )}
+                    </Box>
                   );
                 })}
               </Menu>
@@ -3397,6 +3499,83 @@ export default function NativeControls({
         transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         slotProps={{ paper: { sx: { ...menuPaperSx, width: 280 } } }}
       >
+        {/* Child Stream & Quality Switcher Section */}
+        {childSources.length > 1 && onSelectChildSource && (
+          <Box component="div" sx={{ mb: 1 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1, py: 0.5 }}>
+              <Iconify icon="solar:layers-minimalistic-bold" width={17} sx={{ color: 'primary.light' }} />
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.disabled',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  fontSize: 11,
+                }}
+              >
+                Stream Options & Qualities
+              </Typography>
+            </Stack>
+            <Divider sx={{ my: 0.75, borderColor: alpha('#ffffff', 0.12) }} />
+            {childSources.map((child, childIdx) => {
+              const isChildActive = childIdx === selectedChildIdx;
+              return (
+                <MenuItem
+                  key={`settings-child-${child.id}-${childIdx}`}
+                  selected={isChildActive}
+                  onClick={() => {
+                    onSelectChildSource(childIdx, currentTime);
+                    setSetAnchor(null);
+                  }}
+                  sx={{
+                    borderRadius: 1.5,
+                    px: 1.25,
+                    py: 0.75,
+                    my: 0.25,
+                    justifyContent: 'space-between',
+                    gap: 1.25,
+                    '&.Mui-selected': {
+                      bgcolor: alpha(primaryColor, 0.18),
+                      '&:hover': { bgcolor: alpha(primaryColor, 0.28) },
+                    },
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" spacing={0.85} sx={{ minWidth: 0 }}>
+                    <Box
+                      sx={{
+                        px: 0.7,
+                        py: 0.15,
+                        borderRadius: 0.75,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        bgcolor: alpha(primaryColor, isChildActive ? 0.3 : 0.14),
+                        color: 'primary.light',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {child.quality}
+                    </Box>
+                    <Typography
+                      variant="subtitle2"
+                      noWrap
+                      sx={{ fontWeight: isChildActive ? 600 : 400, fontSize: 12.5 }}
+                    >
+                      {child.optionLabel}
+                    </Typography>
+                  </Stack>
+                  {isChildActive && (
+                    <Iconify
+                      icon="solar:check-circle-bold"
+                      width={18}
+                      sx={{ color: 'primary.light', flexShrink: 0 }}
+                    />
+                  )}
+                </MenuItem>
+              );
+            })}
+          </Box>
+        )}
+
         {/* Quality Section */}
         {qualities.length > 0 && (
           <Box component="div">
