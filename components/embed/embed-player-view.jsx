@@ -22,6 +22,7 @@ import {
   getSubtitles,
   getSeasonDetails,
   getIntroTimestamps,
+  getActiveProviders,
 } from '@/actions/api';
 
 // ----------------------------------------------------------------------
@@ -91,6 +92,21 @@ export function EmbedPlayerView({
   const [openSubtitles, setOpenSubtitles] = useState([]);
   const [timelineSegments, setTimelineSegments] = useState([]);
   const [loadError, setLoadError] = useState(null);
+  const [extractorProviders, setExtractorProviders] = useState(CLIENT_SCRAPER_CONFIG);
+
+  useEffect(() => {
+    let active = true;
+    getActiveProviders()
+      .then((list) => {
+        if (active && Array.isArray(list) && list.length > 0) {
+          setExtractorProviders(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // TV Episode & Seasons
   const [seasonEpisodes, setSeasonEpisodes] = useState([]);
@@ -639,7 +655,7 @@ export function EmbedPlayerView({
         directSources={directSources}
         subtitles={[...(directSources?.subtitles || []), ...openSubtitles]}
         timelineSegments={timelineSegments}
-        extractorProviders={CLIENT_SCRAPER_CONFIG}
+        extractorProviders={extractorProviders}
         activeExtractorId={directSources?.provider || null}
         sourcesLoading={sourcesLoading}
         loading={isLoading}

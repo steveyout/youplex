@@ -1,8 +1,16 @@
 // ----------------------------------------------------------------------
 
 import axios, { endpoints } from '@/utils/axios';
+import { fetchActiveScraperProviders } from '@/lib/scrapers/provider-config';
 import { providers, getEmbedUrl, DEFAULT_PROVIDER_ID } from '@/config/providers';
 import { isContentDmcaBlocked } from '@/lib/dmca';
+
+/**
+ * Fetch active extractor providers directly from movies-scrapper API (/providers).
+ */
+export async function getActiveProviders(opts = {}) {
+  return fetchActiveScraperProviders(opts);
+}
 
 // ----------------------------------------------------------------------
 
@@ -142,8 +150,8 @@ export async function getPlaySources(type, id, opts = {}, onProgress = null) {
     };
   }
 
-  // Priority 1: When in the browser, scrape directly client-side via @p-stream/providers (mirrors streamwatch)
-  // This bypasses VPS datacenter IP blocking, BunkerWeb proxy timeouts, and browser extension fetch hook failures.
+  // Priority 1: When in the browser, scrape directly client-side via movies-scrapper API (api.youplex.site)
+  // This bypasses Next.js proxy overhead and streams SSE progress directly from the scraper backend.
   if (typeof window !== 'undefined') {
     try {
       const { scrapeMedia } = await import('@/lib/providers');

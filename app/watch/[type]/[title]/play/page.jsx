@@ -28,7 +28,7 @@ import { Player } from '@/components/player';
 import { AdBanner } from '@/components/ads';
 import { Iconify } from '@/components/iconify';
 import { CLIENT_SCRAPER_CONFIG } from '@/lib/scrapers/provider-config';
-import { getMovieOrShow, getPlaySources, getSubtitles, getSeasonDetails, searchMedia, getEpisodeImages, getIntroTimestamps } from '@/actions/api';
+import { getMovieOrShow, getPlaySources, getSubtitles, getSeasonDetails, searchMedia, getEpisodeImages, getIntroTimestamps, getActiveProviders } from '@/actions/api';
 
 // ----------------------------------------------------------------------
 
@@ -65,6 +65,21 @@ export default function PlayPage() {
   const [openSubtitles, setOpenSubtitles] = useState([]);
   const [timelineSegments, setTimelineSegments] = useState([]);
   const [error, setError] = useState(null);
+  const [extractorProviders, setExtractorProviders] = useState(CLIENT_SCRAPER_CONFIG);
+
+  useEffect(() => {
+    let active = true;
+    getActiveProviders()
+      .then((list) => {
+        if (active && Array.isArray(list) && list.length > 0) {
+          setExtractorProviders(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Live scrape feedback & auto-switching progress
   const failedProvidersRef = useRef(new Set());
@@ -1309,7 +1324,7 @@ export default function PlayPage() {
               directSources={directSources}
               subtitles={[...(directSources?.subtitles || []), ...openSubtitles]}
               timelineSegments={timelineSegments}
-              extractorProviders={CLIENT_SCRAPER_CONFIG}
+              extractorProviders={extractorProviders}
               activeExtractorId={directSources?.provider || null}
               sourcesLoading={sourcesLoading}
               loading={isLoading}

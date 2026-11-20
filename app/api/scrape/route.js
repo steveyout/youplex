@@ -187,11 +187,13 @@ export async function GET(request) {
             const cleanProvider = providerResult.provider || provider || 'providers';
             emit({
               type: 'success',
+              client: providerResult.client ?? true,
               provider: cleanProvider,
               providerLabel: getProviderFriendlyName(cleanProvider),
               sources: providerResult.sources.map((source) => ({
                 ...source,
-                alreadyProxied: true,
+                client: source.client ?? true,
+                alreadyProxied: source.alreadyProxied ?? true,
               })),
               thumbnailTrack: providerResult.thumbnailTrack || providerResult.sources?.[0]?.thumbnailTrack || null,
               subtitles: providerResult.subtitles || [],
@@ -224,7 +226,7 @@ export async function GET(request) {
     });
   }
 
-  // --- Standard JSON Handler (Strictly using @p-stream/providers) ---
+  // --- Standard JSON Handler (Using movies-scrapper API) ---
   try {
     let title = passedTitle;
     let releaseYear = passedYear;
@@ -259,11 +261,13 @@ export async function GET(request) {
     if (providerResult?.success && providerResult.sources?.length > 0) {
       return NextResponse.json({
         success: true,
+        client: providerResult.client ?? true,
         provider: providerResult.provider || provider || 'providers',
         providerLabel: getProviderFriendlyName(providerResult.provider || provider),
         sources: providerResult.sources.map((source) => ({
           ...source,
-          alreadyProxied: true,
+          client: source.client ?? true,
+          alreadyProxied: source.alreadyProxied ?? true,
         })),
         thumbnailTrack: providerResult.thumbnailTrack || providerResult.sources?.[0]?.thumbnailTrack || null,
         subtitles: providerResult.subtitles || [],
@@ -285,7 +289,7 @@ export async function GET(request) {
       { status: 200 }
     );
   } catch (providerError) {
-    console.warn('@p-stream/providers scrape encountered error:', providerError?.message);
+    console.warn('movies-scrapper API scrape encountered error:', providerError?.message);
     return NextResponse.json(
       {
         success: false,

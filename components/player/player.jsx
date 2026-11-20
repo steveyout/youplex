@@ -131,8 +131,9 @@ function toProxyUrl(source) {
     return rawUrl;
   }
 
-  // If already proxied by dedicated api.youplex.site / proxy.youplex.site proxy, return directly
+  // If marked directly playable by client or already proxied by dedicated api.youplex.site / proxy.youplex.site proxy, return directly
   if (
+    source.client === true ||
     rawUrl.includes('api.youplex.site/proxy') ||
     rawUrl.includes('proxy.youplex.site') ||
     source.alreadyProxied
@@ -180,8 +181,13 @@ function toVidstackSrcs(sources) {
   const list = Array.isArray(sources) ? sources : sources?.sources;
   if (!list || !Array.isArray(list) || list.length === 0) return [];
 
-  return list
+  return [...list]
     .filter((s) => Boolean(s?.url))
+    .sort((a, b) => {
+      const scoreA = (a.directClient ? 2 : 0) + (a.client ? 1 : 0);
+      const scoreB = (b.directClient ? 2 : 0) + (b.client ? 1 : 0);
+      return scoreB - scoreA;
+    })
     .map((s) => {
       const srcUrl = toProxyUrl(s);
 

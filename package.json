@@ -37,7 +37,6 @@
     "@mui/x-date-pickers": "^7.7.0",
     "@next/third-parties": "^16.1.6",
     "@noble/hashes": "^1.8.0",
-    "@p-stream/providers": "github:steveyout/providers#production",
     "@scure/bip39": "^1.6.0",
     "@vidstack/react": "1.15.6",
     "@vyla-entertainment/sdk": "^1.28.0",
